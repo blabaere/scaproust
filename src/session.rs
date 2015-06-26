@@ -4,11 +4,15 @@ use std::io;
 use std::thread;
 use std::sync::mpsc;
 
+use event_loop_msg::EventLoopCmd as EventLoopCmd;
+use event_loop_msg::SessionEvt as SessionEvt;
+use event_loop_msg::SocketEvt as SocketEvt;
+
+use socket::Socket as Socket;
+
 pub struct Session {
-	cmd_sender: mio::Sender<SessionCmd>,
+	cmd_sender: mio::Sender<EventLoopCmd>,
 	evt_receiver: mpsc::Receiver<SessionEvt>
-	// Could use https://github.com/polyfractal/bounded-spsc-queue ?
-	// Only if there is one receiver per NanoSocket and they are only 'Send'
 }
 
 impl Session {
@@ -28,20 +32,17 @@ impl Session {
 	}
 
 	fn ping_event_loop(&self) {
-		self.cmd_sender.send(SessionCmd::Ping);
+		self.cmd_sender.send(EventLoopCmd::Ping);
 		self.evt_receiver.recv().unwrap();
 	}
 
 	pub fn create_socket(&self) -> Option<Socket> {
-		self.cmd_sender.send(SessionCmd::CreateSocket);
+		self.cmd_sender.send(EventLoopCmd::CreateSocket);
+
 		match self.evt_receiver.recv().unwrap() {
-
-			SessionEvt::SocketCreated(rx) => {
-
-				let socket = Socket {
-					cmd_sender: self.cmd_sender.clone(),
-					evt_receiver: rx
-				};
+			SessionEvt::SocketCreated(id, rx) => {
+				let cmd_sender = self.cmd_sender.clone();
+				let socket = Socket::new(id, cmd_sender, rx);
 
 				Some(socket)
 			}
@@ -52,19 +53,7 @@ impl Session {
 
 impl Drop for Session {
 	fn drop(&mut self) {
-		self.cmd_sender.send(SessionCmd::Shutdown);
-	}
-}
-
-pub struct Socket {
-	cmd_sender: mio::Sender<SessionCmd>,
-	evt_receiver: mpsc::Receiver<SocketEvt>
-}
-
-impl Socket {
-	pub fn ping(&self) {
-		self.cmd_sender.send(SessionCmd::PingSocket);
-		self.evt_receiver.recv().unwrap();
+		self.cmd_sender.send(EventLoopCmd::Shutdown);
 	}
 }
 
@@ -78,22 +67,6 @@ impl ProtocolSocket {
 		self.evt_sender.send(SocketEvt::Pong);
 	}
 
-}
-
-enum SocketEvt {
-    Pong
-}
-
-enum SessionCmd {
-	Ping,
-	CreateSocket,
-	PingSocket,
-	Shutdown
-}
-
-enum SessionEvt {
-	Pong,
-	SocketCreated(mpsc::Receiver<SocketEvt>)
 }
 
 struct SessionEventLoopHandler {
@@ -111,27 +84,36 @@ impl SessionEventLoopHandler {
 		let (tx, rx) = mpsc::channel();
 		let socket = ProtocolSocket { evt_sender: tx };
 
-		self.sockets.insert(socket);
-		self.event_sender.send(SessionEvt::SocketCreated(rx));
+		let evt = match self.sockets.insert(socket) {
+			Ok(id) => SessionEvt::SocketCreated(id.as_usize(), rx),
+			Err(_) => SessionEvt::SocketNotCreated
+		};
+
+		self.event_sender.send(evt);
 	}
 	
-	fn ping_socket(&self) {
-		for socket in self.sockets.iter() {
-			socket.pong();
-		}
+	fn ping_socket(&mut self, id: usize) {
+		let token = mio::Token(id);
+		let socket = self.get_socket(token);
+
+		socket.pong();
 	}
+
+    fn get_socket<'a>(&'a mut self, token: mio::Token) -> &'a mut ProtocolSocket {
+        &mut self.sockets[token]
+    }
 }
 
 impl mio::Handler for SessionEventLoopHandler {
     type Timeout = ();
-    type Message = SessionCmd;
+    type Message = EventLoopCmd;
 
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Self>, msg: Self::Message) {
     	match msg {
-    		SessionCmd::Ping => self.pong(),
-    		SessionCmd::CreateSocket => self.create_socket(),
-    		SessionCmd::PingSocket => self.ping_socket(),
-    		SessionCmd::Shutdown => event_loop.shutdown()
+    		EventLoopCmd::Ping => self.pong(),
+    		EventLoopCmd::CreateSocket => self.create_socket(),
+    		EventLoopCmd::PingSocket(id) => self.ping_socket(id),
+    		EventLoopCmd::Shutdown => event_loop.shutdown()
     	}
     	
     }
