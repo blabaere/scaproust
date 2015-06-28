@@ -10,6 +10,7 @@ use event_loop_msg::SessionEvt as SessionEvt;
 use event_loop_msg::SocketEvt as SocketEvt;
 
 use socket_impl::SocketImpl as SocketImpl;
+use protocol;
 
 pub struct SessionImpl {
 	event_sender: mpsc::Sender<SessionEvt>,
@@ -30,8 +31,9 @@ impl SessionImpl {
 	}
 
 	fn create_socket(&mut self, socket_type: SocketType) {
+		let protocol = protocol::create_protocol(socket_type);
 		let (tx, rx) = mpsc::channel();
-		let socket = SocketImpl::new(tx);
+		let socket = SocketImpl::new(protocol, tx);
 
 		let evt = match self.sockets.insert(socket) {
 			Ok(id) => SessionEvt::SocketCreated(id.as_usize(), rx),
@@ -48,6 +50,13 @@ impl SessionImpl {
 		socket.pong();
 	}
 
+	fn connect_socket(&mut self, id: usize, addr: &str) {
+		let token = mio::Token(id);
+		let socket = self.get_socket(token);
+
+		socket.connect(addr);
+	}
+
     fn get_socket<'a>(&'a mut self, token: mio::Token) -> &'a mut SocketImpl {
         &mut self.sockets[token]
     }
@@ -62,6 +71,7 @@ impl mio::Handler for SessionImpl {
     		EventLoopCmd::Ping => self.pong(),
     		EventLoopCmd::CreateSocket(socket_type) => self.create_socket(socket_type),
     		EventLoopCmd::PingSocket(id) => self.ping_socket(id),
+    		EventLoopCmd::ConnectSocket(id, addr) => self.connect_socket(id, &addr),
     		EventLoopCmd::Shutdown => event_loop.shutdown()
     	}
     	

@@ -4,6 +4,7 @@ use event_loop_msg::SocketEvt as SocketEvt;
 use mio;
 
 use std::sync::mpsc;
+use std::io;
 
 pub struct Socket {
 	id: usize,
@@ -29,6 +30,13 @@ impl Socket {
 	
 	pub fn ping(&self) {
 		let cmd = EventLoopCmd::PingSocket(self.id);
+
+		self.cmd_sender.send(cmd);
+		self.evt_receiver.recv().unwrap();
+	}
+
+	pub fn connect(&self, addr: &str) {
+		let cmd = EventLoopCmd::ConnectSocket(self.id, addr.to_owned());
 
 		self.cmd_sender.send(cmd);
 		self.evt_receiver.recv().unwrap();

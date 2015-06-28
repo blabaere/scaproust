@@ -6,6 +6,7 @@ pub enum EventLoopCmd {
 	Ping,
 	CreateSocket(SocketType),
 	PingSocket(usize),
+	ConnectSocket(usize, String),
 	Shutdown
 }
 

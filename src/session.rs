@@ -22,14 +22,19 @@ impl Session {
 	pub fn new() -> io::Result<Session> {
 		let mut event_loop = try!(mio::EventLoop::new());
 		let (tx, rx) = mpsc::channel();
-		let mut handler = SessionImpl::new(tx, 1024);
 		let session = Session { 
 			cmd_sender: event_loop.channel(),
 			evt_receiver: rx };
 
-		thread::spawn(move || event_loop.run(&mut handler));
+		thread::spawn(move || Session::run_event_loop(&mut event_loop, tx));
 
 		Ok(session)
+	}
+
+	fn run_event_loop(event_loop: &mut mio::EventLoop<SessionImpl>, evt_tx: mpsc::Sender<SessionEvt>) {
+		let mut handler = SessionImpl::new(evt_tx, 1024);
+
+		event_loop.run(&mut handler);
 	}
 
 	fn ping_event_loop(&self) {
@@ -83,5 +88,13 @@ mod tests {
     	let socket = session.create_socket(SocketType::Push).unwrap();
 
     	socket.ping();
+    }
+
+    #[test]
+    fn can_connect_socket() {
+    	let session = Session::new().unwrap();
+    	let socket = session.create_socket(SocketType::Push).unwrap();
+
+    	socket.connect("tcp://121.0.0.1:5454");
     }
 }
