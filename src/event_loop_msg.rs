@@ -1,8 +1,10 @@
 use std::sync::mpsc;
 
+use global::SocketType as SocketType;
+
 pub enum EventLoopCmd {
 	Ping,
-	CreateSocket,
+	CreateSocket(SocketType),
 	PingSocket(usize),
 	Shutdown
 }

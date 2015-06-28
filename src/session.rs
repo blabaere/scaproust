@@ -8,7 +8,10 @@ use event_loop_msg::EventLoopCmd as EventLoopCmd;
 use event_loop_msg::SessionEvt as SessionEvt;
 use event_loop_msg::SocketEvt as SocketEvt;
 
+use session_impl::SessionImpl as SessionImpl;
+
 use socket::Socket as Socket;
+use global::SocketType as SocketType;
 
 pub struct Session {
 	cmd_sender: mio::Sender<EventLoopCmd>,
@@ -19,9 +22,7 @@ impl Session {
 	pub fn new() -> io::Result<Session> {
 		let mut event_loop = try!(mio::EventLoop::new());
 		let (tx, rx) = mpsc::channel();
-		let mut handler = SessionEventLoopHandler { 
-			event_sender: tx,
-			sockets: Slab::new(1024) };
+		let mut handler = SessionImpl::new(tx, 1024);
 		let session = Session { 
 			cmd_sender: event_loop.channel(),
 			evt_receiver: rx };
@@ -36,8 +37,8 @@ impl Session {
 		self.evt_receiver.recv().unwrap();
 	}
 
-	pub fn create_socket(&self) -> Option<Socket> {
-		self.cmd_sender.send(EventLoopCmd::CreateSocket);
+	pub fn create_socket(&self, socket_type: SocketType) -> Option<Socket> {
+		self.cmd_sender.send(EventLoopCmd::CreateSocket(socket_type));
 
 		match self.evt_receiver.recv().unwrap() {
 			SessionEvt::SocketCreated(id, rx) => {
@@ -57,71 +58,10 @@ impl Drop for Session {
 	}
 }
 
-struct ProtocolSocket {
-	evt_sender: mpsc::Sender<SocketEvt> 
-}
-
-impl ProtocolSocket {
-
-	fn pong(&self) {
-		self.evt_sender.send(SocketEvt::Pong);
-	}
-
-}
-
-struct SessionEventLoopHandler {
-	event_sender: mpsc::Sender<SessionEvt>,
-	sockets: Slab<ProtocolSocket>
-}
-
-impl SessionEventLoopHandler {
-
-	fn pong(&self) {
-		self.event_sender.send(SessionEvt::Pong);
-	}
-
-	fn create_socket(&mut self) {
-		let (tx, rx) = mpsc::channel();
-		let socket = ProtocolSocket { evt_sender: tx };
-
-		let evt = match self.sockets.insert(socket) {
-			Ok(id) => SessionEvt::SocketCreated(id.as_usize(), rx),
-			Err(_) => SessionEvt::SocketNotCreated
-		};
-
-		self.event_sender.send(evt);
-	}
-	
-	fn ping_socket(&mut self, id: usize) {
-		let token = mio::Token(id);
-		let socket = self.get_socket(token);
-
-		socket.pong();
-	}
-
-    fn get_socket<'a>(&'a mut self, token: mio::Token) -> &'a mut ProtocolSocket {
-        &mut self.sockets[token]
-    }
-}
-
-impl mio::Handler for SessionEventLoopHandler {
-    type Timeout = ();
-    type Message = EventLoopCmd;
-
-    fn notify(&mut self, event_loop: &mut mio::EventLoop<Self>, msg: Self::Message) {
-    	match msg {
-    		EventLoopCmd::Ping => self.pong(),
-    		EventLoopCmd::CreateSocket => self.create_socket(),
-    		EventLoopCmd::PingSocket(id) => self.ping_socket(id),
-    		EventLoopCmd::Shutdown => event_loop.shutdown()
-    	}
-    	
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::Session;
+    use global::SocketType;
 
     #[test]
     fn session_can_be_created() {
@@ -133,14 +73,14 @@ mod tests {
     #[test]
     fn session_can_create_a_socket() {
     	let session = Session::new().unwrap();
-    	let socket = session.create_socket();
+    	let socket = session.create_socket(SocketType::Push);
 
     }
 
     #[test]
     fn can_ping_socket() {
     	let session = Session::new().unwrap();
-    	let socket = session.create_socket().unwrap();
+    	let socket = session.create_socket(SocketType::Push).unwrap();
 
     	socket.ping();
     }

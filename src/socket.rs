@@ -10,7 +10,7 @@ pub struct Socket {
 	cmd_sender: mio::Sender<EventLoopCmd>,
 	evt_receiver: mpsc::Receiver<SocketEvt>
 	// Could use https://github.com/polyfractal/bounded-spsc-queue ?
-	// Only if there is one receiver per NanoSocket and they are only 'Send'
+	// Only if there is one receiver per Socket and they are only 'Send'
 }
 
 impl Socket {
@@ -24,8 +24,9 @@ impl Socket {
 			cmd_sender: cmd_sender,
 			evt_receiver: evt_receiver
 		}
-		
+
 	}
+	
 	pub fn ping(&self) {
 		let cmd = EventLoopCmd::PingSocket(self.id);
 
