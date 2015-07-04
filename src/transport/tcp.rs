@@ -48,10 +48,10 @@ struct TcpConnection {
 }
 
 impl Connection for TcpConnection {
-	fn readable(&mut self, event_loop: &mut EventLoop, hint: mio::ReadHint) -> io::Result<()> {
-		debug!("TcpConnection::readable");
+	fn readable(&mut self, event_loop: &mut EventLoop, hint: mio::ReadHint) -> io::Result<bool> {
+		debug!("TcpConnection::readable hs recv {}", self.handshake_received);
 		if self.handshake_received {
-			Ok(())
+			Ok(self.handshake_sent & self.handshake_received)
 		} else {
 			let mut handshake = [0u8; 8];
 			let read = try!(self.stream.try_read(&mut handshake));
@@ -72,31 +72,39 @@ impl Connection for TcpConnection {
 				}
 			}
 
-			Ok(())
+			Ok(self.handshake_sent & self.handshake_received)
 		}
 	}
 
-	fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-		debug!("TcpConnection::writable");
+	fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<bool> {
+		debug!("TcpConnection::writable hs sent {}", self.handshake_sent);
 		if self.handshake_sent {
-			let random_stuff = vec!(65, 86, 67, 70, 75, 80, 81, 90);
-			let written = try!(self.stream.try_write(&random_stuff));
+			if self.handshake_received {
+				let header = [0, 0, 0, 0, 0, 0, 0, 3];
+				let body = [65, 86, 67];
 
-			match written {
-				Some(0) => {
-					debug!("written 0 bytes of random !");
-				},
-				Some(8) => {
-					debug!("random written !");
-				},
-				Some(n) => {
-					debug!("written {} bytes of random !", n);
-				},
-				None => {
-					debug!("random NOT written !");
-				}
+				try!(self.stream.try_write(&header));
+				try!(self.stream.try_write(&body));
+				/*let random_stuff = vec!(0, 0, 0, 0, 0, 0, 0, 8, 65, 86, 67, 70, 75, 80, 81, 90);
+				let written = try!(self.stream.try_write(&random_stuff));
+
+				try!(self.stream.try_write(&header));
+				try!(self.stream.try_write(&random_stuff));
+
+				match written {
+					Some(0) => {
+						debug!("written 0 bytes of random !");
+					},
+					Some(n) => {
+						debug!("written {} bytes of random !", n);
+					},
+					None => {
+						debug!("random NOT written !");
+					}
+				}*/
+			} else {
+				debug!("writable but waiting for peer handshake !");
 			}
-			Ok(())
 		} else {
 			let handshake = vec!(0, 83, 80, 0, 0, 80, 0, 0);
 			let written = try!(self.stream.try_write(&handshake));
@@ -116,14 +124,9 @@ impl Connection for TcpConnection {
 					debug!("handshake NOT written !");
 				}
 			}
-
-			/*match self.stream.try_write(&handshake) {
-				Ok(None) => Ok(()),
-				Ok(Some(_)) => Ok(()),
-				Err(e) => Err(e)
-			}*/
-			Ok(())
 		}
+
+		Ok(self.handshake_sent & self.handshake_received)
 	}
 
 	fn as_evented(&self) -> &Evented {

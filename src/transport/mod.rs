@@ -16,8 +16,8 @@ pub trait Connector {
 
 pub trait Connection {
 	fn as_evented(&self) -> &mio::Evented;
-	fn readable(&mut self, event_loop: &mut EventLoop, hint: mio::ReadHint) -> io::Result<()>;
-	fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<()>;
+	fn readable(&mut self, event_loop: &mut EventLoop, hint: mio::ReadHint) -> io::Result<bool>;
+	fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<bool>;
 }
 
 pub fn create_transport(addr: &str) -> Box<Transport> {

@@ -51,19 +51,7 @@ impl SocketImpl {
 
 		self.connections.insert(id, connection);
 		self.evt_sender.send(SocketEvt::Connected);
-		// get a transport (arg, fn ?)
-		// socket_connector = self.connector()
-		// tran_connector = transport.connector()
-		// self.add_connector(connector) // sure ???
-		// endpoint = connector.connect()
-		// self.add_endpoint(endpoint)
 
-		// connection retry should be done from here ?
-		// since we are called from the event loop
-		// it should return immediatly on success
-		// or schedule a retry in case of failure
-		// maybe this logic could be moved to a "SocketConnector" struct
-		// which in turn would use a "TransportConnector" trait
 		Ok(())
 	}
 
@@ -82,14 +70,20 @@ impl SocketImpl {
 		debug!("SocketImpl::writable {}", id);
 		if let Some(connection) = self.connections.get_mut(&id) {
 			match connection.writable(event_loop) {
-				Ok(()) => {
+				Ok(false) => {
 					let token = mio::Token(id); 
 					let interest = mio::Interest::readable() | mio::Interest::hup() | mio::Interest::error();
 					let poll_opt = mio::PollOpt::oneshot();
 					event_loop.reregister(connection.as_evented(), token, interest, poll_opt);
 				},
-				Err(_) => {
-					debug!("SocketImpl::writable failed");
+				Ok(true) => {
+					let token = mio::Token(id); 
+					let interest = mio::Interest::writable() | mio::Interest::hup() | mio::Interest::error();
+					let poll_opt = mio::PollOpt::oneshot();
+					event_loop.reregister(connection.as_evented(), token, interest, poll_opt);
+				},
+				Err(e) => {
+					debug!("SocketImpl::writable failed {}", e);
 				}
 			};
 
