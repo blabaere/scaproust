@@ -95,6 +95,6 @@ mod tests {
     	let session = Session::new().unwrap();
     	let socket = session.create_socket(SocketType::Push).unwrap();
 
-    	socket.connect("tcp://121.0.0.1:5454");
+    	socket.connect("tcp://127.0.0.1:5454").unwrap();
     }
 }

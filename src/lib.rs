@@ -1,5 +1,6 @@
 #![crate_name = "scaproust"]
 
+#[macro_use] extern crate log;
 extern crate mio;
 
 mod global;
@@ -11,6 +12,10 @@ mod socket_impl;
 mod protocol;
 mod transport;
 
-pub use session::{
-    Session
-};
+pub use session::Session;
+
+pub use socket::Socket;
+
+pub use global::SocketType;
+
+type EventLoop = mio::EventLoop<session_impl::SessionImpl>;

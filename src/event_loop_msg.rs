@@ -1,4 +1,5 @@
 use std::sync::mpsc;
+use std::io;
 
 use global::SocketType as SocketType;
 
@@ -10,6 +11,10 @@ pub enum EventLoopCmd {
 	Shutdown
 }
 
+pub enum EventLoopTimeout {
+	Reconnect(usize, String)
+}
+
 pub enum SessionEvt {
 	Pong,
 	SocketCreated(usize, mpsc::Receiver<SocketEvt>),
@@ -17,5 +22,7 @@ pub enum SessionEvt {
 }
 
 pub enum SocketEvt {
-    Pong
+    Pong,
+    Connected,
+    NotConnected(io::Error)
 }

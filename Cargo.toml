@@ -3,5 +3,15 @@ name = "scaproust"
 version = "0.1.0"
 authors = ["blabaere <benoit.labaere@gmail.com>"]
 
+[dependencies]
+log = "0.3.1"
+
 [dependencies.mio]
 git = "https://github.com/carllerche/mio"
+
+[dev-dependencies]
+env_logger = "0.3.0"
+
+#[[test]]
+#name = "test"
+#path = "test/test.rs"

@@ -2,6 +2,7 @@ use event_loop_msg::EventLoopCmd as EventLoopCmd;
 use event_loop_msg::SocketEvt as SocketEvt;
 
 use mio;
+use mio::NotifyError;
 
 use std::sync::mpsc;
 use std::io;
@@ -35,10 +36,30 @@ impl Socket {
 		self.evt_receiver.recv().unwrap();
 	}
 
-	pub fn connect(&self, addr: &str) {
+	pub fn connect(&self, addr: &str) -> Result<(), io::Error> {
+		debug!("Socket::connect {} -> {}", self.id, addr);
 		let cmd = EventLoopCmd::ConnectSocket(self.id, addr.to_owned());
 
-		self.cmd_sender.send(cmd);
-		self.evt_receiver.recv().unwrap();
+		// TODO : this should become a function or a macro ...
+		if let Err(send_err) = self.cmd_sender.send(cmd) {
+			let io_err = match send_err {
+				NotifyError::Io(e) => e,
+				NotifyError::Closed(_) => {
+					io::Error::new(io::ErrorKind::Other, "cmd channel closed")
+				},
+				NotifyError::Full(_) => {
+					io::Error::new(io::ErrorKind::WouldBlock, "cmd channel full")
+				}
+			};
+
+			return Err(io_err);
+		}
+
+		match self.evt_receiver.recv() {
+			Ok(SocketEvt::Connected) => Ok(()),
+			Ok(SocketEvt::NotConnected(e)) => Err(e),
+			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
+			Err(e) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
+		}
 	}
 }
