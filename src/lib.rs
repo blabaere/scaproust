@@ -11,6 +11,7 @@ mod socket;
 mod socket_impl;
 mod protocol;
 mod transport;
+mod pipe;
 
 pub use session::Session;
 

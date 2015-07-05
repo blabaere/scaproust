@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::collections::HashMap;
 
 use std::sync::mpsc;
@@ -15,23 +16,24 @@ use event_loop_msg::SocketEvt as SocketEvt;
 use protocol::Protocol as Protocol;
 use transport::Transport as Transport;
 use transport::Connection as Connection;
+use pipe::Pipe as Pipe;
 use transport;
 
 use EventLoop;
 
 pub struct SocketImpl {
-	protocol: Box<Protocol>,
+	protocol: Rc<Box<Protocol>>,
 	evt_sender: mpsc::Sender<SocketEvt>,
-	connections: HashMap<usize, Box<Connection>> 
+	pipes: HashMap<usize, Pipe> 
 }
 
 impl SocketImpl {
 
 	pub fn new(proto: Box<Protocol>, evt_tx: mpsc::Sender<SocketEvt>) -> SocketImpl {
 		SocketImpl { 
-			protocol: proto, 
+			protocol: Rc::new(proto), 
 			evt_sender: evt_tx,
-			connections: HashMap::new()
+			pipes: HashMap::new()
 		}
 	}
 
@@ -46,61 +48,29 @@ impl SocketImpl {
 		let scheme = addr_parts[0];
 		let specific_addr = addr_parts[1];
 		let transport = transport::create_transport(scheme);
-		let connector = transport.connector(specific_addr, id);
-		let connection = try!(connector.connect(event_loop));
+		let connection = transport.connect(specific_addr).unwrap();
+		let pipe = Pipe::new(id, self.protocol.clone(), connection);
 
-		self.connections.insert(id, connection);
+		pipe.init(event_loop);
+
+		self.pipes.insert(id, pipe);
 		self.evt_sender.send(SocketEvt::Connected);
 
 		Ok(())
 	}
 
 	pub fn readable(&mut self, event_loop: &mut EventLoop, id: usize, hint: mio::ReadHint) {
-		debug!("SocketImpl::readable {}", id);
-		if let Some(connection) = self.connections.get_mut(&id) {
-			connection.readable(event_loop, hint);
-			let token = mio::Token(id); 
-			let interest = mio::Interest::writable() | mio::Interest::hup() | mio::Interest::error();
-			let poll_opt = mio::PollOpt::oneshot();
-			event_loop.reregister(connection.as_evented(), token, interest, poll_opt);
+		debug!("SocketImpl::readable {} {:?}", id, hint);
+		if let Some(pipe) = self.pipes.get_mut(&id) {
+			pipe.readable(event_loop, hint);
 		}
 	}
 
 	pub fn writable(&mut self, event_loop: &mut EventLoop, id: usize) {
 		debug!("SocketImpl::writable {}", id);
-		if let Some(connection) = self.connections.get_mut(&id) {
-			match connection.writable(event_loop) {
-				Ok(false) => {
-					let token = mio::Token(id); 
-					let interest = mio::Interest::readable() | mio::Interest::hup() | mio::Interest::error();
-					let poll_opt = mio::PollOpt::oneshot();
-					event_loop.reregister(connection.as_evented(), token, interest, poll_opt);
-				},
-				Ok(true) => {
-					let token = mio::Token(id); 
-					let interest = mio::Interest::writable() | mio::Interest::hup() | mio::Interest::error();
-					let poll_opt = mio::PollOpt::oneshot();
-					event_loop.reregister(connection.as_evented(), token, interest, poll_opt);
-				},
-				Err(e) => {
-					debug!("SocketImpl::writable failed {}", e);
-				}
-			};
-
+		if let Some(pipe) = self.pipes.get_mut(&id) {
+			pipe.writable(event_loop);
 		}
-		/*if let Some(connection) = self.connections.get_mut(&id) {
-			let handshake = vec!(0, 83, 80, 0, 0, 80, 0, 0);
-
-			match connection.try_write(&handshake) {
-				Ok(_) => {
-
-				},
-				Err(e) => {
-					connection.disconnect(event_loop, id);
-					event_loop.timeout_ms(EventLoopTimeout::Reconnect(id, "tcp://127.0.0.1:5454".to_owned()), 500);
-				}
-			}
-		}*/
 	}
 
 }
