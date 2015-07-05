@@ -1,4 +1,5 @@
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SocketType {
     Pair       = (1 * 16),
 	Pub        = (2 * 16),
@@ -10,4 +11,10 @@ pub enum SocketType {
 	Surveyor   = (6 * 16),
 	Respondent = (6 * 16) + 1,
 	Bus        = (7 * 16)
+}
+
+impl SocketType {
+	pub fn id(&self) -> u16 {
+		*self as u16
+	}
 }

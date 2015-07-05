@@ -1,6 +1,7 @@
 #![crate_name = "scaproust"]
 
 #[macro_use] extern crate log;
+extern crate byteorder;
 extern crate mio;
 
 mod global;

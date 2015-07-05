@@ -1,6 +1,8 @@
 use std::rc::Rc;
 use std::io;
 
+use byteorder::{BigEndian, WriteBytesExt};
+
 use mio;
 
 use EventLoop;
@@ -25,7 +27,11 @@ impl Pipe {
 			connection: connection,
 			handshake_sent: false,
 			handshake_received: false,
-			msg_sent: false
+			msg_sent: false 
+			// TODO turn this madness into strategy or state pattern
+			// states could be Initial, Handshake, Ready & Recover
+			// and have a look at coroutine too
+
 		}
 	}
 
@@ -68,6 +74,7 @@ impl Pipe {
 				Some(8) => {
 					debug!("handshake read !");
 					self.handshake_received = true;
+					//TODO validate peer protocol number !
 				},
 				Some(n) => {
 					debug!("read {} bytes of handshake !", n);
@@ -101,14 +108,16 @@ impl Pipe {
 	pub fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
 		if self.handshake_sent {
 			if self.handshake_received {
-				let header = [0, 0, 0, 0, 0, 0, 0, 3];
-				let body = [65, 86, 67];
+				if self.msg_sent {
+					debug!("writable but nothing to do anymore !");
+				} else {
+					let header = [0, 0, 0, 0, 0, 0, 0, 3];
+					let body = [65, 86, 67];
 
-				try!(self.connection.try_write(&header));
-				debug!("packet header sent !");
-				try!(self.connection.try_write(&body));
-				debug!("packet body sent !");
-				self.msg_sent = true;
+					try!(self.connection.try_write(&header));
+					try!(self.connection.try_write(&body));
+					self.msg_sent = true;
+				}
 				/*let random_stuff = vec!(0, 0, 0, 0, 0, 0, 0, 8, 65, 86, 67, 70, 75, 80, 81, 90);
 				let written = try!(self.stream.try_write(&random_stuff));
 
@@ -130,7 +139,10 @@ impl Pipe {
 				debug!("writable but waiting for peer handshake !");
 			}
 		} else {
-			let handshake = vec!(0, 83, 80, 0, 0, 80, 0, 0);
+			// handshake is Zero, 'S', 'P', Version, Proto, Rsvd
+			let mut handshake = vec!(0, 83, 80, 0);
+			handshake.write_u16::<BigEndian>(self.protocol.id()).unwrap();
+			handshake.write_u16::<BigEndian>(0).unwrap();
 			let written = try!(self.connection.try_write(&handshake));
 
 			match written {
