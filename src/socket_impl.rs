@@ -6,16 +6,12 @@ use std::sync::mpsc;
 use std::io;
 
 use mio;
-use mio::{TryRead, TryWrite};
 
 use event_loop_msg::EventLoopCmd as EventLoopCmd;
 use event_loop_msg::EventLoopTimeout as EventLoopTimeout;
-use event_loop_msg::SessionEvt as SessionEvt;
 use event_loop_msg::SocketEvt as SocketEvt;
 
 use protocol::Protocol as Protocol;
-use transport::Transport as Transport;
-use transport::Connection as Connection;
 use pipe::Pipe as Pipe;
 use transport;
 
@@ -49,7 +45,7 @@ impl SocketImpl {
 		let specific_addr = addr_parts[1];
 		let transport = transport::create_transport(scheme);
 		let connection = transport.connect(specific_addr).unwrap();
-		let pipe = Pipe::new(id, self.protocol.clone(), connection);
+		let mut pipe = Pipe::new(id, self.protocol.clone(), connection);
 
 		pipe.init(event_loop);
 

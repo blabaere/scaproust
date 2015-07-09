@@ -9,43 +9,67 @@ use EventLoop;
 use protocol::Protocol as Protocol;
 use transport::Connection as Connection;
 
+enum PipeStateIdx {
+	Handshake,
+	Ready
+}
+
+// TODO : looks like the only option is to:
+// - keep all states inside a collection field (use Slab ?)
+// - keep track of the current state inside an index field (use Token ?)
+// - have the state changing occur by passing around a new index value of the position field ...
+// - use constants to identify each state
 pub struct Pipe {
-	id: usize,
-	protocol: Rc<Box<Protocol>>,
-	connection: Box<Connection>,
-	handshake_sent: bool,
-	handshake_received: bool,
-	msg_sent: bool
+	state: PipeStateIdx,
+	handshake_state: HandshakePipeState
 }
 
 impl Pipe {
 
 	pub fn new(id: usize, protocol: Rc<Box<Protocol>>, connection: Box<Connection>) -> Pipe {
 		Pipe {
-			id: id,
-			protocol: protocol,
-			connection: connection,
-			handshake_sent: false,
-			handshake_received: false,
-			msg_sent: false 
-			// TODO turn this madness into strategy or state pattern
-			// states could be Initial, Handshake, Ready & Recover
-			// and have a look at coroutine too
-
+			state: PipeStateIdx::Handshake,
+			handshake_state: HandshakePipeState::new(id, protocol, connection)
 		}
 	}
 
-	pub fn init(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-		let interest = mio::Interest::readable() | mio::Interest::writable() | mio::Interest::hup();
+	fn get_state<'a>(&'a mut self) -> &'a mut PipeState {
+		match self.state {
+			PipeStateIdx::Handshake => &mut self.handshake_state,
+			PipeStateIdx::Ready => &mut self.handshake_state // todo implement the ready state
+		}
+	}
+
+	fn set_state(&mut self, state: PipeStateIdx, event_loop: &mut EventLoop) -> io::Result<()> {
+		self.state = state;
+		self.get_state().enter(event_loop)
+	}
+
+	pub fn init(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+		self.set_state(PipeStateIdx::Handshake, event_loop)
+		//self.state.take().unwrap().enter(event_loop)
+		/*let interest = mio::Interest::readable() | mio::Interest::writable() | mio::Interest::hup();
 		let poll_opt = mio::PollOpt::oneshot();
 
 		try!(self.register(event_loop, interest, poll_opt));
 
-		Ok(())
+		Ok(())*/
 	}
 
 	pub fn readable(&mut self, event_loop: &mut EventLoop, hint: mio::ReadHint)	-> io::Result<()> {
-		debug!("pipe [{}] readable: {:?}", self.id, hint);
+		//let state = ;
+		if let Some(new_state) = try!(self.get_state().readable(event_loop)) {
+			self.set_state(new_state, event_loop);
+		} 
+
+		Ok(())
+		/*if self.msg_sent {
+			return Ok(())
+		}
+
+		let next = try!(self.state.readable(&mut self.connection, event_loop));
+		Ok(())*/
+		/*debug!("pipe [{}] readable: {:?}", self.id, hint);
 		if self.handshake_received {
 			debug!("pipe [{}] push need no read: {:?}", self.id, hint);
 			let mut packet = [0u8; 1024];
@@ -102,11 +126,23 @@ impl Pipe {
 			try!(self.reregister(event_loop, interest, poll_opt));
 
 			Ok(())			
-		}
+		}*/
 	}
 
 	pub fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-		if self.handshake_sent {
+		/*let mut state = self.state.take().unwrap();
+
+		if try!(state.writable(event_loop)) {
+			self.state = Some(state.leave());
+		} else {
+			self.state = Some(state);
+		}*/
+
+		Ok(())
+		//let state = &self.state;
+		//let next = state.writable(self, event_loop);
+		//Ok(())
+		/*if self.handshake_sent {
 			if self.handshake_received {
 				if self.msg_sent {
 					debug!("writable but nothing to do anymore !");
@@ -187,10 +223,17 @@ impl Pipe {
 			}
 		}
 
-		Ok(())
+		Ok(())*/
 	}
+	
+}
 
-	fn register(&self, event_loop: &mut EventLoop, interest: mio::Interest, poll_opt: mio::PollOpt) -> io::Result<()> {
+trait PipeState {
+	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()>;
+	fn readable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>>;
+	fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>>;
+
+	/*fn register(&self, event_loop: &mut EventLoop, interest: mio::Interest, poll_opt: mio::PollOpt) -> io::Result<()> {
 		let token = mio::Token(self.id); 
 		let fd = self.connection.as_evented();
 
@@ -202,6 +245,107 @@ impl Pipe {
 		let fd = self.connection.as_evented();
 
 		event_loop.reregister(fd, token, interest, poll_opt)
+	}*/
+}
+
+struct HandshakePipeState {
+	id: usize,
+	protocol: Rc<Box<Protocol>>,
+	connection: Box<Connection>,
+	sent: bool,
+	received: bool
+}
+
+impl HandshakePipeState {
+	fn new(id: usize, protocol: Rc<Box<Protocol>>, connection: Box<Connection>) -> HandshakePipeState {
+		HandshakePipeState { 
+			id: id,
+			protocol: protocol,
+			connection: connection,
+			sent: false, 
+			received: false }
 	}
-	
+
+	fn check_received_handshake(&self/*, pipe: &Pipe*/, handshake: &[u8; 8]) -> io::Result<()> {
+		let mut expected_handshake = vec!(0, 83, 80, 0);
+		let protocol_id = 81u16;//pipe.protocol.peer_id();
+		try!(expected_handshake.write_u16::<BigEndian>(protocol_id));
+		try!(expected_handshake.write_u16::<BigEndian>(0));
+		let mut both = handshake.iter().zip(expected_handshake.iter());
+
+		if both.all(|(l,r)| l == r) {
+			Ok(())
+		} else {
+			Err(io::Error::new(io::ErrorKind::InvalidData, "received wrong handshake"))
+		}
+	}
+
+	fn check_sent_handshake(&self, written: Option<usize>) -> io::Result<()> {
+		match written {
+			Some(8) => Ok(()),
+			_ => Err(io::Error::new(io::ErrorKind::InvalidData, "failed to send handshake"))
+		}
+	}
+}
+
+impl PipeState for HandshakePipeState {
+	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+		let interest = mio::Interest::readable() | mio::Interest::writable() | mio::Interest::hup();
+		let poll_opt = mio::PollOpt::oneshot();
+
+		//try!(self.register(event_loop, interest, poll_opt));
+
+		Ok(())
+	}
+
+	fn readable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>> {
+		if self.received {
+			return Ok(None)
+		}
+
+		let mut handshake = [0u8; 8];
+		try!(
+			self.connection.try_read(&mut handshake).
+			and_then(|_| self.check_received_handshake(&handshake)));
+
+		debug!("handshake received !");
+		self.received = true;
+
+		if self.sent {
+			Ok(Some(PipeStateIdx::Ready))			
+		} else {
+			/*let interest = mio::Interest::hup() | mio::Interest::writable();
+			let poll_opt = mio::PollOpt::oneshot();
+
+			try!(pipe.reregister(event_loop, interest, poll_opt));*/
+			Ok(None)			
+		}
+	}
+
+	fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>> {
+		if self.sent {
+			return Ok(None)
+		}
+		// handshake is Zero, 'S', 'P', Version, Proto, Rsvd
+		let mut handshake = vec!(0, 83, 80, 0);
+		let protocol_id = self.protocol.id();
+		try!(handshake.write_u16::<BigEndian>(protocol_id));
+		try!(handshake.write_u16::<BigEndian>(0));
+
+		try!(
+			self.connection.try_write(&handshake).
+			and_then(|w| self.check_sent_handshake(w)));
+
+		debug!("handshake received !");
+		self.sent = true;
+
+		if self.received {
+			Ok(Some(PipeStateIdx::Ready))
+		} else {
+			//let interest = mio::Interest::hup() | mio::Interest::readable();
+			//let poll_opt = mio::PollOpt::oneshot();
+			//try!(pipe.reregister(event_loop, interest, poll_opt));
+			Ok(None)
+		}
+	}
 }
