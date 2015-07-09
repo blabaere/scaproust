@@ -7,6 +7,18 @@ use mio::NotifyError;
 use std::sync::mpsc;
 use std::io;
 
+fn convert_notify_err<T>(err: NotifyError<T>) -> io::Error {
+	match err {
+		NotifyError::Io(e) => e,
+		NotifyError::Closed(_) => {
+			io::Error::new(io::ErrorKind::Other, "cmd channel closed")
+		},
+		NotifyError::Full(_) => {
+			io::Error::new(io::ErrorKind::WouldBlock, "cmd channel full")
+		}
+	}
+}
+
 pub struct Socket {
 	id: usize,
 	cmd_sender: mio::Sender<EventLoopCmd>,
@@ -28,38 +40,35 @@ impl Socket {
 		}
 
 	}
+
+	fn send_cmd(&self, cmd: EventLoopCmd) -> Result<(), io::Error> {
+		self.cmd_sender.send(cmd).map_err(|e| convert_notify_err(e))
+	}
 	
-	pub fn ping(&self) {
+	pub fn ping(&self) -> Result<(), io::Error> {
 		let cmd = EventLoopCmd::PingSocket(self.id);
 
-		self.cmd_sender.send(cmd);
-		self.evt_receiver.recv().unwrap();
+		try!(self.send_cmd(cmd));
+
+		match self.evt_receiver.recv() {
+			Ok(SocketEvt::Pong) => Ok(()),
+			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
+			Err(_) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
+		}
 	}
 
+	// TODO: return an Endpoint struct with a shutdown method instead of '()'
 	pub fn connect(&self, addr: &str) -> Result<(), io::Error> {
 		debug!("Socket::connect {} -> {}", self.id, addr);
 		let cmd = EventLoopCmd::ConnectSocket(self.id, addr.to_owned());
 
-		// TODO : this should become a function or a macro ...
-		if let Err(send_err) = self.cmd_sender.send(cmd) {
-			let io_err = match send_err {
-				NotifyError::Io(e) => e,
-				NotifyError::Closed(_) => {
-					io::Error::new(io::ErrorKind::Other, "cmd channel closed")
-				},
-				NotifyError::Full(_) => {
-					io::Error::new(io::ErrorKind::WouldBlock, "cmd channel full")
-				}
-			};
-
-			return Err(io_err);
-		}
+		try!(self.send_cmd(cmd));
 
 		match self.evt_receiver.recv() {
 			Ok(SocketEvt::Connected) => Ok(()),
 			Ok(SocketEvt::NotConnected(e)) => Err(e),
 			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
-			Err(e) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
+			Err(_) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
 		}
 	}
 }
