@@ -3,6 +3,7 @@
 #[macro_use] extern crate log;
 extern crate byteorder;
 extern crate mio;
+extern crate time;
 
 mod global;
 mod event_loop_msg;

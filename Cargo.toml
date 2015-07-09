@@ -6,6 +6,7 @@ authors = ["blabaere <benoit.labaere@gmail.com>"]
 [dependencies]
 log = "0.3.1"
 byteorder = "0.3.10"
+time = "0.1.30"
 
 [dependencies.mio]
 git = "https://github.com/carllerche/mio"
