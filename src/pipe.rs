@@ -2,7 +2,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::io;
 
-
 use byteorder::{BigEndian, WriteBytesExt};
 
 use mio;
@@ -83,6 +82,7 @@ struct HandshakePipeState {
 }
 
 impl HandshakePipeState {
+
 	fn new(id: usize, protocol: Rc<Box<Protocol>>, connection: Rc<RefCell<Box<Connection>>>) -> HandshakePipeState {
 		HandshakePipeState { 
 			id: id,
@@ -113,9 +113,35 @@ impl HandshakePipeState {
 		}
 	}
 
+	fn read_handshake(&mut self) -> io::Result<()> {
+		let mut handshake = [0u8; 8];
+		let mut connection = self.connection.borrow_mut();
+		try!(
+			connection.try_read(&mut handshake).
+			and_then(|_| self.check_received_handshake(&handshake)));
+		debug!("handshake received !");
+		self.received = true;
+		Ok(())
+	}
+
+	fn write_handshake(&mut self) -> io::Result<()> {
+		// handshake is Zero, 'S', 'P', Version, Proto, Rsvd
+		let mut handshake = vec!(0, 83, 80, 0);
+		let protocol_id = self.protocol.id();
+		try!(handshake.write_u16::<BigEndian>(protocol_id));
+		try!(handshake.write_u16::<BigEndian>(0));
+		let mut connection = self.connection.borrow_mut();
+		try!(
+			connection.try_write(&handshake).
+			and_then(|w| self.check_sent_handshake(w)));
+		debug!("handshake sent !");
+		self.sent = true;
+		Ok(())
+	}
+
 	fn register(&self, event_loop: &mut EventLoop, interest: mio::Interest, poll_opt: mio::PollOpt) -> io::Result<()> {
 		let token = mio::Token(self.id); 
-		let connection = self.connection.borrow_mut();
+		let connection = self.connection.borrow();
 		let fd = connection.as_evented();
 
 		event_loop.register_opt(fd, token, interest, poll_opt)
@@ -123,14 +149,16 @@ impl HandshakePipeState {
 
 	fn reregister(&self, event_loop: &mut EventLoop, interest: mio::Interest, poll_opt: mio::PollOpt) -> io::Result<()> {
 		let token = mio::Token(self.id); 
-		let connection = self.connection.borrow_mut();
+		let connection = self.connection.borrow();
 		let fd = connection.as_evented();
 
 		event_loop.reregister(fd, token, interest, poll_opt)
 	}
+
 }
 
 impl PipeState for HandshakePipeState {
+
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
 		debug!("Enter handshake state");
 		self.sent = false;
@@ -149,15 +177,7 @@ impl PipeState for HandshakePipeState {
 			return Ok(None)
 		}
 
-		let mut handshake = [0u8; 8];
-		let mut connection = self.connection.borrow_mut();
-		try!(
-			connection.try_read(&mut handshake).
-			and_then(|_| self.check_received_handshake(&handshake)));
-		drop(connection);
-
-		debug!("handshake received !");
-		self.received = true;
+		try!(self.read_handshake());
 
 		if self.sent {
 			Ok(Some(PipeStateIdx::Ready))			
@@ -174,20 +194,8 @@ impl PipeState for HandshakePipeState {
 		if self.sent {
 			return Ok(None)
 		}
-		// handshake is Zero, 'S', 'P', Version, Proto, Rsvd
-		let mut handshake = vec!(0, 83, 80, 0);
-		let protocol_id = self.protocol.id();
-		try!(handshake.write_u16::<BigEndian>(protocol_id));
-		try!(handshake.write_u16::<BigEndian>(0));
 
-		let mut connection = self.connection.borrow_mut();
-		try!(
-			connection.try_write(&handshake).
-			and_then(|w| self.check_sent_handshake(w)));
-		drop(connection);
-
-		debug!("handshake sent !");
-		self.sent = true;
+		try!(self.write_handshake());
 
 		if self.received {
 			Ok(Some(PipeStateIdx::Ready))
@@ -198,6 +206,7 @@ impl PipeState for HandshakePipeState {
 			Ok(None)
 		}
 	}
+	
 }
 
 struct ReadyPipeState {
