@@ -7,10 +7,12 @@ use byteorder::{BigEndian, WriteBytesExt};
 use mio;
 
 use EventLoop;
+use Message;
 use protocol::Protocol as Protocol;
 use transport::Connection as Connection;
 
-enum PipeStateIdx {
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum PipeStateIdx {
 	Handshake,
 	Ready
 }
@@ -23,14 +25,22 @@ pub struct Pipe {
 
 impl Pipe {
 
-	pub fn new(id: usize, protocol: Rc<Box<Protocol>>, connection: Box<Connection>) -> Pipe {
+	pub fn new(id: usize, protocol: &Protocol, connection: Box<Connection>) -> Pipe {
 		let conn_ref = Rc::new(RefCell::new(connection));
 
 		Pipe {
 			state: PipeStateIdx::Handshake,
-			handshake_state: HandshakePipeState::new(id, protocol.clone(), conn_ref.clone()),
-			ready_state: ReadyPipeState::new(id, protocol.clone(), conn_ref.clone())
+			handshake_state: HandshakePipeState::new(id, protocol, conn_ref.clone()),
+			ready_state: ReadyPipeState::new(id, conn_ref.clone())
 		}
+	}
+
+	pub fn is_ready(&self) -> bool {
+		self.state == PipeStateIdx::Ready
+	}
+
+	pub fn send(&mut self, msg: Message) {
+		self.get_state().send(msg);
 	}
 
 	fn get_state<'a>(&'a mut self) -> &'a mut PipeState {
@@ -81,11 +91,14 @@ trait PipeState {
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()>;
 	fn readable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>>;
 	fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>>;
+
+	fn send(&mut self, msg: Message) -> io::Result<()>;
 }
 
 struct HandshakePipeState {
 	id: usize,
-	protocol: Rc<Box<Protocol>>,
+	protocol_id: u16,
+	protocol_peer_id: u16,
 	connection: Rc<RefCell<Box<Connection>>>,
 	sent: bool,
 	received: bool
@@ -93,10 +106,11 @@ struct HandshakePipeState {
 
 impl HandshakePipeState {
 
-	fn new(id: usize, protocol: Rc<Box<Protocol>>, connection: Rc<RefCell<Box<Connection>>>) -> HandshakePipeState {
+	fn new(id: usize, protocol: &Protocol, connection: Rc<RefCell<Box<Connection>>>) -> HandshakePipeState {
 		HandshakePipeState { 
 			id: id,
-			protocol: protocol,
+			protocol_id: protocol.id(),
+			protocol_peer_id: protocol.peer_id(),
 			connection: connection,
 			sent: false, 
 			received: false }
@@ -104,8 +118,7 @@ impl HandshakePipeState {
 
 	fn check_received_handshake(&self, handshake: &[u8; 8]) -> io::Result<()> {
 		let mut expected_handshake = vec!(0, 83, 80, 0);
-		let protocol_id = self.protocol.peer_id();
-		try!(expected_handshake.write_u16::<BigEndian>(protocol_id));
+		try!(expected_handshake.write_u16::<BigEndian>(self.protocol_peer_id));
 		try!(expected_handshake.write_u16::<BigEndian>(0));
 		let mut both = handshake.iter().zip(expected_handshake.iter());
 
@@ -137,8 +150,7 @@ impl HandshakePipeState {
 	fn write_handshake(&mut self) -> io::Result<()> {
 		// handshake is Zero, 'S', 'P', Version, Proto, Rsvd
 		let mut handshake = vec!(0, 83, 80, 0);
-		let protocol_id = self.protocol.id();
-		try!(handshake.write_u16::<BigEndian>(protocol_id));
+		try!(handshake.write_u16::<BigEndian>(self.protocol_id));
 		try!(handshake.write_u16::<BigEndian>(0));
 		let mut connection = self.connection.borrow_mut();
 		try!(
@@ -216,21 +228,23 @@ impl PipeState for HandshakePipeState {
 			Ok(None)
 		}
 	}
+
+	fn send(&mut self, _: Message) -> io::Result<()> {
+		Ok(())
+	}
 	
 }
 
 struct ReadyPipeState {
 	id: usize,
-	protocol: Rc<Box<Protocol>>,
 	connection: Rc<RefCell<Box<Connection>>>,
 	sent: bool
 }
 
 impl ReadyPipeState {
-	fn new(id: usize, protocol: Rc<Box<Protocol>>, connection: Rc<RefCell<Box<Connection>>>) -> ReadyPipeState {
+	fn new(id: usize, connection: Rc<RefCell<Box<Connection>>>) -> ReadyPipeState {
 		ReadyPipeState { 
 			id: id,
-			protocol: protocol,
 			connection: connection,
 			sent: false }
 	}	
@@ -267,5 +281,24 @@ impl PipeState for ReadyPipeState {
 
 			Ok(None)
 		}
+	}
+
+	fn send(&mut self, msg: Message) -> io::Result<()> {
+		let mut connection = self.connection.borrow_mut();
+		let mut prefix = Vec::with_capacity(8);
+		try!(prefix.write_u64::<BigEndian>(msg.len() as u64));
+
+		try!(connection.try_write(&prefix));
+
+		if msg.get_header().len() > 0 {
+			try!(connection.try_write(msg.get_header()));
+		}
+
+		if msg.get_body().len() > 0 {
+			try!(connection.try_write(msg.get_body()));
+		}
+
+		debug!("msg sent !");
+		Ok(())
 	}
 }

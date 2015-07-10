@@ -35,4 +35,16 @@ impl Message {
 			body: buffer
 		}
 	}
+
+	pub fn len(&self) -> usize {
+		self.header.len() + self.body.len()
+	}
+
+	pub fn get_header<'a>(&'a self) -> &'a [u8] {
+		&self.header
+	}
+
+	pub fn get_body<'a>(&'a self) -> &'a [u8] {
+		&self.body
+	}
 }

@@ -75,9 +75,9 @@ impl SessionImpl {
 		}
 	}
 
-	fn send_msg(&mut self, id: usize, msg: Message) {
+	fn send_msg(&mut self, id: usize, event_loop: &mut EventLoop, msg: Message) {
 		if let Some(socket) = self.sockets.get_mut(&id) {
-			socket.send(msg);
+			socket.send(event_loop, msg);
 		}
 	}
 }
@@ -87,12 +87,13 @@ impl mio::Handler for SessionImpl {
     type Message = EventLoopCmd;
 
     fn notify(&mut self, event_loop: &mut EventLoop, msg: Self::Message) {
+    	debug!("session backend received a command");
     	match msg {
     		EventLoopCmd::Ping => self.pong(),
     		EventLoopCmd::CreateSocket(socket_type) => self.create_socket(socket_type),
     		EventLoopCmd::PingSocket(id) => self.ping_socket(id),
     		EventLoopCmd::ConnectSocket(id, addr) => self.connect_socket(id, event_loop, &addr),
-    		EventLoopCmd::SendMsg(id, msg) => self.send_msg(id, msg),
+    		EventLoopCmd::SendMsg(id, msg) => self.send_msg(id, event_loop, msg),
     		EventLoopCmd::Shutdown => event_loop.shutdown()
     	}
     }

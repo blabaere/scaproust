@@ -1,5 +1,4 @@
 use mio;
-use mio::util::Slab;
 use std::io;
 use std::thread;
 use std::sync::mpsc;
@@ -33,8 +32,12 @@ impl Session {
 
 	fn run_event_loop(event_loop: &mut mio::EventLoop<SessionImpl>, evt_tx: mpsc::Sender<SessionEvt>) {
 		let mut handler = SessionImpl::new(evt_tx);
+		let exec = event_loop.run(&mut handler);
 
-		event_loop.run(&mut handler);
+		match exec {
+			Ok(_) => debug!("event loop exited"),
+			Err(e) => error!("event loop failed to run: {}", e)
+		}
 	}
 
 	fn ping_event_loop(&self) {

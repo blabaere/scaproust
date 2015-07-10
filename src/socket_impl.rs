@@ -1,8 +1,6 @@
 use std::rc::Rc;
-use std::collections::HashMap;
-
+use std::ops::Deref;
 use std::sync::mpsc;
-
 use std::io;
 
 use mio;
@@ -19,18 +17,16 @@ use EventLoop;
 use Message;
 
 pub struct SocketImpl {
-	protocol: Rc<Box<Protocol>>,
+	protocol: Box<Protocol>,
 	evt_sender: mpsc::Sender<SocketEvt>,
-	pipes: HashMap<usize, Pipe> 
 }
 
 impl SocketImpl {
 
 	pub fn new(proto: Box<Protocol>, evt_tx: mpsc::Sender<SocketEvt>) -> SocketImpl {
 		SocketImpl { 
-			protocol: Rc::new(proto), 
-			evt_sender: evt_tx,
-			pipes: HashMap::new()
+			protocol: proto, 
+			evt_sender: evt_tx
 		}
 	}
 
@@ -46,27 +42,24 @@ impl SocketImpl {
 		let specific_addr = addr_parts[1];
 		let transport = transport::create_transport(scheme);
 		let connection = transport.connect(specific_addr).unwrap();
-
-		// TODO : pipe does not need the whole protocol, just the ids
-		// but the protocol will probably need to know about all the pipes
-		// for example Push will check all the conn to find the first writable one
-		let mut pipe = Pipe::new(id, self.protocol.clone(), connection);
+		let mut pipe = Pipe::new(id, &*self.protocol, connection);
 
 		pipe.init(event_loop);
 
-		self.pipes.insert(id, pipe);
+		self.protocol.add_pipe(id, pipe);
+
 		self.evt_sender.send(SocketEvt::Connected);
 
 		Ok(())
 	}
 
-	pub fn send(&mut self, msg: Message) {
+	pub fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
+		self.protocol.send(event_loop, msg);
+		self.evt_sender.send(SocketEvt::MsgSent); // pretend it went fine
 	}
 
 	pub fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) {
-		if let Some(pipe) = self.pipes.get_mut(&id) {
-			pipe.ready(event_loop, events);
-		}
+		self.protocol.ready(event_loop, id, events)
 	}
 
 }
