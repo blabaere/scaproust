@@ -49,7 +49,17 @@ impl Pipe {
 		self.set_state(PipeStateIdx::Handshake, event_loop)
 	}
 
-	pub fn readable(&mut self, event_loop: &mut EventLoop, hint: mio::ReadHint)	-> io::Result<()> {
+	pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<()> {
+		if events.is_readable() {
+			try!(self.readable(event_loop));
+		} 
+		if events.is_writable() {
+			try!(self.writable(event_loop));
+		} 
+		Ok(())
+	}
+
+	pub fn readable(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
 		if let Some(new_state) = try!(self.get_state().readable(event_loop)) {
 			try!(self.set_state(new_state, event_loop));
 		} 
@@ -139,7 +149,7 @@ impl HandshakePipeState {
 		Ok(())
 	}
 
-	fn register(&self, event_loop: &mut EventLoop, interest: mio::Interest, poll_opt: mio::PollOpt) -> io::Result<()> {
+	fn register(&self, event_loop: &mut EventLoop, interest: mio::EventSet, poll_opt: mio::PollOpt) -> io::Result<()> {
 		let token = mio::Token(self.id); 
 		let connection = self.connection.borrow();
 		let fd = connection.as_evented();
@@ -147,7 +157,7 @@ impl HandshakePipeState {
 		event_loop.register_opt(fd, token, interest, poll_opt)
 	}
 
-	fn reregister(&self, event_loop: &mut EventLoop, interest: mio::Interest, poll_opt: mio::PollOpt) -> io::Result<()> {
+	fn reregister(&self, event_loop: &mut EventLoop, interest: mio::EventSet, poll_opt: mio::PollOpt) -> io::Result<()> {
 		let token = mio::Token(self.id); 
 		let connection = self.connection.borrow();
 		let fd = connection.as_evented();
@@ -164,7 +174,7 @@ impl PipeState for HandshakePipeState {
 		self.sent = false;
 		self.received = false;
 
-		let interest = mio::Interest::readable() | mio::Interest::writable() | mio::Interest::hup();
+		let interest = mio::EventSet::readable() | mio::EventSet::writable() | mio::EventSet::hup();
 		let poll_opt = mio::PollOpt::oneshot();
 
 		try!(self.register(event_loop, interest, poll_opt));
@@ -182,7 +192,7 @@ impl PipeState for HandshakePipeState {
 		if self.sent {
 			Ok(Some(PipeStateIdx::Ready))			
 		} else {
-			let interest = mio::Interest::hup() | mio::Interest::writable();
+			let interest = mio::EventSet::hup() | mio::EventSet::writable();
 			let poll_opt = mio::PollOpt::oneshot();
 
 			try!(self.reregister(event_loop, interest, poll_opt));
@@ -200,7 +210,7 @@ impl PipeState for HandshakePipeState {
 		if self.received {
 			Ok(Some(PipeStateIdx::Ready))
 		} else {
-			let interest = mio::Interest::hup() | mio::Interest::readable();
+			let interest = mio::EventSet::hup() | mio::EventSet::readable();
 			let poll_opt = mio::PollOpt::oneshot();
 			try!(self.reregister(event_loop, interest, poll_opt));
 			Ok(None)
@@ -232,7 +242,7 @@ impl PipeState for ReadyPipeState {
 		let token = mio::Token(self.id); 
 		let connection = self.connection.borrow_mut();
 		let fd = connection.as_evented();
-		let interest = mio::Interest::hup() | mio::Interest::writable();
+		let interest = mio::EventSet::hup() | mio::EventSet::writable();
 		let poll_opt = mio::PollOpt::edge();
 		try!(event_loop.reregister(fd, token, interest, poll_opt));
 		Ok(())

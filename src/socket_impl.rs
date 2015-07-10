@@ -16,6 +16,7 @@ use pipe::Pipe as Pipe;
 use transport;
 
 use EventLoop;
+use Message;
 
 pub struct SocketImpl {
 	protocol: Rc<Box<Protocol>>,
@@ -45,6 +46,10 @@ impl SocketImpl {
 		let specific_addr = addr_parts[1];
 		let transport = transport::create_transport(scheme);
 		let connection = transport.connect(specific_addr).unwrap();
+
+		// TODO : pipe does not need the whole protocol, just the ids
+		// but the protocol will probably need to know about all the pipes
+		// for example Push will check all the conn to find the first writable one
 		let mut pipe = Pipe::new(id, self.protocol.clone(), connection);
 
 		pipe.init(event_loop);
@@ -55,17 +60,12 @@ impl SocketImpl {
 		Ok(())
 	}
 
-	pub fn readable(&mut self, event_loop: &mut EventLoop, id: usize, hint: mio::ReadHint) {
-		debug!("SocketImpl::readable {} {:?}", id, hint);
-		if let Some(pipe) = self.pipes.get_mut(&id) {
-			pipe.readable(event_loop, hint);
-		}
+	pub fn send(&mut self, msg: Message) {
 	}
 
-	pub fn writable(&mut self, event_loop: &mut EventLoop, id: usize) {
-		debug!("SocketImpl::writable {}", id);
+	pub fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) {
 		if let Some(pipe) = self.pipes.get_mut(&id) {
-			pipe.writable(event_loop);
+			pipe.ready(event_loop, events);
 		}
 	}
 

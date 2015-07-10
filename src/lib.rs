@@ -22,3 +22,17 @@ pub use socket::Socket;
 pub use global::SocketType;
 
 type EventLoop = mio::EventLoop<session_impl::SessionImpl>;
+
+pub struct Message {
+    header: Vec<u8>,
+    body: Vec<u8>
+}
+
+impl Message {
+	pub fn new(buffer: Vec<u8>) -> Message {
+		Message {
+			header: Vec::new(),
+			body: buffer
+		}
+	}
+}

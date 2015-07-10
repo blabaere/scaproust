@@ -32,7 +32,7 @@ impl Session {
 	}
 
 	fn run_event_loop(event_loop: &mut mio::EventLoop<SessionImpl>, evt_tx: mpsc::Sender<SessionEvt>) {
-		let mut handler = SessionImpl::new(evt_tx, 1024);
+		let mut handler = SessionImpl::new(evt_tx);
 
 		event_loop.run(&mut handler);
 	}

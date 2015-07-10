@@ -17,6 +17,7 @@ use socket_impl::SocketImpl as SocketImpl;
 use protocol;
 
 use EventLoop;
+use Message;
 
 pub struct SessionImpl {
 	event_sender: mpsc::Sender<SessionEvt>,
@@ -27,7 +28,7 @@ pub struct SessionImpl {
 
 impl SessionImpl {
 
-	pub fn new(event_tx: mpsc::Sender<SessionEvt>, socket_count: usize) -> SessionImpl {
+	pub fn new(event_tx: mpsc::Sender<SessionEvt>) -> SessionImpl {
 		SessionImpl {
 			event_sender: event_tx,
 			sockets: HashMap::new(),
@@ -71,7 +72,13 @@ impl SessionImpl {
 
 		if let Some(socket) = self.sockets.get_mut(&id) {
 			socket.connect(addr, event_loop, connection_id);
-		} // else send error event
+		}
+	}
+
+	fn send_msg(&mut self, id: usize, msg: Message) {
+		if let Some(socket) = self.sockets.get_mut(&id) {
+			socket.send(msg);
+		}
 	}
 }
 
@@ -85,11 +92,21 @@ impl mio::Handler for SessionImpl {
     		EventLoopCmd::CreateSocket(socket_type) => self.create_socket(socket_type),
     		EventLoopCmd::PingSocket(id) => self.ping_socket(id),
     		EventLoopCmd::ConnectSocket(id, addr) => self.connect_socket(id, event_loop, &addr),
+    		EventLoopCmd::SendMsg(id, msg) => self.send_msg(id, msg),
     		EventLoopCmd::Shutdown => event_loop.shutdown()
     	}
     }
 
-    fn readable(&mut self, event_loop: &mut EventLoop, token: mio::Token, hint: mio::ReadHint) {
+    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
+    	let id = token.as_usize();
+    	if let Some(socket_id) = self.socket_ids.get_mut(&id) {
+	    	if let Some(socket) = self.sockets.get_mut(&socket_id) {
+				socket.ready(event_loop, id, events);
+			}
+		}    	
+    }
+
+    /*fn readable(&mut self, event_loop: &mut EventLoop, token: mio::Token, hint: mio::ReadHint) {
     	let id = token.as_usize();
     	if let Some(socket_id) = self.socket_ids.get_mut(&id) {
 	    	if let Some(socket) = self.sockets.get_mut(&socket_id) {
@@ -105,7 +122,7 @@ impl mio::Handler for SessionImpl {
 				socket.writable(event_loop, id);
 			}
 		}
-    }
+    }*/
 
 	fn timeout(&mut self, event_loop: &mut EventLoop, timeout: Self::Timeout) {
 		debug!("timeout");
