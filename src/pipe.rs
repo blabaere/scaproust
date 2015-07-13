@@ -20,7 +20,7 @@ pub enum PipeStateIdx {
 pub struct Pipe {
 	state: PipeStateIdx,
 	handshake_state: HandshakePipeState,
-	connected_state: ReadyPipeState
+	connected_state: ConnectedPipeState
 }
 
 impl Pipe {
@@ -31,7 +31,7 @@ impl Pipe {
 		Pipe {
 			state: PipeStateIdx::Handshake,
 			handshake_state: HandshakePipeState::new(id, protocol, conn_ref.clone()),
-			connected_state: ReadyPipeState::new(id, conn_ref.clone())
+			connected_state: ConnectedPipeState::new(id, conn_ref.clone())
 		}
 	}
 
@@ -235,22 +235,22 @@ impl PipeState for HandshakePipeState {
 	
 }
 
-struct ReadyPipeState {
+struct ConnectedPipeState {
 	id: usize,
 	connection: Rc<RefCell<Box<Connection>>>,
 	sent: bool
 }
 
-impl ReadyPipeState {
-	fn new(id: usize, connection: Rc<RefCell<Box<Connection>>>) -> ReadyPipeState {
-		ReadyPipeState { 
+impl ConnectedPipeState {
+	fn new(id: usize, connection: Rc<RefCell<Box<Connection>>>) -> ConnectedPipeState {
+		ConnectedPipeState { 
 			id: id,
 			connection: connection,
 			sent: false }
 	}	
 }
 
-impl PipeState for ReadyPipeState {
+impl PipeState for ConnectedPipeState {
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
 		debug!("Enter ready state");
 		let token = mio::Token(self.id); 
