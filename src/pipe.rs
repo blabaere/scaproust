@@ -14,13 +14,13 @@ use transport::Connection as Connection;
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum PipeStateIdx {
 	Handshake,
-	Ready
+	Connected
 }
 
 pub struct Pipe {
 	state: PipeStateIdx,
 	handshake_state: HandshakePipeState,
-	ready_state: ReadyPipeState
+	connected_state: ReadyPipeState
 }
 
 impl Pipe {
@@ -31,12 +31,12 @@ impl Pipe {
 		Pipe {
 			state: PipeStateIdx::Handshake,
 			handshake_state: HandshakePipeState::new(id, protocol, conn_ref.clone()),
-			ready_state: ReadyPipeState::new(id, conn_ref.clone())
+			connected_state: ReadyPipeState::new(id, conn_ref.clone())
 		}
 	}
 
 	pub fn is_ready(&self) -> bool {
-		self.state == PipeStateIdx::Ready
+		self.state == PipeStateIdx::Connected
 	}
 
 	pub fn send(&mut self, msg: Message) {
@@ -46,7 +46,7 @@ impl Pipe {
 	fn get_state<'a>(&'a mut self) -> &'a mut PipeState {
 		match self.state {
 			PipeStateIdx::Handshake => &mut self.handshake_state,
-			PipeStateIdx::Ready => &mut self.ready_state
+			PipeStateIdx::Connected => &mut self.connected_state
 		}
 	}
 
@@ -202,7 +202,7 @@ impl PipeState for HandshakePipeState {
 		try!(self.read_handshake());
 
 		if self.sent {
-			Ok(Some(PipeStateIdx::Ready))			
+			Ok(Some(PipeStateIdx::Connected))			
 		} else {
 			let interest = mio::EventSet::hup() | mio::EventSet::writable();
 			let poll_opt = mio::PollOpt::oneshot();
@@ -220,7 +220,7 @@ impl PipeState for HandshakePipeState {
 		try!(self.write_handshake());
 
 		if self.received {
-			Ok(Some(PipeStateIdx::Ready))
+			Ok(Some(PipeStateIdx::Connected))
 		} else {
 			let interest = mio::EventSet::hup() | mio::EventSet::readable();
 			let poll_opt = mio::PollOpt::oneshot();
