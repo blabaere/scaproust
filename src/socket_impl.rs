@@ -59,7 +59,7 @@ impl SocketImpl {
 	}
 
 	pub fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) {
-		self.protocol.ready(event_loop, id, events)
+		self.protocol.ready(event_loop, id, events);
 	}
 
 }

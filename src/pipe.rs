@@ -237,16 +237,15 @@ impl PipeState for HandshakePipeState {
 
 struct ConnectedPipeState {
 	id: usize,
-	connection: Rc<RefCell<Box<Connection>>>,
-	sent: bool
+	connection: Rc<RefCell<Box<Connection>>>
 }
 
 impl ConnectedPipeState {
 	fn new(id: usize, connection: Rc<RefCell<Box<Connection>>>) -> ConnectedPipeState {
 		ConnectedPipeState { 
 			id: id,
-			connection: connection,
-			sent: false }
+			connection: connection
+		}
 	}	
 }
 
@@ -263,11 +262,14 @@ impl PipeState for ConnectedPipeState {
 	}
 
 	fn readable(&mut self, _: &mut EventLoop) -> io::Result<Option<PipeStateIdx>> {
+		// take care of pending read here
 		Ok(None)
 	}
 
 	fn writable(&mut self, _: &mut EventLoop) -> io::Result<Option<PipeStateIdx>> {
-		if self.sent {
+		//take care of pending write here
+		Ok(None)
+		/*if self.sent {
 			Ok(None)
 		} else {
 			let mut connection = self.connection.borrow_mut();
@@ -280,7 +282,7 @@ impl PipeState for ConnectedPipeState {
 			debug!("dummy msg sent !");
 
 			Ok(None)
-		}
+		}*/
 	}
 
 	fn send(&mut self, msg: Message) -> io::Result<()> {

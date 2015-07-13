@@ -1,3 +1,5 @@
+use std::io;
+
 use mio;
 
 use global::SocketType as SocketType;
@@ -14,7 +16,7 @@ pub trait Protocol {
 
 	fn add_pipe(&mut self, id: usize, pipe: Pipe);
 
-	fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet);
+	fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) -> io::Result<()>;
 	fn send(&mut self, event_loop: &mut EventLoop, msg: Message);
 }
 

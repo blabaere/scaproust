@@ -1,6 +1,8 @@
 use mio;
 
 use super::Protocol;
+use std::io;
+
 use pipe::Pipe as Pipe;
 use global::SocketType as SocketType;
 use EventLoop;
@@ -21,8 +23,8 @@ impl Protocol for Pull {
 	fn add_pipe(&mut self, id: usize, _: Pipe) {
 	}
 
-	fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) {
-
+	fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) -> io::Result<()> {
+		Ok(())
 	}
 
 	fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
