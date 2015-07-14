@@ -35,8 +35,7 @@ struct TcpConnection {
 
 impl Drop for TcpConnection {
 	fn drop(&mut self) {
-		debug!("dropping some connection");
-		self.stream.shutdown(tcp::Shutdown::Both);
+		let _ = self.stream.shutdown(tcp::Shutdown::Both);
 	}
 }
 
