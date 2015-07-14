@@ -33,6 +33,13 @@ struct TcpConnection {
 	stream: tcp::TcpStream
 }
 
+impl Drop for TcpConnection {
+	fn drop(&mut self) {
+		debug!("dropping some connection");
+		self.stream.shutdown(tcp::Shutdown::Both);
+	}
+}
+
 impl Connection for TcpConnection {
 	fn try_read(&mut self, buf: &mut [u8]) -> Result<Option<usize>, io::Error> {
 		self.stream.try_read(buf)

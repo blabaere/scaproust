@@ -18,6 +18,7 @@ pub enum PipeStateIdx {
 }
 
 pub struct Pipe {
+	addr: String,
 	state: PipeStateIdx,
 	handshake_state: HandshakePipeState,
 	connected_state: ConnectedPipeState
@@ -25,14 +26,19 @@ pub struct Pipe {
 
 impl Pipe {
 
-	pub fn new(id: usize, protocol: &Protocol, connection: Box<Connection>) -> Pipe {
+	pub fn new(addr: String, id: usize, protocol: &Protocol, connection: Box<Connection>) -> Pipe {
 		let conn_ref = Rc::new(RefCell::new(connection));
 
 		Pipe {
+			addr: addr,
 			state: PipeStateIdx::Handshake,
 			handshake_state: HandshakePipeState::new(id, protocol, conn_ref.clone()),
 			connected_state: ConnectedPipeState::new(id, conn_ref.clone())
 		}
+	}
+
+	pub fn addr(self) -> String {
+		self.addr
 	}
 
 	pub fn is_ready(&self) -> bool {

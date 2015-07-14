@@ -23,6 +23,10 @@ impl Protocol for Pull {
 	fn add_pipe(&mut self, id: usize, _: Pipe) {
 	}
 
+	fn remove_pipe(&mut self, _: usize) -> Option<String> {
+		None
+	}
+
 	fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) -> io::Result<()> {
 		Ok(())
 	}

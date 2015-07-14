@@ -8,7 +8,10 @@ use scaproust::{Session, SocketType, Socket};
 
 fn handle_comand(cmd: &str, socket: &mut Socket) {
 	println!("User command: {:?}", cmd);
-    socket.send(vec!(66, 67, 68, 69)).unwrap();
+    match socket.send(vec!(66, 67, 68, 69)) {
+        Ok(_) => info!("message sent !"),
+        Err(e) => error!("message NOT sent: {} !", e)
+    }
 }
 
 fn main() {
@@ -19,8 +22,9 @@ fn main() {
     let session = Session::new().unwrap();
     let mut socket = session.create_socket(SocketType::Push).unwrap();
 
-    socket.connect("tcp://127.0.0.1:5454");
-    socket.connect("tcp://127.0.0.1:5455");
+    assert!(socket.connect("tcp://127.0.0.1:5454").is_ok());
+    assert!(socket.connect("tcp://127.0.0.1:5455").is_ok());
+    assert!(socket.connect("tcp://some random crap").is_err());
 
     let mut input = String::new();
     loop {

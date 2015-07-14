@@ -110,6 +110,14 @@ mod tests {
     	let session = Session::new().unwrap();
     	let socket = session.create_socket(SocketType::Push).unwrap();
 
-    	socket.connect("tcp://127.0.0.1:5454").unwrap();
+    	assert!(socket.connect("tcp://127.0.0.1:5454").is_ok());
+    }
+
+    #[test]
+    fn can_try_connect_socket() {
+    	let session = Session::new().unwrap();
+    	let socket = session.create_socket(SocketType::Push).unwrap();
+
+    	assert!(socket.connect("tcp://this should not work").is_err());
     }
 }

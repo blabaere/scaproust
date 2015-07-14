@@ -34,6 +34,10 @@ impl Protocol for Push {
 		self.pipes.insert(id, pipe);
 	}
 
+	fn remove_pipe(&mut self, id: usize) -> Option<String> {
+		self.pipes.remove(&id).map(|p| p.addr())
+	}
+
 	fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) -> io::Result<()> {
 		if let Some(pipe) = self.pipes.get_mut(&id) {
 			pipe.ready(event_loop, events)

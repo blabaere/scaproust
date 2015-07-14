@@ -52,7 +52,7 @@ impl SessionImpl {
 	fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: usize, cmd: SocketCmd) {
 		match cmd {
 			SocketCmd::Ping => self.ping_socket(id),
-			SocketCmd::Connect(addr) => self.connect_socket(id, event_loop, &addr),
+			SocketCmd::Connect(addr) => self.connect_socket(id, event_loop, addr),
 			SocketCmd::SendMsg(msg) => self.send_msg(id, event_loop, msg)
 		}
 	}
@@ -64,8 +64,8 @@ impl SessionImpl {
 	fn create_socket(&mut self, socket_type: SocketType) {
 		let protocol = protocol::create_protocol(socket_type);
 		let (tx, rx) = mpsc::channel();
-		let socket = SocketImpl::new(protocol, tx);
 		let id = self.next_id();
+		let socket = SocketImpl::new(id, protocol, tx);
 
 		self.sockets.insert(id, socket);
 		self.event_sender.send(SessionEvt::SocketCreated(id, rx));
@@ -77,7 +77,7 @@ impl SessionImpl {
 		}
 	}
 
-	fn connect_socket(&mut self, id: usize, event_loop: &mut EventLoop, addr: &str) {
+	fn connect_socket(&mut self, id: usize, event_loop: &mut EventLoop, addr: String) {
 		let connection_id = self.next_id();
 
 		self.socket_ids.insert(connection_id, id);
@@ -140,7 +140,7 @@ impl mio::Handler for SessionImpl {
 			EventLoopTimeout::Reconnect(id, addr) => {
 				if let Some(socket_id) = self.socket_ids.get_mut(&id) {
 					if let Some(socket) = self.sockets.get_mut(&socket_id) {
-						socket.connect(&addr, event_loop, id);
+						socket.reconnect(addr, event_loop, id);
 					}
 				}
 			}
