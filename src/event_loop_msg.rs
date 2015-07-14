@@ -5,12 +5,20 @@ use global::SocketType as SocketType;
 use Message;
 
 pub enum EventLoopCmd {
+	SessionLevel(SessionCmd),
+	SocketLevel(usize, SocketCmd)
+}
+
+pub enum SessionCmd {
 	Ping,
 	CreateSocket(SocketType),
-	PingSocket(usize),
-	ConnectSocket(usize, String),
-	SendMsg(usize, Message),
 	Shutdown
+}
+
+pub enum SocketCmd {
+	Ping,
+	Connect(String),
+	SendMsg(Message)
 }
 
 pub enum EventLoopTimeout {

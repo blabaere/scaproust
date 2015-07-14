@@ -4,14 +4,10 @@ use std::collections::HashMap;
 use std::sync::mpsc;
 
 use mio;
-use mio::util::Slab;
 
 use global::SocketType as SocketType;
 
-use event_loop_msg::EventLoopCmd as EventLoopCmd;
-use event_loop_msg::EventLoopTimeout as EventLoopTimeout;
-use event_loop_msg::SessionEvt as SessionEvt;
-use event_loop_msg::SocketEvt as SocketEvt;
+use event_loop_msg::*;
 
 use socket_impl::SocketImpl as SocketImpl;
 use protocol;
@@ -43,6 +39,22 @@ impl SessionImpl {
 		self.id_seq.set(id+1);
 
 		id
+	}
+
+	fn handle_session_cmd(&mut self, event_loop: &mut EventLoop, cmd: SessionCmd) {
+		match cmd {
+			SessionCmd::Ping => self.pong(),
+			SessionCmd::CreateSocket(socket_type) => self.create_socket(socket_type),
+			SessionCmd::Shutdown => event_loop.shutdown()
+		}
+	}
+
+	fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: usize, cmd: SocketCmd) {
+		match cmd {
+			SocketCmd::Ping => self.ping_socket(id),
+			SocketCmd::Connect(addr) => self.connect_socket(id, event_loop, &addr),
+			SocketCmd::SendMsg(msg) => self.send_msg(id, event_loop, msg)
+		}
 	}
 
 	fn pong(&self) {
@@ -89,12 +101,8 @@ impl mio::Handler for SessionImpl {
     fn notify(&mut self, event_loop: &mut EventLoop, msg: Self::Message) {
     	debug!("session backend received a command");
     	match msg {
-    		EventLoopCmd::Ping => self.pong(),
-    		EventLoopCmd::CreateSocket(socket_type) => self.create_socket(socket_type),
-    		EventLoopCmd::PingSocket(id) => self.ping_socket(id),
-    		EventLoopCmd::ConnectSocket(id, addr) => self.connect_socket(id, event_loop, &addr),
-    		EventLoopCmd::SendMsg(id, msg) => self.send_msg(id, event_loop, msg),
-    		EventLoopCmd::Shutdown => event_loop.shutdown()
+    		EventLoopCmd::SessionLevel(cmd) => self.handle_session_cmd(event_loop, cmd),
+    		EventLoopCmd::SocketLevel(id, cmd) => self.handle_socket_cmd(event_loop, id, cmd)
     	}
     }
 

@@ -4,8 +4,7 @@ use std::io;
 use mio;
 use mio::NotifyError;
 
-use event_loop_msg::EventLoopCmd as EventLoopCmd;
-use event_loop_msg::SocketEvt as SocketEvt;
+use event_loop_msg::*;
 
 use Message;
 
@@ -43,14 +42,14 @@ impl Socket {
 
 	}
 
-	fn send_cmd(&self, cmd: EventLoopCmd) -> Result<(), io::Error> {
+	fn send_cmd(&self, socket_cmd: SocketCmd) -> Result<(), io::Error> {
+		let cmd = EventLoopCmd::SocketLevel(self.id, socket_cmd);
+
 		self.cmd_sender.send(cmd).map_err(|e| convert_notify_err(e))
 	}
 	
 	pub fn ping(&self) -> Result<(), io::Error> {
-		let cmd = EventLoopCmd::PingSocket(self.id);
-
-		try!(self.send_cmd(cmd));
+		try!(self.send_cmd(SocketCmd::Ping));
 
 		match self.evt_receiver.recv() {
 			Ok(SocketEvt::Pong) => Ok(()),
@@ -61,9 +60,8 @@ impl Socket {
 
 	// TODO: return an Endpoint struct with a shutdown method instead of '()'
 	pub fn connect(&self, addr: &str) -> Result<(), io::Error> {
-		debug!("Socket::connect {} -> {}", self.id, addr);
-		let cmd = EventLoopCmd::ConnectSocket(self.id, addr.to_owned());
-
+		let cmd = SocketCmd::Connect(addr.to_owned());
+		
 		try!(self.send_cmd(cmd));
 
 		match self.evt_receiver.recv() {
@@ -76,7 +74,7 @@ impl Socket {
 
 	pub fn send(&self, buffer: Vec<u8>) -> Result<(), io::Error> {
 		let msg = Message::new(buffer);
-		let cmd = EventLoopCmd::SendMsg(self.id, msg);
+		let cmd = SocketCmd::SendMsg(msg);
 
 		try!(self.send_cmd(cmd));
 

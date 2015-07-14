@@ -3,9 +3,13 @@ use std::io;
 use std::thread;
 use std::sync::mpsc;
 
-use event_loop_msg::EventLoopCmd as EventLoopCmd;
-use event_loop_msg::SessionEvt as SessionEvt;
-use event_loop_msg::SocketEvt as SocketEvt;
+use event_loop_msg:: {
+	EventLoopCmd,
+	SessionCmd,
+	SessionEvt,
+	SocketCmd,
+	SocketEvt
+};
 
 use session_impl::SessionImpl as SessionImpl;
 
@@ -41,12 +45,17 @@ impl Session {
 	}
 
 	fn ping_event_loop(&self) {
-		self.cmd_sender.send(EventLoopCmd::Ping);
+		let session_cmd = SessionCmd::Ping;
+		let cmd = EventLoopCmd::SessionLevel(session_cmd);
+
+		self.cmd_sender.send(cmd);
 		self.evt_receiver.recv().unwrap();
 	}
 
 	pub fn create_socket(&self, socket_type: SocketType) -> Option<Socket> {
-		self.cmd_sender.send(EventLoopCmd::CreateSocket(socket_type));
+		let session_cmd = SessionCmd::CreateSocket(socket_type);
+		let cmd = EventLoopCmd::SessionLevel(session_cmd);
+		self.cmd_sender.send(cmd);
 
 		match self.evt_receiver.recv().unwrap() {
 			SessionEvt::SocketCreated(id, rx) => {
@@ -62,7 +71,10 @@ impl Session {
 
 impl Drop for Session {
 	fn drop(&mut self) {
-		self.cmd_sender.send(EventLoopCmd::Shutdown);
+		let session_cmd = SessionCmd::Shutdown;
+		let cmd = EventLoopCmd::SessionLevel(session_cmd);
+		
+		self.cmd_sender.send(cmd);
 	}
 }
 
