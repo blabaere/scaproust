@@ -17,6 +17,9 @@ pub enum PipeStateIdx {
 	Connected
 }
 
+// A pipe is responsible for handshaking with its peer and transfering messages over a connection.
+// That means adding the size prefix to message bytes transfering the bytes
+// according to the connection readiness and the operation progress
 pub struct Pipe {
 	addr: String,
 	state: PipeStateIdx,
@@ -26,7 +29,7 @@ pub struct Pipe {
 
 impl Pipe {
 
-	pub fn new(addr: String, id: usize, protocol: &Protocol, connection: Box<Connection>) -> Pipe {
+	pub fn new(id: usize, addr: String, protocol: &Protocol, connection: Box<Connection>) -> Pipe {
 		let conn_ref = Rc::new(RefCell::new(connection));
 
 		Pipe {
@@ -66,26 +69,16 @@ impl Pipe {
 	}
 
 	pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<()> {
-		if events.is_readable() {
-			try!(self.readable(event_loop));
-		} 
-		if events.is_writable() {
-			try!(self.writable(event_loop));
-		} 
-		Ok(())
-	}
+		if events.is_hup() {
+			return Err(io::Error::new(io::ErrorKind::ConnectionReset, "hup"));
+		}
 
-	pub fn readable(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-		if let Some(new_state) = try!(self.get_state().readable(event_loop)) {
-			try!(self.set_state(new_state, event_loop));
-		} 
+		if events.is_error() {
+			return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "hup"));
+		}
 
-		Ok(())
-	}
-
-	pub fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-		if let Some(new_state) = try!(self.get_state().writable(event_loop)) {
-			try!(self.set_state(new_state, event_loop));
+		if let Some(new_state) = try!(self.get_state().ready(event_loop, events)) {
+			return self.set_state(new_state, event_loop);
 		} 
 
 		Ok(())
@@ -95,8 +88,9 @@ impl Pipe {
 
 trait PipeState {
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()>;
-	fn readable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>>;
-	fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>>;
+	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<PipeStateIdx>>;
+	/*fn readable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>>;
+	fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>>;*/
 
 	fn send(&mut self, msg: Message) -> io::Result<()>;
 }
@@ -148,7 +142,7 @@ impl HandshakePipeState {
 		try!(
 			connection.try_read(&mut handshake).
 			and_then(|_| self.check_received_handshake(&handshake)));
-		debug!("handshake received !");
+		debug!("[{}] handshake received.", self.id);
 		self.received = true;
 		Ok(())
 	}
@@ -162,7 +156,7 @@ impl HandshakePipeState {
 		try!(
 			connection.try_write(&handshake).
 			and_then(|w| self.check_sent_handshake(w)));
-		debug!("handshake sent !");
+		debug!("[{}] handshake sent.", self.id);
 		self.sent = true;
 		Ok(())
 	}
@@ -188,7 +182,7 @@ impl HandshakePipeState {
 impl PipeState for HandshakePipeState {
 
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-		debug!("Enter handshake state");
+		debug!("[{}] enter handshake state", self.id);
 		self.sent = false;
 		self.received = false;
 
@@ -200,7 +194,35 @@ impl PipeState for HandshakePipeState {
 		Ok(())
 	}
 
-	fn readable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>> {
+	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<PipeStateIdx>> {
+		if !self.received && events.is_readable() {
+			try!(self.read_handshake());
+		}
+
+		if !self.sent && events.is_writable() {
+			try!(self.write_handshake());
+		}
+
+		if self.received && self.sent {
+			return Ok(Some(PipeStateIdx::Connected));
+		}
+
+		let mut interest = mio::EventSet::hup();
+		let poll_opt = mio::PollOpt::oneshot();
+
+		if !self.received {
+			interest = interest | mio::EventSet::readable();
+		}
+		if !self.sent {
+			interest = interest | mio::EventSet::writable();
+		}
+
+		try!(self.reregister(event_loop, interest, poll_opt));
+
+		Ok(None)
+	}
+
+	/*fn readable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>> {
 		if self.received {
 			return Ok(None)
 		}
@@ -233,7 +255,7 @@ impl PipeState for HandshakePipeState {
 			try!(self.reregister(event_loop, interest, poll_opt));
 			Ok(None)
 		}
-	}
+	}*/
 
 	fn send(&mut self, _: Message) -> io::Result<()> {
 		Ok(())
@@ -257,38 +279,18 @@ impl ConnectedPipeState {
 
 impl PipeState for ConnectedPipeState {
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-		debug!("Enter ready state");
+		debug!("[{}] enter connected state", self.id);
 		let token = mio::Token(self.id); 
 		let connection = self.connection.borrow_mut();
 		let fd = connection.as_evented();
-		let interest = mio::EventSet::hup() | mio::EventSet::writable();
+		let interest = mio::EventSet::hup();
 		let poll_opt = mio::PollOpt::edge();
 		try!(event_loop.reregister(fd, token, interest, poll_opt));
 		Ok(())
 	}
 
-	fn readable(&mut self, _: &mut EventLoop) -> io::Result<Option<PipeStateIdx>> {
-		// take care of pending read here
+	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<PipeStateIdx>> {
 		Ok(None)
-	}
-
-	fn writable(&mut self, _: &mut EventLoop) -> io::Result<Option<PipeStateIdx>> {
-		//take care of pending write here
-		Ok(None)
-		/*if self.sent {
-			Ok(None)
-		} else {
-			let mut connection = self.connection.borrow_mut();
-			let header = [0, 0, 0, 0, 0, 0, 0, 3];
-			let body = [65, 86, 67];
-
-			try!(connection.try_write(&header));
-			try!(connection.try_write(&body));
-			self.sent = true;
-			debug!("dummy msg sent !");
-
-			Ok(None)
-		}*/
 	}
 
 	fn send(&mut self, msg: Message) -> io::Result<()> {

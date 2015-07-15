@@ -4,7 +4,6 @@ use mio;
 
 use super::Protocol;
 use pipe::Pipe as Pipe;
-use pipe::PipeStateIdx as PipeStateIdx;
 use global::SocketType as SocketType;
 use EventLoop;
 use Message;

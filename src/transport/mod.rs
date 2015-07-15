@@ -9,8 +9,10 @@ pub trait Transport {
 	fn connect(&self, addr: &str) -> Result<Box<Connection>, io::Error>;
 }
 
-// represents an Endpoint in a given media
-// only needs to expose mio compatible fd
+// represents a connection in a given media
+// only needs to expose mio compatible features
+// - transfert bytes in non-blocking manner
+// - being registrable into the event loop
 pub trait Connection {
 	fn as_evented(&self) -> &mio::Evented;
 	fn try_read(&mut self, buf: &mut [u8]) -> Result<Option<usize>, io::Error>;

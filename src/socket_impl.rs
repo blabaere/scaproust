@@ -1,11 +1,8 @@
-use std::rc::Rc;
-use std::ops::Deref;
 use std::sync::mpsc;
 use std::io;
 
 use mio;
 
-use event_loop_msg::EventLoopCmd as EventLoopCmd;
 use event_loop_msg::EventLoopTimeout as EventLoopTimeout;
 use event_loop_msg::SocketEvt as SocketEvt;
 
@@ -39,36 +36,27 @@ impl SocketImpl {
 	pub fn connect(&mut self, addr: String, event_loop: &mut EventLoop, id: usize) {
 		debug!("[{}] pipe [{}] connect: '{}'", self.id, id, addr);
 
-		match self.create_connection(&addr) {
-			Ok(connection) => {
-				let mut pipe = Pipe::new(addr.clone(), id, &*self.protocol, connection);
+		let evt = match self.create_connection(&addr).and_then(|c| self.on_connected(addr, event_loop, id, c)) {
+			Ok(_) => SocketEvt::Connected,
+			Err(e) => SocketEvt::NotConnected(e)
+		};
 
-				pipe.init(event_loop);
+		self.evt_sender.send(evt);
+	}
 
-				self.protocol.add_pipe(id, pipe);
-				self.evt_sender.send(SocketEvt::Connected);
-			}
-			Err(e) => {
-				self.evt_sender.send(SocketEvt::NotConnected(e));
-			}
-		}
+	fn on_connected(&mut self, addr: String, event_loop: &mut EventLoop, id: usize, conn: Box<Connection>) -> io::Result<()> {
+		let mut pipe = Pipe::new(id, addr, &*self.protocol, conn);
+
+		try!(pipe.init(event_loop));
+
+		self.protocol.add_pipe(id, pipe);
+		Ok(())
 	}
 
 	pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, id: usize) {
 		debug!("[{}] pipe [{}] reconnect: '{}'", self.id, id, addr);
 
-		match self.create_connection(&addr) {
-			Ok(connection) => {
-				let mut pipe = Pipe::new(addr.clone(), id, &*self.protocol, connection);
-
-				pipe.init(event_loop);
-
-				self.protocol.add_pipe(id, pipe);
-			}
-			Err(e) => {
-				// ??? reschedule ?
-			}
-		}
+		self.create_connection(&addr).and_then(|c| self.on_connected(addr, event_loop, id, c));
 	}
 
 	fn create_connection(&self, addr: &str) -> Result<Box<Connection>, io::Error> {
@@ -88,7 +76,6 @@ impl SocketImpl {
 	}
 
 	pub fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) {
-		debug!("[{}] pipe [{}] ready: '{:?}'", self.id, id, events);
 		self.protocol.
 			ready(event_loop, id, events).
 			unwrap_or_else(|e| self.on_pipe_error(event_loop, id, e));
@@ -97,11 +84,8 @@ impl SocketImpl {
 	fn on_pipe_error(&mut self, event_loop: &mut EventLoop, id: usize, err: io::Error) {
 		debug!("[{}] pipe [{}] error: '{:?}'", self.id, id, err);
 
-		match self.protocol.remove_pipe(id) {
-			Some(addr) => {
-				event_loop.timeout_ms(EventLoopTimeout::Reconnect(id, addr), 200);
-			},
-			_ => {}
+		if let Some(addr) = self.protocol.remove_pipe(id) {
+			event_loop.timeout_ms(EventLoopTimeout::Reconnect(id, addr), 200);
 		}
 	}
 }

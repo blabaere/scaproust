@@ -22,9 +22,8 @@ fn main() {
     let session = Session::new().unwrap();
     let mut socket = session.create_socket(SocketType::Push).unwrap();
 
-    assert!(socket.connect("tcp://127.0.0.1:5454").is_ok());
-    assert!(socket.connect("tcp://127.0.0.1:5455").is_ok());
-    assert!(socket.connect("tcp://some random crap").is_err());
+    socket.connect("tcp://127.0.0.1:5454").unwrap();
+    socket.connect("tcp://127.0.0.1:5455").unwrap();
 
     let mut input = String::new();
     loop {
