@@ -89,8 +89,6 @@ impl Pipe {
 trait PipeState {
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()>;
 	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<PipeStateIdx>>;
-	/*fn readable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>>;
-	fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>>;*/
 
 	fn send(&mut self, msg: Message) -> io::Result<()>;
 }
@@ -132,7 +130,7 @@ impl HandshakePipeState {
 	fn check_sent_handshake(&self, written: Option<usize>) -> io::Result<()> {
 		match written {
 			Some(8) => Ok(()),
-			_ => Err(io::Error::new(io::ErrorKind::InvalidData, "failed to send handshake"))
+			_ => Err(io::Error::new(io::ErrorKind::Other, "failed to send handshake"))
 		}
 	}
 
@@ -222,41 +220,6 @@ impl PipeState for HandshakePipeState {
 		Ok(None)
 	}
 
-	/*fn readable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>> {
-		if self.received {
-			return Ok(None)
-		}
-
-		try!(self.read_handshake());
-
-		if self.sent {
-			Ok(Some(PipeStateIdx::Connected))			
-		} else {
-			let interest = mio::EventSet::hup() | mio::EventSet::writable();
-			let poll_opt = mio::PollOpt::oneshot();
-
-			try!(self.reregister(event_loop, interest, poll_opt));
-			Ok(None)			
-		}
-	}
-
-	fn writable(&mut self, event_loop: &mut EventLoop) -> io::Result<Option<PipeStateIdx>> {
-		if self.sent {
-			return Ok(None)
-		}
-
-		try!(self.write_handshake());
-
-		if self.received {
-			Ok(Some(PipeStateIdx::Connected))
-		} else {
-			let interest = mio::EventSet::hup() | mio::EventSet::readable();
-			let poll_opt = mio::PollOpt::oneshot();
-			try!(self.reregister(event_loop, interest, poll_opt));
-			Ok(None)
-		}
-	}*/
-
 	fn send(&mut self, _: Message) -> io::Result<()> {
 		Ok(())
 	}
@@ -283,7 +246,7 @@ impl PipeState for ConnectedPipeState {
 		let token = mio::Token(self.id); 
 		let connection = self.connection.borrow_mut();
 		let fd = connection.as_evented();
-		let interest = mio::EventSet::hup();
+		let interest = mio::EventSet::hup() | mio::EventSet::error();
 		let poll_opt = mio::PollOpt::edge();
 		try!(event_loop.reregister(fd, token, interest, poll_opt));
 		Ok(())
