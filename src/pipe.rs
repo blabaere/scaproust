@@ -11,6 +11,10 @@ use Message;
 use protocol::Protocol as Protocol;
 use transport::Connection as Connection;
 
+// this is wrong, it works only for Push
+// Pub for example wants all pipe to acquire the message
+// So this logic must be in a pipe sender held by the protocol
+// Shit !!!
 pub enum SendStatus {
     Rejected(Message),   // Message can't be sent at the moment
     Completed,       // Message has been successfully sent
