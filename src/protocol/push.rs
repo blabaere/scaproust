@@ -1,15 +1,16 @@
+use std::rc::*;
 use std::collections::HashMap;
 use std::io;
 use mio;
 
 use super::Protocol;
-use pipe::Pipe as Pipe;
+use pipe::*;
 use global::SocketType as SocketType;
 use EventLoop;
 use Message;
 
 pub struct Push {
-	pipes: HashMap<usize, Pipe> 
+	pipes: HashMap<usize, PushPipe> 
 }
 
 impl Push {
@@ -30,7 +31,7 @@ impl Protocol for Push {
 	}
 
 	fn add_pipe(&mut self, id: usize, pipe: Pipe) {
-		self.pipes.insert(id, pipe);
+		self.pipes.insert(id, PushPipe::new(pipe));
 	}
 
 	fn remove_pipe(&mut self, id: usize) -> Option<String> {
@@ -40,38 +41,96 @@ impl Protocol for Push {
 	fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) -> io::Result<()> {
 		if let Some(pipe) = self.pipes.get_mut(&id) {
 			pipe.ready(event_loop, events)
+			// TODO check if a pending message was sent
 		} else {
 			Ok(())
 		}
 	}
 
 	fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
-		// Something's wrong here in the way it is done.
-		// The message should be shared between each pipe.
-		// The first pipe to be write-ready should take it (like in Option.take)
-		// This pipe then starts sending it, notifying upstream success or failure
+		let mut sent = false;
+		let mut piped = false;
+		let mut shared = false;
+		let shared_msg = Rc::new(msg);
 
-		// Since this behavior is protocol specific, it can not be implemented at the pipe level.
-		// So there has to be an additional layer above pipe, maybe inside Push
+		// after loop state can be
+		// - message sent : clean push pipes and notify success upstream
+		// - message partially sent : clean push pipes and wait some ...
+		// - message pending : wait some ...
+		// - message not acquired by anybody (everybody in error !!!) : notify failure upstream 
 
-		// The send operation progress could be monitored inside the pipe
-		/*for (_, pipe) in self.pipes.iter_mut() {
-			if pipe.is_ready() {
-				pipe.send(msg);
-				return;
+		for (_, pipe) in self.pipes.iter_mut() {
+			match pipe.send(event_loop, shared_msg.clone()) {
+				Ok(Some(true)) => sent = true,
+				Ok(Some(false)) => piped = true,
+				Ok(None) => shared = true,
+				Err(_) => continue 
+				// this pipe looks dead, but it will be taken care of during next ready notification
 			}
-		}*/
 
-		// first idea:
-		// call begin_send on each pipe, which should try to write the size prefix
+			if sent | piped {
+				break;
+			}
+		}
 
-		// when one returns Some(SendProgress) instead of None, 
-		// transfer the message to that pipe with end_send(msg)
-		// it should then try to finish sending the header and body,
-		// registering to writable in case of partial write
+		if sent {
+			info!("Message sent.");
+		} else if piped {
+			info!("Message sending in progress.");
+		} else if shared {
+			info!("Message sending postponed.");
+		} else {
+			info!("Message NOT sent")
+		}
 
-		// if no pipe succeeded in begin_send, store the message for further usage
-		// and have each pipe register to the writable event
-		// when it arrives, try again on that pipe only
+		if sent | piped {
+			for (_, pipe) in self.pipes.iter_mut() {
+				pipe.clean_pending_send();
+			}
+		}
+	}
+}
+
+struct PushPipe {
+    pipe: Pipe,
+    pending_send: Option<Rc<Message>>
+}
+
+impl PushPipe {
+	fn new(pipe: Pipe) -> PushPipe {
+		PushPipe { 
+			pipe: pipe,
+			pending_send: None
+		}
+	}
+
+	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<()> {
+		self.pipe.ready(event_loop, events)
+		// TODO check if there is a pending message to be sent ...
+	}
+
+	// result can be
+	// - sent    (msg can be dropped)
+	// - sending (msg acquired by pipe)
+	// - pending (msg shared with other push pipes)
+	fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> io::Result<Option<bool>> {
+		let progress = match try!(self.pipe.send(event_loop, msg)) {
+			SendStatus::Completed => Some(true),
+			SendStatus::InProgress => Some(false),
+			SendStatus::Postponed(message) => {
+				self.pending_send = Some(message);
+				None
+			}
+		};
+
+		Ok(progress)
+	}
+
+	fn clean_pending_send(&mut self) {
+		self.pending_send = None;
+	}
+
+	fn addr(self) -> String {
+		self.pipe.addr()
 	}
 }

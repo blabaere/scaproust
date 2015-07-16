@@ -11,16 +11,6 @@ use Message;
 use protocol::Protocol as Protocol;
 use transport::Connection as Connection;
 
-// this is wrong, it works only for Push
-// Pub for example wants all pipe to acquire the message
-// So this logic must be in a pipe sender held by the protocol
-// Shit !!!
-pub enum SendStatus {
-    Rejected(Message),   // Message can't be sent at the moment
-    Completed,       // Message has been successfully sent
-    Started          // Message has been partially sent, will finish later
-}
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum State {
 	Handshake,
@@ -28,7 +18,7 @@ enum State {
 }
 
 // A pipe is responsible for handshaking with its peer and transfering messages over a connection.
-// That means adding the size prefix to message bytes transfering the bytes
+// That means send/receive size prefix and then message payload
 // according to the connection readiness and the operation progress
 pub struct Pipe {
 	addr: String,
@@ -37,10 +27,19 @@ pub struct Pipe {
 	connected_state: ConnectedPipeState
 }
 
+pub enum SendStatus {
+	Postponed(Rc<Message>), // Message can't be sent at the moment : Handshake in progress or would block
+    Completed,              // Message has been successfully sent
+    InProgress              // Message has been partially sent, will finish later
+}
+
 impl Pipe {
 
 	pub fn new(id: usize, addr: String, protocol: &Protocol, connection: Box<Connection>) -> Pipe {
 		let conn_ref = Rc::new(RefCell::new(connection));
+
+		// TODO : maybe the connection could be stored inside the Pipe 
+		// and then passed as &mut to the state methods ?
 
 		Pipe {
 			addr: addr,
@@ -50,13 +49,7 @@ impl Pipe {
 		}
 	}
 
-	// result can be :
-	//  - can't send (write prefix would block), transfer back msg ownership
-	//  - message successfully sent
-	//  - message partially sent, will finish later 
-	//  - tried to send, but an error occured while sending or write prefix partial write, msg is lost
-
-	pub fn send(&mut self, event_loop: &mut EventLoop, msg: Message) -> io::Result<SendStatus> {
+	pub fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> io::Result<SendStatus> {
 		self.get_state().send(event_loop, msg)
 	}
 
@@ -82,11 +75,11 @@ impl Pipe {
 
 	pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<()> {
 		if events.is_hup() {
-			return Err(io::Error::new(io::ErrorKind::ConnectionReset, "hup"));
+			return Err(io::Error::new(io::ErrorKind::ConnectionReset, "event: hup"));
 		}
 
 		if events.is_error() {
-			return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "hup"));
+			return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "event: error"));
 		}
 
 		if let Some(new_state) = try!(self.get_state().ready(event_loop, events)) {
@@ -102,7 +95,7 @@ trait PipeState {
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()>;
 	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<State>>;
 
-	fn send(&mut self, event_loop: &mut EventLoop, msg: Message) -> io::Result<SendStatus>;
+	fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> io::Result<SendStatus>;
 }
 
 struct HandshakePipeState {
@@ -135,14 +128,15 @@ impl HandshakePipeState {
 		if both.all(|(l,r)| l == r) {
 			Ok(())
 		} else {
-			Err(io::Error::new(io::ErrorKind::InvalidData, "received wrong handshake"))
+			Err(io::Error::new(io::ErrorKind::InvalidData, "received bad handshake"))
 		}
 	}
 
 	fn check_sent_handshake(&self, written: Option<usize>) -> io::Result<()> {
 		match written {
 			Some(8) => Ok(()),
-			_ => Err(io::Error::new(io::ErrorKind::Other, "failed to send handshake"))
+			Some(_) => Err(io::Error::new(io::ErrorKind::WouldBlock, "failed to send full handshake")),
+			_       => Err(io::Error::new(io::ErrorKind::WouldBlock, "failed to send handshake"))
 		}
 	}
 
@@ -232,23 +226,33 @@ impl PipeState for HandshakePipeState {
 		Ok(None)
 	}
 
-	fn send(&mut self, event_loop: &mut EventLoop, msg: Message) -> io::Result<SendStatus> {
-		Ok(SendStatus::Rejected(msg))
+	fn send(&mut self, _: &mut EventLoop, msg: Rc<Message>) -> io::Result<SendStatus> {
+		Ok(SendStatus::Postponed(msg))
 	}
 }
 
 struct ConnectedPipeState {
 	id: usize,
-	connection: Rc<RefCell<Box<Connection>>>
+	connection: Rc<RefCell<Box<Connection>>>,
+	pending_send: Option<Rc<Message>>,
+	pending_step: u8, // 1=prefix, 2=header, 3=body
+	pending_progress: usize  // bytes written
+	// TODO move these fields inside a SendOperation struct
+	// and change pending_send: Option<SendOperation>
 }
 
 impl ConnectedPipeState {
+
 	fn new(id: usize, connection: Rc<RefCell<Box<Connection>>>) -> ConnectedPipeState {
 		ConnectedPipeState { 
 			id: id,
-			connection: connection
+			connection: connection,
+			pending_send: None,
+			pending_step: 0,
+			pending_progress: 0
 		}
 	}	
+
 }
 
 impl PipeState for ConnectedPipeState {
@@ -257,36 +261,75 @@ impl PipeState for ConnectedPipeState {
 		let token = mio::Token(self.id); 
 		let connection = self.connection.borrow_mut();
 		let fd = connection.as_evented();
-		let interest = mio::EventSet::hup() | mio::EventSet::error();
+		let interest = mio::EventSet::all();
 		let poll_opt = mio::PollOpt::edge();
 		try!(event_loop.reregister(fd, token, interest, poll_opt));
 		Ok(())
 	}
 
 	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<State>> {
+		// TODO : check if there is message pending to be sent
 		Ok(None)
 	}
 
-	fn send(&mut self, event_loop: &mut EventLoop, msg: Message) -> io::Result<SendStatus> {
-		Ok(SendStatus::Rejected(msg))
-	}
-
-	/*fn send(&mut self, msg: Message) -> io::Result<()> {
+	fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> io::Result<SendStatus> {
 		let mut connection = self.connection.borrow_mut();
 		let mut prefix = Vec::with_capacity(8);
 		try!(prefix.write_u64::<BigEndian>(msg.len() as u64));
 
-		try!(connection.try_write(&prefix));
-
-		if msg.get_header().len() > 0 {
-			try!(connection.try_write(msg.get_header()));
+		// try send prefix
+		match try!(connection.try_write(&prefix)) {
+			Some(8) => {
+			}, //all good
+			Some(x) => {
+				self.pending_send = Some(msg);
+				self.pending_step = 1;
+				self.pending_progress = x;
+				return Ok(SendStatus::InProgress);
+			},
+			None => {
+				return Ok(SendStatus::Postponed(msg));
+			}
 		}
 
-		if msg.get_body().len() > 0 {
-			try!(connection.try_write(msg.get_body()));
+		// try send msg header
+		match try!(connection.try_write(msg.get_header())) {
+			Some(x) => {
+				if x < msg.get_header().len() {
+					self.pending_send = Some(msg);
+					self.pending_step = 2;
+					self.pending_progress = x;
+					return Ok(SendStatus::InProgress);
+				}
+			},
+			None => {
+				self.pending_send = Some(msg);
+				self.pending_step = 2;
+				self.pending_progress = 0;
+				return Ok(SendStatus::InProgress);
+			}
 		}
 
-		debug!("msg sent !");
-		Ok(())
-	}*/
+		// try send msg body
+		match try!(connection.try_write(msg.get_body())) {
+			Some(x) => {
+				if x == msg.get_body().len() {
+					return Ok(SendStatus::Completed);
+				} else {
+					self.pending_send = Some(msg);
+					self.pending_step = 3;
+					self.pending_progress = x;
+					return Ok(SendStatus::InProgress);
+				}
+			},
+			None => {
+				self.pending_send = Some(msg);
+				self.pending_step = 3;
+				self.pending_progress = 0;
+				return Ok(SendStatus::InProgress);
+			}
+		}
+
+		// TODO : when something is pending, should reregister to writable ...
+	}
 }
