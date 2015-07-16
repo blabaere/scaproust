@@ -235,7 +235,7 @@ struct ConnectedPipeState {
 	id: usize,
 	connection: Rc<RefCell<Box<Connection>>>,
 	pending_send: Option<Rc<Message>>,
-	pending_step: u8, // 1=prefix, 2=header, 3=body
+	pending_step: u8,        // 1=prefix, 2=header, 3=body
 	pending_progress: usize  // bytes written
 	// TODO move these fields inside a SendOperation struct
 	// and change pending_send: Option<SendOperation>
@@ -268,20 +268,19 @@ impl PipeState for ConnectedPipeState {
 	}
 
 	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<State>> {
-		// TODO : check if there is message pending to be sent
+		// TODO : check if there is a message pending to be sent
 		Ok(None)
 	}
 
 	fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> io::Result<SendStatus> {
+		// TODO just create a SendOperation and let it work from the begining ?
 		let mut connection = self.connection.borrow_mut();
 		let mut prefix = Vec::with_capacity(8);
 		try!(prefix.write_u64::<BigEndian>(msg.len() as u64));
 
 		// try send prefix
 		match try!(connection.try_write(&prefix)) {
-			Some(8) => {
-			}, //all good
-			Some(x) => {
+			Some(x) => if x < 8 {
 				self.pending_send = Some(msg);
 				self.pending_step = 1;
 				self.pending_progress = x;
@@ -294,13 +293,11 @@ impl PipeState for ConnectedPipeState {
 
 		// try send msg header
 		match try!(connection.try_write(msg.get_header())) {
-			Some(x) => {
-				if x < msg.get_header().len() {
-					self.pending_send = Some(msg);
-					self.pending_step = 2;
-					self.pending_progress = x;
-					return Ok(SendStatus::InProgress);
-				}
+			Some(x) => if x < msg.get_header().len() {
+				self.pending_send = Some(msg);
+				self.pending_step = 2;
+				self.pending_progress = x;
+				return Ok(SendStatus::InProgress);
 			},
 			None => {
 				self.pending_send = Some(msg);
@@ -312,15 +309,11 @@ impl PipeState for ConnectedPipeState {
 
 		// try send msg body
 		match try!(connection.try_write(msg.get_body())) {
-			Some(x) => {
-				if x == msg.get_body().len() {
-					return Ok(SendStatus::Completed);
-				} else {
-					self.pending_send = Some(msg);
-					self.pending_step = 3;
-					self.pending_progress = x;
-					return Ok(SendStatus::InProgress);
-				}
+			Some(x) => if x < msg.get_body().len() {
+				self.pending_send = Some(msg);
+				self.pending_step = 3;
+				self.pending_progress = x;
+				return Ok(SendStatus::InProgress);
 			},
 			None => {
 				self.pending_send = Some(msg);
@@ -330,6 +323,7 @@ impl PipeState for ConnectedPipeState {
 			}
 		}
 
-		// TODO : when something is pending, should reregister to writable ...
+		// TODO : when something is pending, should reregister, to writable at least ...
+		Ok(SendStatus::Completed)
 	}
 }
