@@ -11,8 +11,14 @@ use Message;
 use protocol::Protocol as Protocol;
 use transport::Connection as Connection;
 
+pub enum SendStatus {
+    Rejected(Message),   // Message can't be sent at the moment
+    Completed,       // Message has been successfully sent
+    Started          // Message has been partially sent, will finish later
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum PipeStateIdx {
+enum State {
 	Handshake,
 	Connected
 }
@@ -22,7 +28,7 @@ pub enum PipeStateIdx {
 // according to the connection readiness and the operation progress
 pub struct Pipe {
 	addr: String,
-	state: PipeStateIdx,
+	state: State,
 	handshake_state: HandshakePipeState,
 	connected_state: ConnectedPipeState
 }
@@ -34,38 +40,40 @@ impl Pipe {
 
 		Pipe {
 			addr: addr,
-			state: PipeStateIdx::Handshake,
+			state: State::Handshake,
 			handshake_state: HandshakePipeState::new(id, protocol, conn_ref.clone()),
 			connected_state: ConnectedPipeState::new(id, conn_ref.clone())
 		}
+	}
+
+	// result can be :
+	//  - can't send (write prefix would block), transfer back msg ownership
+	//  - message successfully sent
+	//  - message partially sent, will finish later 
+	//  - tried to send, but an error occured while sending or write prefix partial write, msg is lost
+
+	pub fn send(&mut self, event_loop: &mut EventLoop, msg: Message) -> io::Result<SendStatus> {
+		self.get_state().send(event_loop, msg)
 	}
 
 	pub fn addr(self) -> String {
 		self.addr
 	}
 
-	pub fn is_ready(&self) -> bool {
-		self.state == PipeStateIdx::Connected
-	}
-
-	pub fn send(&mut self, msg: Message) {
-		self.get_state().send(msg);
-	}
-
 	fn get_state<'a>(&'a mut self) -> &'a mut PipeState {
 		match self.state {
-			PipeStateIdx::Handshake => &mut self.handshake_state,
-			PipeStateIdx::Connected => &mut self.connected_state
+			State::Handshake => &mut self.handshake_state,
+			State::Connected => &mut self.connected_state
 		}
 	}
 
-	fn set_state(&mut self, state: PipeStateIdx, event_loop: &mut EventLoop) -> io::Result<()> {
+	fn set_state(&mut self, state: State, event_loop: &mut EventLoop) -> io::Result<()> {
 		self.state = state;
 		self.get_state().enter(event_loop)
 	}
 
 	pub fn init(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-		self.set_state(PipeStateIdx::Handshake, event_loop)
+		self.set_state(State::Handshake, event_loop)
 	}
 
 	pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<()> {
@@ -88,9 +96,9 @@ impl Pipe {
 
 trait PipeState {
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()>;
-	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<PipeStateIdx>>;
+	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<State>>;
 
-	fn send(&mut self, msg: Message) -> io::Result<()>;
+	fn send(&mut self, event_loop: &mut EventLoop, msg: Message) -> io::Result<SendStatus>;
 }
 
 struct HandshakePipeState {
@@ -192,7 +200,7 @@ impl PipeState for HandshakePipeState {
 		Ok(())
 	}
 
-	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<PipeStateIdx>> {
+	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<State>> {
 		if !self.received && events.is_readable() {
 			try!(self.read_handshake());
 		}
@@ -202,7 +210,7 @@ impl PipeState for HandshakePipeState {
 		}
 
 		if self.received && self.sent {
-			return Ok(Some(PipeStateIdx::Connected));
+			return Ok(Some(State::Connected));
 		}
 
 		let mut interest = mio::EventSet::hup();
@@ -220,10 +228,9 @@ impl PipeState for HandshakePipeState {
 		Ok(None)
 	}
 
-	fn send(&mut self, _: Message) -> io::Result<()> {
-		Ok(())
+	fn send(&mut self, event_loop: &mut EventLoop, msg: Message) -> io::Result<SendStatus> {
+		Ok(SendStatus::Rejected(msg))
 	}
-	
 }
 
 struct ConnectedPipeState {
@@ -252,11 +259,15 @@ impl PipeState for ConnectedPipeState {
 		Ok(())
 	}
 
-	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<PipeStateIdx>> {
+	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<State>> {
 		Ok(None)
 	}
 
-	fn send(&mut self, msg: Message) -> io::Result<()> {
+	fn send(&mut self, event_loop: &mut EventLoop, msg: Message) -> io::Result<SendStatus> {
+		Ok(SendStatus::Rejected(msg))
+	}
+
+	/*fn send(&mut self, msg: Message) -> io::Result<()> {
 		let mut connection = self.connection.borrow_mut();
 		let mut prefix = Vec::with_capacity(8);
 		try!(prefix.write_u64::<BigEndian>(msg.len() as u64));
@@ -273,5 +284,5 @@ impl PipeState for ConnectedPipeState {
 
 		debug!("msg sent !");
 		Ok(())
-	}
+	}*/
 }

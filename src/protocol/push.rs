@@ -55,11 +55,23 @@ impl Protocol for Push {
 		// So there has to be an additional layer above pipe, maybe inside Push
 
 		// The send operation progress could be monitored inside the pipe
-		for (_, pipe) in self.pipes.iter_mut() {
+		/*for (_, pipe) in self.pipes.iter_mut() {
 			if pipe.is_ready() {
 				pipe.send(msg);
 				return;
 			}
-		}
+		}*/
+
+		// first idea:
+		// call begin_send on each pipe, which should try to write the size prefix
+
+		// when one returns Some(SendProgress) instead of None, 
+		// transfer the message to that pipe with end_send(msg)
+		// it should then try to finish sending the header and body,
+		// registering to writable in case of partial write
+
+		// if no pipe succeeded in begin_send, store the message for further usage
+		// and have each pipe register to the writable event
+		// when it arrives, try again on that pipe only
 	}
 }
