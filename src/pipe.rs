@@ -41,6 +41,9 @@ impl Pipe {
 		// TODO : maybe the connection could be stored inside the Pipe 
 		// and then passed as &mut to the state methods ?
 
+		// TODO : maybe the connection could be stored inside the Pipe
+		// and then referenced from the states inside a &'x Connection field ?
+
 		Pipe {
 			addr: addr,
 			state: State::Handshake,
@@ -234,11 +237,7 @@ impl PipeState for HandshakePipeState {
 struct ConnectedPipeState {
 	id: usize,
 	connection: Rc<RefCell<Box<Connection>>>,
-	pending_send: Option<Rc<Message>>,
-	pending_step: u8,        // 1=prefix, 2=header, 3=body
-	pending_progress: usize  // bytes written
-	// TODO move these fields inside a SendOperation struct
-	// and change pending_send: Option<SendOperation>
+	pending_send: Option<SendOperation>
 }
 
 impl ConnectedPipeState {
@@ -247,11 +246,25 @@ impl ConnectedPipeState {
 		ConnectedPipeState { 
 			id: id,
 			connection: connection,
-			pending_send: None,
-			pending_step: 0,
-			pending_progress: 0
+			pending_send: None
 		}
 	}	
+
+	fn resume_sending(&mut self) -> io::Result<SendStatus> {
+		let mut connection = self.connection.borrow_mut();
+		let mut operation = self.pending_send.take().unwrap();
+		let progress = match try!(operation.advance(&mut **connection)) {
+			SendStatus::Postponed(msg) => SendStatus::Postponed(msg),
+			SendStatus::Completed => SendStatus::Completed,
+			SendStatus::InProgress => {
+				self.pending_send = Some(operation);
+
+				SendStatus::InProgress
+			}
+		};
+
+		Ok(progress)
+	}
 
 }
 
@@ -268,62 +281,156 @@ impl PipeState for ConnectedPipeState {
 	}
 
 	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<State>> {
-		// TODO : check if there is a message pending to be sent
+		if self.pending_send.is_some() && events.is_writable() {
+			try!(self.resume_sending());
+		}
+
 		Ok(None)
 	}
 
 	fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> io::Result<SendStatus> {
-		// TODO just create a SendOperation and let it work from the begining ?
-		let mut connection = self.connection.borrow_mut();
-		let mut prefix = Vec::with_capacity(8);
-		try!(prefix.write_u64::<BigEndian>(msg.len() as u64));
+		self.pending_send = Some(SendOperation::new(msg));
 
+		self.resume_sending()
+	}
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum SendOperationStep {
+	Prefix,
+	Header,
+	Body,
+	Done
+}
+
+struct SendOperation {
+	msg: Rc<Message>,
+	step: SendOperationStep,
+	written: usize
+}
+
+impl SendOperation {
+	fn new(msg: Rc<Message>) -> SendOperation {
+		SendOperation {
+			msg: msg,
+			step: SendOperationStep::Prefix,
+			written: 0
+		}
+	}
+
+	fn advance(&mut self, connection: &mut Connection) -> io::Result<SendStatus> {
 		// try send prefix
-		match try!(connection.try_write(&prefix)) {
-			Some(x) => if x < 8 {
-				self.pending_send = Some(msg);
-				self.pending_step = 1;
-				self.pending_progress = x;
-				return Ok(SendStatus::InProgress);
-			},
-			None => {
-				return Ok(SendStatus::Postponed(msg));
+		if self.step == SendOperationStep::Prefix {
+			let prefix = try!(self.get_prefix_bytes());
+			let remaining = prefix.len() - self.written;
+			let buffer = &prefix[self.written..];
+
+			match try!(connection.try_write(buffer)) {
+				Some(x) => if x < remaining {
+					self.written = self.written + x;
+					return Ok(SendStatus::InProgress);
+				},
+				None => {
+					return Ok(SendStatus::Postponed(self.msg.clone()));
+				}
 			}
+
+			self.step = SendOperationStep::Header;
+			self.written = 0;
 		}
 
+		/*if try!(self.advance_payload_fragment(connection)) {
+			self.step = SendOperationStep::Body;
+			self.written = 0;
+		} else {
+			return Ok(SendStatus::InProgress);
+		}
+
+		if try!(self.advance_payload_fragment(connection)) {
+			self.step = SendOperationStep::Done;
+			self.written = 0;
+		} else {
+			return Ok(SendStatus::InProgress);
+		}*/
+
 		// try send msg header
-		match try!(connection.try_write(msg.get_header())) {
-			Some(x) => if x < msg.get_header().len() {
-				self.pending_send = Some(msg);
-				self.pending_step = 2;
-				self.pending_progress = x;
-				return Ok(SendStatus::InProgress);
-			},
-			None => {
-				self.pending_send = Some(msg);
-				self.pending_step = 2;
-				self.pending_progress = 0;
-				return Ok(SendStatus::InProgress);
+		if self.step == SendOperationStep::Header {
+			let header = self.msg.get_header();
+			let remaining = header.len() - self.written;
+
+			if remaining > 0 {
+				let buffer = &header[self.written..];
+				match try!(connection.try_write(buffer)) {
+					Some(x) => if x < remaining {
+						self.written = self.written + x;
+						return Ok(SendStatus::InProgress);
+					},
+					None => {
+						return Ok(SendStatus::InProgress);
+					}
+				}
 			}
+
+			self.step = SendOperationStep::Body;
+			self.written = 0;
 		}
 
 		// try send msg body
-		match try!(connection.try_write(msg.get_body())) {
-			Some(x) => if x < msg.get_body().len() {
-				self.pending_send = Some(msg);
-				self.pending_step = 3;
-				self.pending_progress = x;
-				return Ok(SendStatus::InProgress);
-			},
-			None => {
-				self.pending_send = Some(msg);
-				self.pending_step = 3;
-				self.pending_progress = 0;
-				return Ok(SendStatus::InProgress);
-			}
-		}
+		if self.step == SendOperationStep::Body {
+			let body = self.msg.get_body();
+			let remaining = body.len() - self.written;
 
-		// TODO : when something is pending, should reregister, to writable at least ...
+			if remaining > 0 {
+				let buffer = &body[self.written..];
+				match try!(connection.try_write(buffer)) {
+					Some(x) => if x < remaining {
+						self.written = self.written + x;
+						return Ok(SendStatus::InProgress);
+					},
+					None => {
+						return Ok(SendStatus::InProgress);
+					}
+				}
+			}
+
+			self.step = SendOperationStep::Done;
+			self.written = 0;
+		};
+
 		Ok(SendStatus::Completed)
 	}
+
+	/*fn advance_payload_fragment(&mut self, connection: &mut Connection) -> io::Result<bool> {
+		let buffer = match self.step {
+			SendOperationStep::Header => self.msg.get_header(),
+			_ => self.msg.get_body(),
+		};
+		let remaining = buffer.len() - self.written;
+
+		let done = if remaining > 0 {
+			let fragment = &buffer[self.written..];
+			match try!(connection.try_write(fragment)) {
+				Some(x) => {
+					self.written = self.written + x;
+
+					x == remaining
+				},
+				None => false
+			}
+		} else {
+			true
+		};
+
+		Ok(done)
+	}*/
+
+	fn get_prefix_bytes(&self) -> io::Result<Vec<u8>> {
+		let mut prefix = Vec::with_capacity(8);
+		let msg_len = self.msg.len() as u64;
+
+		try!(prefix.write_u64::<BigEndian>(msg_len));
+
+		Ok(prefix)
+	}
+	
 }

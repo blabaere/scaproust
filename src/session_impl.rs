@@ -53,7 +53,7 @@ impl SessionImpl {
 		match cmd {
 			SocketCmd::Ping => self.ping_socket(id),
 			SocketCmd::Connect(addr) => self.connect_socket(id, event_loop, addr),
-			SocketCmd::SendMsg(msg) => self.send_msg(id, event_loop, msg)
+			SocketCmd::SendMsg(msg) => self.send(id, event_loop, msg)
 		}
 	}
 
@@ -87,7 +87,7 @@ impl SessionImpl {
 		}
 	}
 
-	fn send_msg(&mut self, id: usize, event_loop: &mut EventLoop, msg: Message) {
+	fn send(&mut self, id: usize, event_loop: &mut EventLoop, msg: Message) {
 		if let Some(socket) = self.sockets.get_mut(&id) {
 			socket.send(event_loop, msg);
 		}
