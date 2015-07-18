@@ -1,13 +1,13 @@
  - put description and objective in README
  - setup CI with travis once there are some unit tests
 
- - Move pipe selection for message sending to the protocol
  - Decide who will be responsible for sending the success/failure event to the front-end socket
  - Implement send timeout
- - Have Socket::connect return an Endpoint that can be shut down
  - Implement Pull protocol to see how receive operation can be done
  - Implement Bind operation
  - Now that there is send & receive, connect & bind : TEST ALL THE THINGS !!!
  - Implement the other protocols ...
  - Implement socket options ...
+ - Implement load balancing and fair queuing
+ - Have Socket::connect return an Endpoint that can be shut down
  - Implement nanocat
