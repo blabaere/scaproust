@@ -1,4 +1,5 @@
-use std::rc::*;
+use std::rc::Rc;
+use std::sync::mpsc;
 use std::collections::HashMap;
 use std::io;
 use mio;
@@ -6,17 +7,20 @@ use mio;
 use super::Protocol;
 use pipe::*;
 use global::SocketType as SocketType;
+use event_loop_msg::SocketEvt as SocketEvt;
 use EventLoop;
 use Message;
 
 pub struct Push {
-	pipes: HashMap<usize, PushPipe> 
+	pipes: HashMap<usize, PushPipe>,
+	evt_sender: Rc<mpsc::Sender<SocketEvt>>
 }
 
 impl Push {
-	pub fn new() -> Push {
+	pub fn new(evt_sender: Rc<mpsc::Sender<SocketEvt>>) -> Push {
 		Push { 
-			pipes: HashMap::new()
+			pipes: HashMap::new(),
+			evt_sender: evt_sender
 		}
 	}
 }
@@ -39,28 +43,31 @@ impl Protocol for Push {
 	}
 
 	fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) -> io::Result<()> {
+		let mut clear_pending_send = false;
+
 		if let Some(pipe) = self.pipes.get_mut(&id) {
-			pipe.ready(event_loop, events)
-			// TODO check if a pending message was sent
-		} else {
-			Ok(())
+			try!(pipe.ready(event_loop, events));
+
+			clear_pending_send = try!(pipe.flush_pending_send()).is_some();
 		}
+
+		if clear_pending_send {
+			for (_, pipe) in self.pipes.iter_mut() {
+				pipe.clear_pending_send();
+			}
+		}
+
+		Ok(())
 	}
 
-	fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
+	fn send(&mut self, _: &mut EventLoop, msg: Message) {
 		let mut sent = false;
 		let mut piped = false;
 		let mut shared = false;
 		let shared_msg = Rc::new(msg);
 
-		// after loop state can be
-		// - message sent : clean push pipes and notify success upstream
-		// - message partially sent : clean push pipes and wait some ...
-		// - message pending : wait some ...
-		// - message not acquired by anybody (everybody in error !!!) : notify failure upstream 
-
 		for (_, pipe) in self.pipes.iter_mut() {
-			match pipe.send(event_loop, shared_msg.clone()) {
+			match pipe.send(shared_msg.clone()) {
 				Ok(Some(true)) => sent = true,
 				Ok(Some(false)) => piped = true,
 				Ok(None) => shared = true,
@@ -73,20 +80,13 @@ impl Protocol for Push {
 			}
 		}
 
-		if sent {
-			info!("Message sent.");
-		} else if piped {
-			info!("Message sending in progress.");
-		} else if shared {
-			info!("Message sending postponed.");
-		} else {
-			info!("Message NOT sent")
-		}
-
 		if sent | piped {
 			for (_, pipe) in self.pipes.iter_mut() {
-				pipe.clean_pending_send();
+				pipe.clear_pending_send();
 			}
+		} else if shared == false {
+			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
+			let _ = self.evt_sender.send(SocketEvt::MsgNotSent(err));
 		}
 	}
 }
@@ -106,15 +106,10 @@ impl PushPipe {
 
 	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<()> {
 		self.pipe.ready(event_loop, events)
-		// TODO check if there is a pending message to be sent ...
 	}
 
-	// result can be
-	// - sent    (msg can be dropped)
-	// - sending (msg acquired by pipe)
-	// - pending (msg shared with other push pipes)
-	fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> io::Result<Option<bool>> {
-		let progress = match try!(self.pipe.send(event_loop, msg)) {
+	fn send(&mut self, msg: Rc<Message>) -> io::Result<Option<bool>> {
+		let progress = match try!(self.pipe.send(msg)) {
 			SendStatus::Completed => Some(true),
 			SendStatus::InProgress => Some(false),
 			SendStatus::Postponed(message) => {
@@ -126,7 +121,14 @@ impl PushPipe {
 		Ok(progress)
 	}
 
-	fn clean_pending_send(&mut self) {
+	fn flush_pending_send(&mut self) -> io::Result<Option<bool>> {
+		match self.pending_send.take() {
+			None => Ok(None),
+			Some(msg) => self.send(msg)
+		}
+	}
+
+	fn clear_pending_send(&mut self) {
 		self.pending_send = None;
 	}
 

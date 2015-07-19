@@ -1,5 +1,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::sync::mpsc;
 use std::io;
 
 use byteorder::{BigEndian, WriteBytesExt};
@@ -8,6 +9,7 @@ use mio;
 
 use EventLoop;
 use Message;
+use event_loop_msg::SocketEvt as SocketEvt;
 use protocol::Protocol as Protocol;
 use transport::Connection as Connection;
 
@@ -35,25 +37,25 @@ pub enum SendStatus {
 
 impl Pipe {
 
-	pub fn new(id: usize, addr: String, protocol: &Protocol, connection: Box<Connection>) -> Pipe {
+	pub fn new(
+		id: usize, 
+		addr: String, 
+		protocol: &Protocol, 
+		connection: Box<Connection>,
+		evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Pipe {
+
 		let conn_ref = Rc::new(RefCell::new(connection));
-
-		// TODO : maybe the connection could be stored inside the Pipe 
-		// and then passed as &mut to the state methods ?
-
-		// TODO : maybe the connection could be stored inside the Pipe
-		// and then referenced from the states inside a &'x Connection field ?
 
 		Pipe {
 			addr: addr,
 			state: State::Handshake,
 			handshake_state: HandshakePipeState::new(id, protocol, conn_ref.clone()),
-			connected_state: ConnectedPipeState::new(id, conn_ref.clone())
+			connected_state: ConnectedPipeState::new(id, evt_tx, conn_ref.clone())
 		}
 	}
 
-	pub fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> io::Result<SendStatus> {
-		self.get_state().send(event_loop, msg)
+	pub fn send(&mut self, msg: Rc<Message>) -> io::Result<SendStatus> {
+		self.get_state().send(msg)
 	}
 
 	pub fn addr(self) -> String {
@@ -76,8 +78,8 @@ impl Pipe {
 		self.set_state(State::Handshake, event_loop)
 	}
 
-	//TODO ready should tell the caller about any pending send or receive completion ...
-	pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<()> {
+	pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<()> {
+
 		if events.is_hup() {
 			return Err(io::Error::new(io::ErrorKind::ConnectionReset, "event: hup"));
 		}
@@ -87,7 +89,7 @@ impl Pipe {
 		}
 
 		if let Some(new_state) = try!(self.get_state().ready(event_loop, events)) {
-			return self.set_state(new_state, event_loop);
+			try!(self.set_state(new_state, event_loop));
 		} 
 
 		Ok(())
@@ -99,7 +101,7 @@ trait PipeState {
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()>;
 	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<State>>;
 
-	fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> io::Result<SendStatus>;
+	fn send(&mut self, msg: Rc<Message>) -> io::Result<SendStatus>;
 }
 
 struct HandshakePipeState {
@@ -230,22 +232,24 @@ impl PipeState for HandshakePipeState {
 		Ok(None)
 	}
 
-	fn send(&mut self, _: &mut EventLoop, msg: Rc<Message>) -> io::Result<SendStatus> {
+	fn send(&mut self, msg: Rc<Message>) -> io::Result<SendStatus> {
 		Ok(SendStatus::Postponed(msg))
 	}
 }
 
 struct ConnectedPipeState {
 	id: usize,
+	evt_sender: Rc<mpsc::Sender<SocketEvt>>,
 	connection: Rc<RefCell<Box<Connection>>>,
 	pending_send: Option<SendOperation>
 }
 
 impl ConnectedPipeState {
 
-	fn new(id: usize, connection: Rc<RefCell<Box<Connection>>>) -> ConnectedPipeState {
+	fn new(id: usize, evt_tx: Rc<mpsc::Sender<SocketEvt>>, connection: Rc<RefCell<Box<Connection>>>) -> ConnectedPipeState {
 		ConnectedPipeState { 
 			id: id,
+			evt_sender: evt_tx,
 			connection: connection,
 			pending_send: None
 		}
@@ -256,7 +260,11 @@ impl ConnectedPipeState {
 		let mut operation = self.pending_send.take().unwrap();
 		let progress = match try!(operation.send(&mut **connection)) {
 			SendStatus::Postponed(msg) => SendStatus::Postponed(msg),
-			SendStatus::Completed => SendStatus::Completed,
+			SendStatus::Completed => {
+				let _ = self.evt_sender.send(SocketEvt::MsgSent);
+
+				SendStatus::Completed
+			},
 			SendStatus::InProgress => {
 				self.pending_send = Some(operation);
 
@@ -281,7 +289,7 @@ impl PipeState for ConnectedPipeState {
 		Ok(())
 	}
 
-	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<State>> {
+	fn ready(&mut self, _: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<State>> {
 		if self.pending_send.is_some() && events.is_writable() {
 			try!(self.resume_sending());
 		}
@@ -289,7 +297,7 @@ impl PipeState for ConnectedPipeState {
 		Ok(None)
 	}
 
-	fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> io::Result<SendStatus> {
+	fn send(&mut self, msg: Rc<Message>) -> io::Result<SendStatus> {
 		let operation = try!(SendOperation::new(msg));
 
 		self.pending_send = Some(operation);

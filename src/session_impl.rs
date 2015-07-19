@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::cell::Cell;
 use std::collections::HashMap;
 
@@ -62,10 +63,11 @@ impl SessionImpl {
 	}
 
 	fn create_socket(&mut self, socket_type: SocketType) {
-		let protocol = protocol::create_protocol(socket_type);
 		let (tx, rx) = mpsc::channel();
+		let shared_tx = Rc::new(tx);
+		let protocol = protocol::create_protocol(socket_type, shared_tx.clone());
 		let id = self.next_id();
-		let socket = SocketImpl::new(id, protocol, tx);
+		let socket = SocketImpl::new(id, protocol, shared_tx.clone());
 
 		self.sockets.insert(id, socket);
 		self.event_sender.send(SessionEvt::SocketCreated(id, rx));

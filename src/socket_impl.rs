@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::sync::mpsc;
 use std::io;
 
@@ -16,12 +17,12 @@ use Message;
 pub struct SocketImpl {
 	id: usize,
 	protocol: Box<Protocol>,
-	evt_sender: mpsc::Sender<SocketEvt>,
+	evt_sender: Rc<mpsc::Sender<SocketEvt>>
 }
 
 impl SocketImpl {
 
-	pub fn new(id: usize, proto: Box<Protocol>, evt_tx: mpsc::Sender<SocketEvt>) -> SocketImpl {
+	pub fn new(id: usize, proto: Box<Protocol>, evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> SocketImpl {
 		SocketImpl { 
 			id: id,
 			protocol: proto, 
@@ -44,22 +45,15 @@ impl SocketImpl {
 		self.evt_sender.send(evt);
 	}
 
-	fn on_connected(&mut self, addr: String, event_loop: &mut EventLoop, id: usize, conn: Box<Connection>) -> io::Result<()> {
-		let mut pipe = Pipe::new(id, addr, &*self.protocol, conn);
-
-		try!(pipe.init(event_loop));
-
-		self.protocol.add_pipe(id, pipe);
-		Ok(())
-	}
-
 	pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, id: usize) {
 		debug!("[{}] pipe [{}] reconnect: '{}'", self.id, id, addr);
 
-		self.create_connection(&addr).and_then(|c| self.on_connected(addr, event_loop, id, c));
+		self.create_connection(&addr).
+			and_then(|c| self.on_connected(addr, event_loop, id, c)).
+			unwrap_or_else(|e| self.on_pipe_error(event_loop, id, e));
 	}
 
-	fn create_connection(&self, addr: &str) -> Result<Box<Connection>, io::Error> {
+	fn create_connection(&self, addr: &str) -> io::Result<Box<Connection>> {
 
 		let addr_parts: Vec<&str> = addr.split("://").collect();
 		let scheme = addr_parts[0];
@@ -69,13 +63,20 @@ impl SocketImpl {
 		transport.connect(specific_addr)
 	}
 
+	fn on_connected(&mut self, addr: String, event_loop: &mut EventLoop, id: usize, conn: Box<Connection>) -> io::Result<()> {
+		let evt_sender = self.evt_sender.clone();
+		let mut pipe = Pipe::new(id, addr, &*self.protocol, conn, evt_sender);
+
+		pipe.init(event_loop).and_then(|_| Ok(self.protocol.add_pipe(id, pipe)))
+	}
+
 	pub fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
 		debug!("[{}] send", self.id);
 		self.protocol.send(event_loop, msg);
-		self.evt_sender.send(SocketEvt::MsgSent); // pretend it went fine
 	}
 
 	pub fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) {
+		debug!("[{}] pipe [{}] ready: '{:?}'", self.id, id, events);
 		self.protocol.
 			ready(event_loop, id, events).
 			unwrap_or_else(|e| self.on_pipe_error(event_loop, id, e));
