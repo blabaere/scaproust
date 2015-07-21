@@ -87,6 +87,7 @@ impl Protocol for Push {
 		} else if shared == false {
 			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
 			let _ = self.evt_sender.send(SocketEvt::MsgNotSent(err));
+			// TODO : cancel related event loop timeout
 		}
 	}
 }

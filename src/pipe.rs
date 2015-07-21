@@ -262,6 +262,7 @@ impl ConnectedPipeState {
 			SendStatus::Postponed(msg) => SendStatus::Postponed(msg),
 			SendStatus::Completed => {
 				let _ = self.evt_sender.send(SocketEvt::MsgSent);
+				// TODO : cancel related event loop timeout
 
 				SendStatus::Completed
 			},
