@@ -27,3 +27,11 @@ CURRENTLY THE PIPE IS RAISING THE SUCCESS EVENT
 THIS IS WRONG BECAUSE THE PROTOCOL MAY REQUIRE 
 THAT ALL LIVE PIPES SEND THE MESSAGE.
 FOR EXAMPLE PUB, BUS, SURVEYOR ...
+
+
+Stuff to look at :
+https://github.com/dpc/mioco
+https://github.com/dwrensha/gj
+https://github.com/calc0000/tcp-loop
+https://github.com/diwic/fdringbuf-rs
+https://github.com/zonyitoo/simplesched
