@@ -1,6 +1,16 @@
  - put description and objective in README
  - setup CI with travis once there are some unit tests
+ - setup CI with appveyor once mio is compatible with windows
 
+Refactors:
+ - Use an mio::Token instead of usize where applicable
+ - Use something else than usize where mio::Token is not applicable
+ - Expose the id of identified items
+ - move transport call from socket_impl to session_impl
+ - have each transport share a token factory (sequence number)
+ - find a better name for socket_impl and session_impl
+
+Features:
  - Implement send timeout
  - Implement Pull protocol to see how receive operation can be done
  - Implement Bind operation

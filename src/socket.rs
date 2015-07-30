@@ -4,6 +4,7 @@ use std::io;
 use mio;
 use mio::NotifyError;
 
+use global::*;
 use event_loop_msg::*;
 
 use Message;
@@ -21,7 +22,7 @@ fn convert_notify_err<T>(err: NotifyError<T>) -> io::Error {
 }
 
 pub struct Socket {
-	id: usize,
+	id: SocketId,
 	cmd_sender: mio::Sender<EventLoopCmd>,
 	evt_receiver: mpsc::Receiver<SocketEvt>
 	// Could use https://github.com/polyfractal/bounded-spsc-queue ?
@@ -30,7 +31,7 @@ pub struct Socket {
 
 impl Socket {
 	pub fn new(
-		id: usize,
+		id: SocketId,
 		cmd_sender: mio::Sender<EventLoopCmd>,
 		evt_receiver: mpsc::Receiver<SocketEvt>) -> Socket {
 
@@ -67,6 +68,19 @@ impl Socket {
 		match self.evt_receiver.recv() {
 			Ok(SocketEvt::Connected) => Ok(()),
 			Ok(SocketEvt::NotConnected(e)) => Err(e),
+			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
+			Err(_) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
+		}
+	}
+
+	pub fn bind(&self, addr: &str) -> Result<(), io::Error> {
+		let cmd = SocketCmd::Bind(addr.to_owned());
+		
+		try!(self.send_cmd(cmd));
+
+		match self.evt_receiver.recv() {
+			Ok(SocketEvt::Bound) => Ok(()),
+			Ok(SocketEvt::NotBound(e)) => Err(e),
 			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
 			Err(_) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
 		}

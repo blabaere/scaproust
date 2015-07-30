@@ -6,8 +6,7 @@ use std::sync::mpsc;
 
 use mio;
 
-use global::SocketType as SocketType;
-
+use global::*;
 use event_loop_msg::*;
 
 use socket_impl::SocketImpl as SocketImpl;
@@ -18,8 +17,8 @@ use Message;
 
 pub struct SessionImpl {
 	event_sender: mpsc::Sender<SessionEvt>,
-	sockets: HashMap<usize, SocketImpl>,
-	socket_ids: HashMap<usize, usize>,
+	sockets: HashMap<SocketId, SocketImpl>,
+	socket_ids: HashMap<usize, SocketId>,
 	id_seq: Cell<usize>
 }
 
@@ -50,10 +49,11 @@ impl SessionImpl {
 		}
 	}
 
-	fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: usize, cmd: SocketCmd) {
+	fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: SocketId, cmd: SocketCmd) {
 		match cmd {
 			SocketCmd::Ping => self.ping_socket(id),
 			SocketCmd::Connect(addr) => self.connect_socket(id, event_loop, addr),
+			SocketCmd::Bind(addr) => self.bind_socket(id, event_loop, addr),
 			SocketCmd::SendMsg(msg) => self.send(id, event_loop, msg)
 		}
 	}
@@ -66,20 +66,20 @@ impl SessionImpl {
 		let (tx, rx) = mpsc::channel();
 		let shared_tx = Rc::new(tx);
 		let protocol = protocol::create_protocol(socket_type, shared_tx.clone());
-		let id = self.next_id();
+		let id = SocketId(self.next_id());
 		let socket = SocketImpl::new(id, protocol, shared_tx.clone());
 
 		self.sockets.insert(id, socket);
 		self.event_sender.send(SessionEvt::SocketCreated(id, rx));
 	}
 	
-	fn ping_socket(&mut self, id: usize) {
+	fn ping_socket(&mut self, id: SocketId) {
 		if let Some(socket) = self.sockets.get_mut(&id) {
 			socket.pong();
 		}
 	}
 
-	fn connect_socket(&mut self, id: usize, event_loop: &mut EventLoop, addr: String) {
+	fn connect_socket(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {
 		let connection_id = self.next_id();
 
 		self.socket_ids.insert(connection_id, id);
@@ -89,7 +89,18 @@ impl SessionImpl {
 		}
 	}
 
-	fn send(&mut self, id: usize, event_loop: &mut EventLoop, msg: Message) {
+	fn bind_socket(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {
+		let connection_id = self.next_id();
+
+		self.socket_ids.insert(connection_id, id);
+
+		if let Some(socket) = self.sockets.get_mut(&id) {
+			socket.bind(addr, event_loop, connection_id);
+		}
+	}
+
+
+	fn send(&mut self, id: SocketId, event_loop: &mut EventLoop, msg: Message) {
 		if let Some(socket) = self.sockets.get_mut(&id) {
 			socket.send(event_loop, msg);
 		}

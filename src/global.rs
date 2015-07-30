@@ -18,3 +18,7 @@ impl SocketType {
 		*self as u16
 	}
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SocketId(pub usize);
+

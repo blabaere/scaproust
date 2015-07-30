@@ -10,8 +10,8 @@ use mio;
 use EventLoop;
 use Message;
 use event_loop_msg::SocketEvt as SocketEvt;
-use protocol::Protocol as Protocol;
-use transport::Connection as Connection;
+use protocol::Protocol;
+use transport::Connection;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum State {
@@ -97,6 +97,9 @@ impl Pipe {
 	
 }
 
+// May be it so no a good idea after all
+// When handshaking,  the result of ready() can only be bool telling if the handshake is doe or not
+// When connected, it has to tell if any message was sent, or received, or both.
 trait PipeState {
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()>;
 	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet)-> io::Result<Option<State>>;

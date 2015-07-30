@@ -1,12 +1,12 @@
 use std::sync::mpsc;
 use std::io;
 
-use global::SocketType as SocketType;
+use global::*;
 use Message;
 
 pub enum EventLoopCmd {
 	SessionLevel(SessionCmd),
-	SocketLevel(usize, SocketCmd)
+	SocketLevel(SocketId, SocketCmd)
 }
 
 pub enum SessionCmd {
@@ -18,6 +18,7 @@ pub enum SessionCmd {
 pub enum SocketCmd {
 	Ping,
 	Connect(String),
+	Bind(String),
 	SendMsg(Message)
 }
 
@@ -27,13 +28,15 @@ pub enum EventLoopTimeout {
 
 pub enum SessionEvt {
 	Pong,
-	SocketCreated(usize, mpsc::Receiver<SocketEvt>),
+	SocketCreated(SocketId, mpsc::Receiver<SocketEvt>),
 	SocketNotCreated}
 
 pub enum SocketEvt {
     Pong,
     Connected,
     NotConnected(io::Error),
+    Bound,
+    NotBound(io::Error),
 	MsgSent,
 	MsgNotSent(io::Error)
 }
