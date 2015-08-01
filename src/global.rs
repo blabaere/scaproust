@@ -1,3 +1,5 @@
+use std::rc::Rc;
+use std::cell::Cell;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SocketType {
@@ -22,3 +24,36 @@ impl SocketType {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SocketId(pub usize);
 
+#[derive(Clone)]
+pub struct IdSequence {
+    value: Rc<Cell<usize>>
+}
+
+impl IdSequence {
+	pub fn new() -> IdSequence {
+		IdSequence { value: Rc::new(Cell::new(0)) }
+	}
+
+	pub fn next(&self) -> usize {
+		let id = self.value.get();
+
+		self.value.set(id + 1);
+		id
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::IdSequence;
+
+	#[test]
+	fn id_sequence_can_be_cloned() {
+		let seq = IdSequence::new();
+		let other = seq.clone();
+
+		assert_eq!(0, other.next());
+		assert_eq!(1, seq.next());
+		assert_eq!(2, seq.next());
+		assert_eq!(3, other.next());
+	}
+}

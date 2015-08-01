@@ -23,7 +23,7 @@ enum State {
 // That means send/receive size prefix and then message payload
 // according to the connection readiness and the operation progress
 pub struct Pipe {
-	addr: String,
+	addr: Option<String>,
 	state: State,
 	handshake_state: HandshakePipeState,
 	connected_state: ConnectedPipeState
@@ -38,8 +38,8 @@ pub enum SendStatus {
 impl Pipe {
 
 	pub fn new(
-		id: usize, 
-		addr: String, 
+		token: mio::Token, 
+		addr: Option<String>, 
 		protocol: &Protocol, 
 		connection: Box<Connection>,
 		evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Pipe {
@@ -49,8 +49,8 @@ impl Pipe {
 		Pipe {
 			addr: addr,
 			state: State::Handshake,
-			handshake_state: HandshakePipeState::new(id, protocol, conn_ref.clone()),
-			connected_state: ConnectedPipeState::new(id, evt_tx, conn_ref.clone())
+			handshake_state: HandshakePipeState::new(token, protocol, conn_ref.clone()),
+			connected_state: ConnectedPipeState::new(token, evt_tx, conn_ref.clone())
 		}
 	}
 
@@ -58,7 +58,7 @@ impl Pipe {
 		self.get_state().send(msg)
 	}
 
-	pub fn addr(self) -> String {
+	pub fn addr(self) -> Option<String> {
 		self.addr
 	}
 
@@ -108,7 +108,7 @@ trait PipeState {
 }
 
 struct HandshakePipeState {
-	id: usize,
+	token: mio::Token,
 	protocol_id: u16,
 	protocol_peer_id: u16,
 	connection: Rc<RefCell<Box<Connection>>>,
@@ -118,9 +118,9 @@ struct HandshakePipeState {
 
 impl HandshakePipeState {
 
-	fn new(id: usize, protocol: &Protocol, connection: Rc<RefCell<Box<Connection>>>) -> HandshakePipeState {
+	fn new(token: mio::Token, protocol: &Protocol, connection: Rc<RefCell<Box<Connection>>>) -> HandshakePipeState {
 		HandshakePipeState { 
-			id: id,
+			token: token,
 			protocol_id: protocol.id(),
 			protocol_peer_id: protocol.peer_id(),
 			connection: connection,
@@ -155,7 +155,7 @@ impl HandshakePipeState {
 		try!(
 			connection.try_read(&mut handshake).
 			and_then(|_| self.check_received_handshake(&handshake)));
-		debug!("[{}] handshake received.", self.id);
+		debug!("[{:?}] handshake received.", self.token);
 		self.received = true;
 		Ok(())
 	}
@@ -169,25 +169,23 @@ impl HandshakePipeState {
 		try!(
 			connection.try_write(&handshake).
 			and_then(|w| self.check_sent_handshake(w)));
-		debug!("[{}] handshake sent.", self.id);
+		debug!("[{:?}] handshake sent.", self.token);
 		self.sent = true;
 		Ok(())
 	}
 
 	fn register(&self, event_loop: &mut EventLoop, interest: mio::EventSet, poll_opt: mio::PollOpt) -> io::Result<()> {
-		let token = mio::Token(self.id); 
 		let connection = self.connection.borrow();
 		let fd = connection.as_evented();
 
-		event_loop.register_opt(fd, token, interest, poll_opt)
+		event_loop.register_opt(fd, self.token, interest, poll_opt)
 	}
 
 	fn reregister(&self, event_loop: &mut EventLoop, interest: mio::EventSet, poll_opt: mio::PollOpt) -> io::Result<()> {
-		let token = mio::Token(self.id); 
 		let connection = self.connection.borrow();
 		let fd = connection.as_evented();
 
-		event_loop.reregister(fd, token, interest, poll_opt)
+		event_loop.reregister(fd, self.token, interest, poll_opt)
 	}
 
 }
@@ -195,7 +193,7 @@ impl HandshakePipeState {
 impl PipeState for HandshakePipeState {
 
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-		debug!("[{}] enter handshake state", self.id);
+		debug!("[{:?}] enter handshake state", self.token);
 		self.sent = false;
 		self.received = false;
 
@@ -241,7 +239,7 @@ impl PipeState for HandshakePipeState {
 }
 
 struct ConnectedPipeState {
-	id: usize,
+	token: mio::Token,
 	evt_sender: Rc<mpsc::Sender<SocketEvt>>,
 	connection: Rc<RefCell<Box<Connection>>>,
 	pending_send: Option<SendOperation>
@@ -249,9 +247,9 @@ struct ConnectedPipeState {
 
 impl ConnectedPipeState {
 
-	fn new(id: usize, evt_tx: Rc<mpsc::Sender<SocketEvt>>, connection: Rc<RefCell<Box<Connection>>>) -> ConnectedPipeState {
+	fn new(token: mio::Token, evt_tx: Rc<mpsc::Sender<SocketEvt>>, connection: Rc<RefCell<Box<Connection>>>) -> ConnectedPipeState {
 		ConnectedPipeState { 
-			id: id,
+			token: token,
 			evt_sender: evt_tx,
 			connection: connection,
 			pending_send: None
@@ -283,13 +281,12 @@ impl ConnectedPipeState {
 
 impl PipeState for ConnectedPipeState {
 	fn enter(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-		debug!("[{}] enter connected state", self.id);
-		let token = mio::Token(self.id); 
+		debug!("[{:?}] enter connected state", self.token);
 		let connection = self.connection.borrow_mut();
 		let fd = connection.as_evented();
 		let interest = mio::EventSet::all();
 		let poll_opt = mio::PollOpt::edge();
-		try!(event_loop.reregister(fd, token, interest, poll_opt));
+		try!(event_loop.reregister(fd, self.token, interest, poll_opt));
 		Ok(())
 	}
 

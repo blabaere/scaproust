@@ -1,5 +1,7 @@
 #![crate_name = "scaproust"]
 
+#![feature(drain)]
+
 #[macro_use] extern crate log;
 extern crate byteorder;
 extern crate mio;
@@ -14,6 +16,7 @@ mod socket_impl;
 mod protocol;
 mod transport;
 mod pipe;
+mod acceptor;
 
 pub use session::Session;
 

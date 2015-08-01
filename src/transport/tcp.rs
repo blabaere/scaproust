@@ -1,7 +1,7 @@
 use std::net;
 use std::str;
 use std::io;
-use super::{ Transport, Connection, Acceptor };
+use super::{ Transport, Connection, Listener };
 use mio::{ TryRead, TryWrite, Evented };
 use mio::tcp;
 
@@ -16,9 +16,9 @@ impl Transport for Tcp {
 		}
 	}
 
-	fn listen(&self, addr: &str) -> io::Result<Box<Acceptor>> {
+	fn bind(&self, addr: &str) -> io::Result<Box<Listener>> {
 		match str::FromStr::from_str(addr) {
-			Ok(addr) => self.listen(addr),
+			Ok(addr) => self.bind(addr),
 			Err(_) => Err(io::Error::new(io::ErrorKind::InvalidInput, addr.to_owned()))
 		}
 	}
@@ -34,11 +34,11 @@ impl Tcp {
 		Ok(Box::new(connection))
 	}
 	
-	fn listen(&self, addr: net::SocketAddr) -> Result<Box<Acceptor>, io::Error> {
+	fn bind(&self, addr: net::SocketAddr) -> Result<Box<Listener>, io::Error> {
 		let tcp_listener = try!(tcp::TcpListener::bind(&addr));
-		let acceptor = TcpAcceptor { listener: tcp_listener };
+		let listener = TcpListener { listener: tcp_listener };
 
-		Ok(Box::new(acceptor))
+		Ok(Box::new(listener))
 	}
 	
 }
@@ -67,12 +67,26 @@ impl Connection for TcpConnection {
 	}
 }
 
-struct TcpAcceptor {
+struct TcpListener {
     listener: tcp::TcpListener
 }
 
-impl Acceptor for TcpAcceptor {
-	fn accept(&mut self) -> io::Result<Box<Connection>> {
-		Err(io::Error::new(io::ErrorKind::Other, "not implemented"))
+impl Listener for TcpListener {
+
+	fn as_evented(&self) -> &Evented {
+		&self.listener
+	}
+
+	fn accept(&mut self) -> io::Result<Vec<Box<Connection>>> {
+		let mut conns: Vec<Box<Connection>> = Vec::new();
+
+		loop {
+			match try!(self.listener.accept()) {
+				Some(s) => conns.push(Box::new(TcpConnection { stream: s })),
+				None    => break
+			}
+		}
+
+		Ok(conns)
 	}
 }

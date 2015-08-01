@@ -8,13 +8,13 @@ use scaproust::{Session, SocketType, Socket};
 
 fn handle_comand(cmd: &str, socket: &mut Socket) {
 	println!("User command: {:?}", cmd);
-    let big: usize = 3 * 1024 * 1024; // this to force a partial write
+    let big: usize = 3/* * 1024 * 1024*/; // this to force a partial write
     let mut msg = Vec::with_capacity(big);
     for x in 0..big {
         let index = (x % 26) as u8;
         msg.push(65 + index);
     }
-    match socket.send(/*vec!(66, 67, 68, 69)*/msg) {
+    match socket.send(msg) {
         Ok(_) => info!("message sent !"),
         Err(e) => error!("message NOT sent: {} !", e)
     }

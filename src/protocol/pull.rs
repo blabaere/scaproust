@@ -20,14 +20,14 @@ impl Protocol for Pull {
 		SocketType::Push.id()
 	}
 
-	fn add_pipe(&mut self, id: usize, _: Pipe) {
+	fn add_pipe(&mut self, token: mio::Token, _: Pipe) {
 	}
 
-	fn remove_pipe(&mut self, _: usize) -> Option<String> {
+	fn remove_pipe(&mut self, token: mio::Token) -> Option<String> {
 		None
 	}
 
-	fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) -> io::Result<()> {
+	fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
 		Ok(())
 	}
 

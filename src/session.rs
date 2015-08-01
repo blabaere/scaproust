@@ -6,9 +6,7 @@ use std::sync::mpsc;
 use event_loop_msg:: {
 	EventLoopCmd,
 	SessionCmd,
-	SessionEvt,
-	SocketCmd,
-	SocketEvt
+	SessionEvt
 };
 
 use session_impl::SessionImpl as SessionImpl;

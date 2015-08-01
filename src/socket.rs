@@ -26,7 +26,7 @@ pub struct Socket {
 	cmd_sender: mio::Sender<EventLoopCmd>,
 	evt_receiver: mpsc::Receiver<SocketEvt>
 	// Could use https://github.com/polyfractal/bounded-spsc-queue ?
-	// Only if there is one receiver per Socket and they are only 'Send'
+	// Maybe once a smart waiting strategy is available (like spin, then sleep 0, then sleep 1, then mutex ?)
 }
 
 impl Socket {
@@ -73,6 +73,7 @@ impl Socket {
 		}
 	}
 
+	// TODO: return an Endpoint struct with a shutdown method instead of '()'
 	pub fn bind(&self, addr: &str) -> Result<(), io::Error> {
 		let cmd = SocketCmd::Bind(addr.to_owned());
 		

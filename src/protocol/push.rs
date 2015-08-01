@@ -12,7 +12,7 @@ use EventLoop;
 use Message;
 
 pub struct Push {
-	pipes: HashMap<usize, PushPipe>,
+	pipes: HashMap<mio::Token, PushPipe>,
 	evt_sender: Rc<mpsc::Sender<SocketEvt>>
 }
 
@@ -34,18 +34,18 @@ impl Protocol for Push {
 		SocketType::Pull.id()
 	}
 
-	fn add_pipe(&mut self, id: usize, pipe: Pipe) {
-		self.pipes.insert(id, PushPipe::new(pipe));
+	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {
+		self.pipes.insert(token, PushPipe::new(pipe));
 	}
 
-	fn remove_pipe(&mut self, id: usize) -> Option<String> {
-		self.pipes.remove(&id).map(|p| p.addr())
+	fn remove_pipe(&mut self, token: mio::Token) -> Option<String> {
+		self.pipes.remove(&token).and_then(|p| p.addr())
 	}
 
-	fn ready(&mut self, event_loop: &mut EventLoop, id: usize, events: mio::EventSet) -> io::Result<()> {
+	fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
 		let mut clear_pending_send = false;
 
-		if let Some(pipe) = self.pipes.get_mut(&id) {
+		if let Some(pipe) = self.pipes.get_mut(&token) {
 			try!(pipe.ready(event_loop, events));
 
 			clear_pending_send = try!(pipe.flush_pending_send()).is_some();
@@ -133,7 +133,7 @@ impl PushPipe {
 		self.pending_send = None;
 	}
 
-	fn addr(self) -> String {
+	fn addr(self) -> Option<String> {
 		self.pipe.addr()
 	}
 }

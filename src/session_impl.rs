@@ -1,5 +1,4 @@
 use std::rc::Rc;
-use std::cell::Cell;
 use std::collections::HashMap;
 
 use std::sync::mpsc;
@@ -18,8 +17,8 @@ use Message;
 pub struct SessionImpl {
 	event_sender: mpsc::Sender<SessionEvt>,
 	sockets: HashMap<SocketId, SocketImpl>,
-	socket_ids: HashMap<usize, SocketId>,
-	id_seq: Cell<usize>
+	socket_ids: HashMap<mio::Token, SocketId>,
+	id_seq: IdSequence
 }
 
 impl SessionImpl {
@@ -29,16 +28,8 @@ impl SessionImpl {
 			event_sender: event_tx,
 			sockets: HashMap::new(),
 			socket_ids: HashMap::new(),
-			id_seq: Cell::new(1)
+			id_seq: IdSequence::new()
 		}
-	}
-
-	fn next_id(&self) -> usize {
-		let id = self.id_seq.get();
-
-		self.id_seq.set(id+1);
-
-		id
 	}
 
 	fn handle_session_cmd(&mut self, event_loop: &mut EventLoop, cmd: SessionCmd) {
@@ -66,8 +57,8 @@ impl SessionImpl {
 		let (tx, rx) = mpsc::channel();
 		let shared_tx = Rc::new(tx);
 		let protocol = protocol::create_protocol(socket_type, shared_tx.clone());
-		let id = SocketId(self.next_id());
-		let socket = SocketImpl::new(id, protocol, shared_tx.clone());
+		let id = SocketId(self.id_seq.next());
+		let socket = SocketImpl::new(id, protocol, shared_tx.clone(), self.id_seq.clone());
 
 		self.sockets.insert(id, socket);
 		self.event_sender.send(SessionEvt::SocketCreated(id, rx));
@@ -80,22 +71,22 @@ impl SessionImpl {
 	}
 
 	fn connect_socket(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {
-		let connection_id = self.next_id();
+		let token = mio::Token(self.id_seq.next());
 
-		self.socket_ids.insert(connection_id, id);
+		self.socket_ids.insert(token, id);
 
 		if let Some(socket) = self.sockets.get_mut(&id) {
-			socket.connect(addr, event_loop, connection_id);
+			socket.connect(addr, event_loop, token);
 		}
 	}
 
 	fn bind_socket(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {
-		let connection_id = self.next_id();
+		let token = mio::Token(self.id_seq.next());
 
-		self.socket_ids.insert(connection_id, id);
+		self.socket_ids.insert(token, id);
 
 		if let Some(socket) = self.sockets.get_mut(&id) {
-			socket.bind(addr, event_loop, connection_id);
+			socket.bind(addr, event_loop, token);
 		}
 	}
 
@@ -105,6 +96,12 @@ impl SessionImpl {
 			socket.send(event_loop, msg);
 		}
 	}
+
+    fn link(&mut self, mut tokens: Vec<mio::Token>, socket_id: SocketId) {
+		for token in tokens.drain(..) {
+			self.socket_ids.insert(token, socket_id);
+		}
+    }
 }
 
 impl mio::Handler for SessionImpl {
@@ -120,40 +117,32 @@ impl mio::Handler for SessionImpl {
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
-    	let id = token.as_usize();
-    	if let Some(socket_id) = self.socket_ids.get_mut(&id) {
-	    	if let Some(socket) = self.sockets.get_mut(&socket_id) {
-				socket.ready(event_loop, id, events);
-			}
-		}    	
-    }
+    	let mut target_socket_id = None;
+    	let mut added_tokens = None;
 
-    /*fn readable(&mut self, event_loop: &mut EventLoop, token: mio::Token, hint: mio::ReadHint) {
-    	let id = token.as_usize();
-    	if let Some(socket_id) = self.socket_ids.get_mut(&id) {
-	    	if let Some(socket) = self.sockets.get_mut(&socket_id) {
-				socket.readable(event_loop, id, hint);
+    	if let Some(socket_id) = self.socket_ids.get(&token) {
+    		if let Some(socket) = self.sockets.get_mut(&socket_id) {
+	    		target_socket_id = Some(socket_id.clone());
+	    		added_tokens = socket.ready(event_loop, token, events);
 			}
 		}
-    }
 
-    fn writable(&mut self, event_loop: &mut EventLoop, token: mio::Token) {
-    	let id = token.as_usize();
-    	if let Some(socket_id) = self.socket_ids.get_mut(&id) {
-	    	if let Some(socket) = self.sockets.get_mut(&socket_id) {
-				socket.writable(event_loop, id);
-			}
-		}
-    }*/
+    	if let Some(socket_id) = target_socket_id {
+    		if let Some(tokens) = added_tokens {
+    			self.link(tokens, socket_id);
+    		}
+    	}
+    	
+    }
 
 	fn timeout(&mut self, event_loop: &mut EventLoop, timeout: Self::Timeout) {
 		debug!("timeout");
 
 		match timeout {
-			EventLoopTimeout::Reconnect(id, addr) => {
-				if let Some(socket_id) = self.socket_ids.get_mut(&id) {
+			EventLoopTimeout::Reconnect(token, addr) => {
+				if let Some(socket_id) = self.socket_ids.get_mut(&token) {
 					if let Some(socket) = self.sockets.get_mut(&socket_id) {
-						socket.reconnect(addr, event_loop, id);
+						socket.reconnect(addr, event_loop, token);
 					}
 				}
 			}

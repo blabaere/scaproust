@@ -1,14 +1,31 @@
+General:
  - put description and objective in README
  - setup CI with travis once there are some unit tests
  - setup CI with appveyor once mio is compatible with windows
 
+Problem :
+ - the session_impl receives notifications from the event loop with a token
+ - a token identifies a connection or an acceptor
+ - the notification should be forwarded to the socket owning this connection or acceptor (so the session needs to find a socket from a token)
+ - an acceptor can create connections and the socket needs to create a token for each one of them.
+ - when recreating a broken connection, the old token should be reused
+
+NO : the socket operations should return the created/destroyed tokens so the session can update the socket id / token association.
+ - connect should return Some<Token>, in case the connection has been created
+ - listen should return Some<Token>, in case the listener has been created
+ - ready should return Some<Vec<Token>>, in case a listener has accepted connections
+ - when an error occurs while calling a connection/listener, the association should be destroyed ...
+ ... and a Reconnect/Rebind timeout should be set on the event loop
+
+Protocol is not concerned by Listeners and accept operation, it should only deal with connections.
+So maybe listeners should be owned by the socket.
+
 Refactors:
+ - Use the sequence generator from within the socket ?
  - Use an mio::Token instead of usize where applicable
  - Use something else than usize where mio::Token is not applicable
- - Expose the id of identified items
- - move transport call from socket_impl to session_impl
- - have each transport share a token factory (sequence number)
  - find a better name for socket_impl and session_impl
+
 
 Features:
  - Implement send timeout
@@ -21,6 +38,8 @@ Features:
  - Have Socket::connect return an Endpoint that can be shut down
  - Implement nanocat
 
+
+WIP:
 Sending the protocol should be dealing with the whole process :
  - Create a timeout
  - Select a pipe and transfer the sending

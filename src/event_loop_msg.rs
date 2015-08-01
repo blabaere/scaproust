@@ -1,6 +1,8 @@
 use std::sync::mpsc;
 use std::io;
 
+use mio;
+
 use global::*;
 use Message;
 
@@ -23,7 +25,8 @@ pub enum SocketCmd {
 }
 
 pub enum EventLoopTimeout {
-	Reconnect(usize, String)
+	Reconnect(mio::Token, String),
+	//Rebind(mio::Token, String)
 }
 
 pub enum SessionEvt {
