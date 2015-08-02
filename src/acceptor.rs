@@ -30,4 +30,8 @@ impl Acceptor {
 	pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<Vec<Box<Connection>>> {
 		self.listener.accept()
 	}
+
+	pub fn addr(self) -> String {
+		self.addr
+	}
 }

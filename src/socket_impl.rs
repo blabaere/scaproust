@@ -94,6 +94,12 @@ impl SocketImpl {
 		self.evt_sender.send(evt);
 	}
 
+	pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {
+		debug!("[{:?}] acceptor [{:?}] rebind: '{}'", self.id, token, addr);
+
+		self.create_listener(&addr).and_then(|c| self.on_listener_created(addr, event_loop, token, c));
+	}
+
 	fn create_listener(&self, addr: &str) -> io::Result<Box<Listener>> {
 
 		let addr_parts: Vec<&str> = addr.split("://").collect();
@@ -113,7 +119,10 @@ impl SocketImpl {
 	fn add_acceptor(&mut self, token: mio::Token, acceptor: Acceptor) {
 		self.acceptors.insert(token, acceptor);
 	}
-	//fn remove_pipe(&mut self, id: usize) -> Option<String>;
+
+	fn remove_acceptor(&mut self, token: mio::Token) -> Option<String> {
+		self.acceptors.remove(&token).map(|a| a.addr())
+	}
 
 	pub fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
 		debug!("[{:?}] send", self.id);
@@ -169,6 +178,13 @@ impl SocketImpl {
 	}
 
 	fn on_acceptor_error(&mut self, event_loop: &mut EventLoop, token: mio::Token, err: io::Error) {
+		debug!("[{:?}] acceptor [{:?}] error: '{:?}'", self.id, token, err);
+
+		//event_loop.deregister(io)
+
+		if let Some(addr) = self.remove_acceptor(token) {
+			event_loop.timeout_ms(EventLoopTimeout::Rebind(token, addr), 200);	
+		}
 	}
 
 	fn on_pipe_error(&mut self, event_loop: &mut EventLoop, token: mio::Token, err: io::Error) {

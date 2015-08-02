@@ -145,6 +145,13 @@ impl mio::Handler for SessionImpl {
 						socket.reconnect(addr, event_loop, token);
 					}
 				}
+			},
+			EventLoopTimeout::Rebind(token, addr) => {
+				if let Some(socket_id) = self.socket_ids.get_mut(&token) {
+					if let Some(socket) = self.sockets.get_mut(&socket_id) {
+						socket.rebind(addr, event_loop, token);
+					}
+				}
 			}
 		}
 	}

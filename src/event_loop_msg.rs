@@ -26,7 +26,7 @@ pub enum SocketCmd {
 
 pub enum EventLoopTimeout {
 	Reconnect(mio::Token, String),
-	//Rebind(mio::Token, String)
+	Rebind(mio::Token, String)
 }
 
 pub enum SessionEvt {
