@@ -190,9 +190,11 @@ impl SocketImpl {
 	fn on_pipe_error(&mut self, event_loop: &mut EventLoop, token: mio::Token, err: io::Error) {
 		debug!("[{:?}] pipe [{:?}] error: '{:?}'", self.id, token, err);
 
-		// should unregister from event loop ?
-		if let Some(addr) = self.protocol.remove_pipe(token) {
-			event_loop.timeout_ms(EventLoopTimeout::Reconnect(token, addr), 200);
+		if let Some(pipe) = self.protocol.remove_pipe(token) {
+			let _ = pipe.close(event_loop);
+			if let Some(addr) = pipe.addr() {
+				event_loop.timeout_ms(EventLoopTimeout::Reconnect(token, addr), 200);
+			}
 		}
 	}
 }

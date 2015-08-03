@@ -50,10 +50,15 @@ impl Pipe {
 			|hs| hs.open(event_loop))
 	}
 
-	/*pub fn close (mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-		Ok(())
-		// add code here
-	}*/
+	pub fn close(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+		if self.handshake_state.is_some() {
+			self.handshake_state.as_ref().unwrap().close(event_loop)
+		} else if self.connected_state.is_some() {
+			self.connected_state.as_ref().unwrap().close(event_loop)
+		} else {
+			Ok(())
+		}
+	}
 
 	pub fn addr(self) -> Option<String> {
 		self.addr
@@ -142,6 +147,10 @@ impl HandshakePipeState {
 			mio::PollOpt::oneshot())
 	}
 
+	fn close(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+		event_loop.deregister(self.connection.as_evented())
+	}
+
 	fn ready(&mut self, _: &mut EventLoop, events: mio::EventSet)-> io::Result<bool> {
 		if !self.received && events.is_readable() {
 			try!(self.read_handshake());
@@ -228,6 +237,10 @@ impl ConnectedPipeState {
 			self.token,
 			mio::EventSet::all(),
 			mio::PollOpt::edge())
+	}
+
+	fn close(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+		event_loop.deregister(self.connection.as_evented())
 	}
 
 	fn resume_sending(&mut self) -> io::Result<SendStatus> {

@@ -18,7 +18,7 @@ pub trait Protocol {
 	fn peer_id(&self) -> u16;
 
 	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe);
-	fn remove_pipe(&mut self, token: mio::Token) -> Option<String>;
+	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
 
 	fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()>;
 	fn send(&mut self, event_loop: &mut EventLoop, msg: Message);

@@ -23,7 +23,7 @@ impl Protocol for Pull {
 	fn add_pipe(&mut self, token: mio::Token, _: Pipe) {
 	}
 
-	fn remove_pipe(&mut self, token: mio::Token) -> Option<String> {
+	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
 		None
 	}
 

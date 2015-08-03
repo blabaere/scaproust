@@ -38,8 +38,8 @@ impl Protocol for Push {
 		self.pipes.insert(token, PushPipe::new(pipe));
 	}
 
-	fn remove_pipe(&mut self, token: mio::Token) -> Option<String> {
-		self.pipes.remove(&token).and_then(|p| p.addr())
+	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
+		self.pipes.remove(&token).map(|p| p.remove())
 	}
 
 	fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
@@ -152,7 +152,7 @@ impl PushPipe {
 		self.pending_send = None;
 	}
 
-	fn addr(self) -> Option<String> {
-		self.pipe.addr()
+	fn remove(self) -> Pipe {
+		self.pipe
 	}
 }
