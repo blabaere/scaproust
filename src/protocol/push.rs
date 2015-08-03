@@ -43,17 +43,32 @@ impl Protocol for Push {
 	}
 
 	fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
-		let mut clear_pending_send = false;
+		let mut reset_pending_send = false;
 
 		if let Some(pipe) = self.pipes.get_mut(&token) {
-			try!(pipe.ready(event_loop, events));
+			let (sent, received) = try!(pipe.ready(event_loop, events));
 
-			clear_pending_send = try!(pipe.flush_pending_send()).is_some();
+			if sent {
+				let _ = self.evt_sender.send(SocketEvt::MsgSent);
+			} else {
+				match try!(pipe.resume_pending_send()) {
+					Some(true) => {
+						reset_pending_send = true;
+						let _ = self.evt_sender.send(SocketEvt::MsgSent);
+					},
+					Some(false) => {
+						reset_pending_send = true;
+					},
+					None => {
+						reset_pending_send = false;
+					}
+				}
+			}
 		}
 
-		if clear_pending_send {
+		if reset_pending_send {
 			for (_, pipe) in self.pipes.iter_mut() {
-				pipe.clear_pending_send();
+				pipe.reset_pending_send();
 			}
 		}
 
@@ -68,10 +83,10 @@ impl Protocol for Push {
 
 		for (_, pipe) in self.pipes.iter_mut() {
 			match pipe.send(shared_msg.clone()) {
-				Ok(Some(true)) => sent = true,
+				Ok(Some(true))  => sent = true,
 				Ok(Some(false)) => piped = true,
-				Ok(None) => shared = true,
-				Err(_) => continue 
+				Ok(None)        => shared = true,
+				Err(_)          => continue 
 				// this pipe looks dead, but it will be taken care of during next ready notification
 			}
 
@@ -80,9 +95,13 @@ impl Protocol for Push {
 			}
 		}
 
+		if sent {
+			let _ = self.evt_sender.send(SocketEvt::MsgSent);
+		}
+
 		if sent | piped {
 			for (_, pipe) in self.pipes.iter_mut() {
-				pipe.clear_pending_send();
+				pipe.reset_pending_send();
 			}
 		} else if shared == false {
 			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
@@ -105,7 +124,7 @@ impl PushPipe {
 		}
 	}
 
-	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<()> {
+	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<(bool, bool)> {
 		self.pipe.ready(event_loop, events)
 	}
 
@@ -122,14 +141,14 @@ impl PushPipe {
 		Ok(progress)
 	}
 
-	fn flush_pending_send(&mut self) -> io::Result<Option<bool>> {
+	fn resume_pending_send(&mut self) -> io::Result<Option<bool>> {
 		match self.pending_send.take() {
 			None => Ok(None),
 			Some(msg) => self.send(msg)
 		}
 	}
 
-	fn clear_pending_send(&mut self) {
+	fn reset_pending_send(&mut self) {
 		self.pending_send = None;
 	}
 

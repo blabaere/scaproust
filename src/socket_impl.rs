@@ -77,10 +77,10 @@ impl SocketImpl {
 	}
 
 	fn on_connected(&mut self, addr: Option<String>, event_loop: &mut EventLoop, token: mio::Token, conn: Box<Connection>) -> io::Result<()> {
-		let evt_sender = self.evt_sender.clone();
-		let mut pipe = Pipe::new(token, addr, &*self.protocol, conn, evt_sender);
+		let protocol_ids = (self.protocol.id(), self.protocol.peer_id());
+		let pipe = Pipe::new(token, addr, protocol_ids, conn);
 
-		pipe.init(event_loop).and_then(|_| Ok(self.protocol.add_pipe(token, pipe)))
+		pipe.open(event_loop).and_then(|_| Ok(self.protocol.add_pipe(token, pipe)))
 	}
 
 	pub fn bind(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {

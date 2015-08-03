@@ -2,6 +2,7 @@ use std::io;
 
 use mio;
 
+use global;
 use transport::{ Listener, Connection };
 use EventLoop;
 
@@ -27,8 +28,12 @@ impl Acceptor {
 		event_loop.register_opt(io, self.token, interest, mio::PollOpt::edge())
 	}
 
-	pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<Vec<Box<Connection>>> {
-		self.listener.accept()
+	pub fn ready(&mut self, _: &mut EventLoop, events: mio::EventSet) -> io::Result<Vec<Box<Connection>>> {
+		if events.is_readable() {
+			self.listener.accept()
+		} else {
+			Err(global::other_io_error("tcp listener ready but not readable"))
+		}
 	}
 
 	pub fn addr(self) -> String {

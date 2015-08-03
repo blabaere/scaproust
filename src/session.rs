@@ -93,6 +93,7 @@ mod tests {
     	let session = Session::new().unwrap();
     	let socket = session.create_socket(SocketType::Push);
 
+    	drop(socket);
     }
 
     #[test]
@@ -100,7 +101,7 @@ mod tests {
     	let session = Session::new().unwrap();
     	let socket = session.create_socket(SocketType::Push).unwrap();
 
-    	socket.ping();
+    	socket.ping().unwrap();
     }
 
     #[test]

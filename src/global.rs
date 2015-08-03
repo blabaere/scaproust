@@ -42,6 +42,10 @@ impl IdSequence {
 	}
 }
 
+pub fn other_io_error(msg: &'static str) -> ::std::io::Error {
+	::std::io::Error::new(::std::io::ErrorKind::Other, msg)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::IdSequence;
