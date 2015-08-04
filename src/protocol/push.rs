@@ -61,7 +61,6 @@ impl Protocol for Push {
 	fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
 		let mut msg_acquired = false;
 		let mut msg_sent = false;
-		//let mut msg_received = false;
 
 		if let Some(pipe) = self.pipes.get_mut(&token) {
 			let (sent, _) = try!(pipe.ready(event_loop, events));
@@ -136,6 +135,15 @@ impl Protocol for Push {
 			pipe.on_send_timeout();
 		}
 	}
+
+	fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
+		//let err = global::other_io_error("recv not supported by protocol");
+		//let cmd = SocketEvt::MsgNotRecv(err);
+		//let _ = self.evt_sender.send(cmd);
+	}
+	
+	fn on_recv_timeout(&mut self, _: &mut EventLoop) {
+	}
 }
 
 struct PushPipe {
@@ -160,6 +168,7 @@ impl PushPipe {
 			SendStatus::Completed => Some(true),
 			SendStatus::InProgress => Some(false),
 			SendStatus::Postponed(message) => {
+				self.pipe.reset_pending_send();
 				self.pending_send = Some(message);
 				None
 			}
@@ -181,6 +190,7 @@ impl PushPipe {
 	}
 
 	fn reset_pending_send(&mut self) {
+		self.pipe.reset_pending_send();
 		self.pending_send = None;
 	}
 

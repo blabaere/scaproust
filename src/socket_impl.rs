@@ -211,4 +211,14 @@ impl SocketImpl {
 		debug!("[{:?}] on_send_timeout", self.id);
 		self.protocol.on_send_timeout(event_loop);
 	}
+
+	pub fn recv(&mut self, event_loop: &mut EventLoop) {
+		debug!("[{:?}] recv", self.id);
+		let SocketId(id) = self.id;
+		let token = mio::Token(id);
+
+		event_loop.timeout_ms(EventLoopTimeout::CancelRecv(token), 1000).
+			map(|timeout| self.protocol.recv(event_loop, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
+			map_err(|err| error!("[{:?}] failed to set timeout on recv", self.id));
+	}
 }

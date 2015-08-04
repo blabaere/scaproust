@@ -21,13 +21,15 @@ pub enum SocketCmd {
 	Ping,
 	Connect(String),
 	Bind(String),
-	SendMsg(Message)
+	SendMsg(Message),
+	RecvMsg
 }
 
 pub enum EventLoopTimeout {
 	Reconnect(mio::Token, String),
 	Rebind(mio::Token, String),
-	CancelSend(mio::Token)
+	CancelSend(mio::Token),
+	CancelRecv(mio::Token)
 }
 
 pub enum SessionEvt {
@@ -42,5 +44,7 @@ pub enum SocketEvt {
     Bound,
     NotBound(io::Error),
 	MsgSent,
-	MsgNotSent(io::Error)
+	MsgNotSent(io::Error),
+	MsgRecv(Message),
+	MsgNotRecv(io::Error)
 }

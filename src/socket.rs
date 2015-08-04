@@ -88,7 +88,10 @@ impl Socket {
 	}
 
 	pub fn send(&self, buffer: Vec<u8>) -> Result<(), io::Error> {
-		let msg = Message::new(buffer);
+		self.send_msg(Message::new(buffer))
+	}
+
+	pub fn send_msg(&self, msg: Message) -> Result<(), io::Error> {
 		let cmd = SocketCmd::SendMsg(msg);
 
 		try!(self.send_cmd(cmd));
@@ -96,6 +99,17 @@ impl Socket {
 		match self.evt_receiver.recv() {
 			Ok(SocketEvt::MsgSent) => Ok(()),
 			Ok(SocketEvt::MsgNotSent(e)) => Err(e),
+			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
+			Err(_) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
+		}
+	}
+
+	pub fn recv_msg(&self) -> Result<Message, io::Error> {
+		try!(self.send_cmd(SocketCmd::RecvMsg));
+
+		match self.evt_receiver.recv() {
+			Ok(SocketEvt::MsgRecv(msg)) => Ok(msg),
+			Ok(SocketEvt::MsgNotRecv(e)) => Err(e),
 			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
 			Err(_) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
 		}

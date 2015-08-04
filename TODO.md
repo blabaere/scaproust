@@ -1,20 +1,11 @@
-
-WIP:
-Sending, the protocol should be dealing with the whole process :
- - Create a timeout
- - Select a pipe and transfer the sending
- - Raise a failure event if no pipe is available within the specified timeout
- - Raise a success event and cancel the timeout if enough pipes finished sending the message
- - Cancel the send operation when the timeout is reached
-
-
+What to do when a pipe becomes readable while no op in progress: ignore
 General:
  - put description and objective in README
  - setup CI with travis once there are some unit tests
  - setup CI with appveyor once mio is compatible with windows
 
 Refactors:
- - change on_pipe_error to have the protocol return the dead pipe, and call close on it, before asking it addr
+ - make the timeout enum hold a socket id rather than a token ?
  - find a better name for socket_impl and session_impl
  - maybe the acceptor could create pipes instead of connections ?
 

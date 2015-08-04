@@ -42,10 +42,11 @@ impl SessionImpl {
 
 	fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: SocketId, cmd: SocketCmd) {
 		match cmd {
-			SocketCmd::Ping => self.ping_socket(id),
+			SocketCmd::Ping          => self.ping_socket(id),
 			SocketCmd::Connect(addr) => self.connect_socket(id, event_loop, addr),
-			SocketCmd::Bind(addr) => self.bind_socket(id, event_loop, addr),
-			SocketCmd::SendMsg(msg) => self.send(id, event_loop, msg)
+			SocketCmd::Bind(addr)    => self.bind_socket(id, event_loop, addr),
+			SocketCmd::SendMsg(msg)  => self.send(id, event_loop, msg),
+			SocketCmd::RecvMsg       => self.recv(id, event_loop)
 		}
 	}
 
@@ -119,6 +120,19 @@ impl SessionImpl {
 		}
 	}
 
+	fn recv(&mut self, id: SocketId, event_loop: &mut EventLoop) {
+		if let Some(socket) = self.sockets.get_mut(&id) {
+			socket.recv(event_loop);
+		}
+	}
+
+	fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, token: mio::Token) {
+		let socket_id = SocketId(token.as_usize());
+		if let Some(socket) = self.sockets.get_mut(&socket_id) {
+			socket.on_send_timeout(event_loop);
+		}
+	}
+
     fn link(&mut self, mut tokens: Vec<mio::Token>, socket_id: SocketId) {
 		for token in tokens.drain(..) {
 			self.socket_ids.insert(token, socket_id);
@@ -163,11 +177,12 @@ impl mio::Handler for SessionImpl {
 		match timeout {
 			EventLoopTimeout::Reconnect(token, addr) => self.reconnect_socket(event_loop, token, addr),
 			EventLoopTimeout::Rebind(token, addr)    => self.rebind_socket(event_loop, token, addr),
-			EventLoopTimeout::CancelSend(token)      => self.on_send_timeout(event_loop, token)
+			EventLoopTimeout::CancelSend(token)      => self.on_send_timeout(event_loop, token),
+			EventLoopTimeout::CancelRecv(token)      => self.on_recv_timeout(event_loop, token)
 		}
 	}
 
-    fn interrupted(&mut self, event_loop: &mut EventLoop) {
+    fn interrupted(&mut self, _: &mut EventLoop) {
 
     }
 }

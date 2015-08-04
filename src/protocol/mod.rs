@@ -25,13 +25,16 @@ pub trait Protocol {
 
 	fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>);
 	fn on_send_timeout(&mut self, event_loop: &mut EventLoop);
+
+	fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>);
+	fn on_recv_timeout(&mut self, event_loop: &mut EventLoop);
 }
 
 
 pub fn create_protocol(socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Box<Protocol> {
 	match socket_type {
 		SocketType::Push => Box::new(push::Push::new(evt_tx)),
-		SocketType::Pull => Box::new(pull::Pull),
+		SocketType::Pull => Box::new(pull::Pull::new(evt_tx)),
 		_ => panic!("")
 	}
 }

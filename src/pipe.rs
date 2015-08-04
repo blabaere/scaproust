@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::io;
 
-use byteorder::{BigEndian, WriteBytesExt};
+use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
 
 use mio;
 
@@ -24,6 +24,12 @@ pub enum SendStatus {
 	Postponed(Rc<Message>), // Message can't be sent at the moment : Handshake in progress or would block
     Completed,              // Message has been successfully sent
     InProgress              // Message has been partially sent, will finish later
+}
+
+pub enum RecvStatus {
+	Postponed,              // Message can't be read at the moment : Handshake in progress or would block
+    Completed(Message),     // Message has been successfully read
+    InProgress              // Message has been partially read, will finish later
 }
 
 impl Pipe {
@@ -105,8 +111,26 @@ impl Pipe {
 			|mut connected| connected.send(msg))		
 	}
 
+	pub fn reset_pending_send(&mut self) {
+		self.connected_state.as_mut().map(|mut connected| connected.reset_pending_send());
+	}
+
 	pub fn on_send_timeout(&mut self) {
 		self.connected_state.as_mut().map(|mut connected| connected.on_send_timeout());
+	}
+
+	pub fn recv(&mut self) -> io::Result<RecvStatus> {
+		if self.handshake_state.is_some() {
+			return Ok(RecvStatus::Postponed);
+		}
+
+		self.connected_state.as_mut().map_or_else(
+			|| Err(global::other_io_error("cannot receive when pipe is dead")),
+			|mut connected| connected.recv())		
+	}
+
+	pub fn on_recv_timeout(&mut self) {
+		self.connected_state.as_mut().map(|mut connected| connected.on_recv_timeout());
 	}
 }
 
@@ -219,7 +243,8 @@ impl HandshakePipeState {
 struct ConnectedPipeState {
 	token: mio::Token,
 	connection: Box<Connection>,
-	pending_send: Option<SendOperation>
+	pending_send: Option<SendOperation>,
+	pending_recv: Option<RecvOperation>
 }
 
 impl ConnectedPipeState {
@@ -228,7 +253,8 @@ impl ConnectedPipeState {
 		ConnectedPipeState { 
 			token: token,
 			connection: connection,
-			pending_send: None
+			pending_send: None,
+			pending_recv: None
 		}
 	}
 
@@ -246,6 +272,27 @@ impl ConnectedPipeState {
 		event_loop.deregister(self.connection.as_evented())
 	}
 
+	fn ready(&mut self, _: &mut EventLoop, events: mio::EventSet)-> io::Result<(bool, bool)> {
+		let mut sent = false;
+		let mut recv = false;
+
+		if self.pending_send.is_some() && events.is_writable() {
+			sent = match try!(self.resume_sending()) {
+				SendStatus::Completed => true,
+				_                     => false
+			}
+		}
+
+		if self.pending_recv.is_some() && events.is_readable() {
+			recv = match try!(self.resume_receiving()) {
+				RecvStatus::Completed(msg) => true,
+				_ => false
+			}
+		}
+
+		Ok((sent, recv))
+	}
+
 	fn resume_sending(&mut self) -> io::Result<SendStatus> {
 		let mut operation = self.pending_send.take().unwrap();
 		let progress = match try!(operation.send(&mut *self.connection)) {
@@ -261,17 +308,20 @@ impl ConnectedPipeState {
 		Ok(progress)
 	}
 
-	fn ready(&mut self, _: &mut EventLoop, events: mio::EventSet)-> io::Result<(bool, bool)> {
-		let mut sent = false;
+	fn resume_receiving(&mut self) -> io::Result<RecvStatus> {
+		debug!("[{:?}] resume_receiving", self.token);
+		let mut operation = self.pending_recv.take().unwrap();
+		let progress = match try!(operation.recv(&mut *self.connection)) {
+			RecvStatus::Postponed      => RecvStatus::Postponed,
+			RecvStatus::Completed(msg) => RecvStatus::Completed(msg),
+			RecvStatus::InProgress     => {
+				self.pending_recv = Some(operation);
 
-		if self.pending_send.is_some() && events.is_writable() {
-			sent = match try!(self.resume_sending()) {
-				SendStatus::Completed => true,
-				_                     => false
+				RecvStatus::InProgress
 			}
-		}
+		};
 
-		Ok((sent, false))
+		Ok(progress)
 	}
 
 	fn send(&mut self, msg: Rc<Message>) -> io::Result<SendStatus> {
@@ -281,8 +331,23 @@ impl ConnectedPipeState {
 		self.resume_sending()
 	}
 
+	fn reset_pending_send(&mut self) {
+		self.pending_send = None;
+	}
+
 	fn on_send_timeout(&mut self) {
 		self.pending_send = None;
+	}
+
+	fn recv(&mut self) -> io::Result<RecvStatus> {
+		let operation = RecvOperation::new();
+
+		self.pending_recv = Some(operation);
+		self.resume_receiving()
+	}
+
+	fn on_recv_timeout(&mut self) {
+		self.pending_recv = None;
 	}
 
 }
@@ -396,4 +461,102 @@ impl SendOperation {
 			Ok(0)
 		}
 	}
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum RecvOperationStep {
+	Prefix,
+	Payload,
+	Done
+}
+
+impl RecvOperationStep {
+	fn next(&self) -> RecvOperationStep {
+		match *self {
+			RecvOperationStep::Prefix  => RecvOperationStep::Payload,
+			RecvOperationStep::Payload => RecvOperationStep::Done,
+			RecvOperationStep::Done    => RecvOperationStep::Done
+		}
+	}
+}
+
+struct RecvOperation {
+	prefix: [u8; 8],
+    msg_len: u64,
+    step: RecvOperationStep,
+    buffer: Option<Vec<u8>>,
+    read: usize
+}
+
+impl RecvOperation {
+
+	fn new() -> RecvOperation {
+		RecvOperation {
+			prefix: [0u8; 8],
+			msg_len: 0,
+			step: RecvOperationStep::Prefix,
+			buffer: None,
+			read: 0
+		}
+	}
+
+	fn recv(&mut self, connection: &mut Connection) -> io::Result<RecvStatus> {
+		if self.step == RecvOperationStep::Prefix {
+			debug!("RecvOperation resume to step prefix");
+			let mut prefix = [0u8; 8];
+			match try!(connection.try_read(&mut prefix)) {
+				None    => return Ok(RecvStatus::Postponed),
+				Some(0) => return Ok(RecvStatus::Postponed),
+				Some(8) => {
+					debug!("RecvOperation read 8 bytes prefix");
+					let mut bytes: &[u8] = &prefix;
+					self.msg_len = try!(bytes.read_u64::<BigEndian>());
+					debug!("RecvOperation converted prefix to msg len: {}", self.msg_len);
+					self.buffer = Some( vec![0u8; self.msg_len as usize]);
+					debug!("RecvOperation allocated buffer");
+					self.step = self.step.next();
+					debug!("RecvOperation moved step");
+				},
+				Some(x) => {
+					debug!("pipe recv read {} bytes of size prefix ...", x);
+					return Ok(RecvStatus::InProgress);
+				}
+				// TODO fixme : this is wrong, we should keep track of the read byte count
+				// and store the size prefix bytes in the struct
+			}
+		}		
+
+		if self.step == RecvOperationStep::Payload {
+			debug!("RecvOperation resume to step payload");
+			let mut buffer = self.buffer.take().unwrap();
+			let mut read_buffer = [0u8; 1024];
+			match try!(connection.try_read(&mut buffer[self.read..])) {
+				None    => {
+					debug!("pipe recv would block while reading body ...");					
+					self.buffer = Some(buffer);
+					return Ok(RecvStatus::InProgress);
+				},
+				Some(0) => {
+					debug!("pipe recv read 0 bytes while reading body ...");					
+					self.buffer = Some(buffer);
+					return Ok(RecvStatus::InProgress);
+				},
+				Some(x) => {
+					self.read = self.read + x;
+					if self.read as u64 == self.msg_len {
+						self.step = self.step.next();
+
+						return Ok(RecvStatus::Completed(Message::new(buffer)));
+					} else {
+						debug!("pipe recv read {} more bytes while reading body, total read: {}, expected: {} ...", x, self.read, self.msg_len);					
+						self.buffer = Some(buffer);
+						return Ok(RecvStatus::InProgress);
+					}
+				}
+			}
+		}
+
+		Err(global::other_io_error("recv operation already completed"))
+	}
+
 }
