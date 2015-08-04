@@ -20,6 +20,7 @@ Refactors:
 
 Features:
  - Implement send timeout
+ - Check what could be done when send timeout is reached and parts of the message has already been sent !
  - Implement Pull protocol to see how receive operation can be done
  - Now that there is send & receive, connect & bind : TEST ALL THE THINGS !!!
  - Implement the other protocols ...

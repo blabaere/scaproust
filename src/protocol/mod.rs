@@ -1,6 +1,7 @@
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::io;
+use std::boxed::FnBox;
 
 use mio;
 
@@ -21,7 +22,9 @@ pub trait Protocol {
 	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
 
 	fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()>;
-	fn send(&mut self, event_loop: &mut EventLoop, msg: Message);
+
+	fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>);
+	fn on_send_timeout(&mut self, event_loop: &mut EventLoop);
 }
 
 

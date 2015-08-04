@@ -1,7 +1,9 @@
+use std::io;
+use std::boxed::FnBox;
+
 use mio;
 
 use super::Protocol;
-use std::io;
 
 use pipe::Pipe as Pipe;
 use global::SocketType as SocketType;
@@ -31,7 +33,11 @@ impl Protocol for Pull {
 		Ok(())
 	}
 
-	fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
+	fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
+
+	}
+
+	fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
 
 	}
 }

@@ -80,6 +80,14 @@ impl SessionImpl {
 		}
 	}
 
+	fn reconnect_socket(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
+		if let Some(socket_id) = self.socket_ids.get_mut(&token) {
+			if let Some(socket) = self.sockets.get_mut(&socket_id) {
+				socket.reconnect(addr, event_loop, token);
+			}
+		}
+	}
+
 	fn bind_socket(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {
 		let token = mio::Token(self.id_seq.next());
 
@@ -90,10 +98,24 @@ impl SessionImpl {
 		}
 	}
 
+	fn rebind_socket(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
+		if let Some(socket_id) = self.socket_ids.get_mut(&token) {
+			if let Some(socket) = self.sockets.get_mut(&socket_id) {
+				socket.rebind(addr, event_loop, token);
+			}
+		}
+	}
 
 	fn send(&mut self, id: SocketId, event_loop: &mut EventLoop, msg: Message) {
 		if let Some(socket) = self.sockets.get_mut(&id) {
 			socket.send(event_loop, msg);
+		}
+	}
+
+	fn on_send_timeout(&mut self, event_loop: &mut EventLoop, token: mio::Token) {
+		let socket_id = SocketId(token.as_usize());
+		if let Some(socket) = self.sockets.get_mut(&socket_id) {
+			socket.on_send_timeout(event_loop);
 		}
 	}
 
@@ -139,20 +161,9 @@ impl mio::Handler for SessionImpl {
 		debug!("timeout");
 
 		match timeout {
-			EventLoopTimeout::Reconnect(token, addr) => {
-				if let Some(socket_id) = self.socket_ids.get_mut(&token) {
-					if let Some(socket) = self.sockets.get_mut(&socket_id) {
-						socket.reconnect(addr, event_loop, token);
-					}
-				}
-			},
-			EventLoopTimeout::Rebind(token, addr) => {
-				if let Some(socket_id) = self.socket_ids.get_mut(&token) {
-					if let Some(socket) = self.sockets.get_mut(&socket_id) {
-						socket.rebind(addr, event_loop, token);
-					}
-				}
-			}
+			EventLoopTimeout::Reconnect(token, addr) => self.reconnect_socket(event_loop, token, addr),
+			EventLoopTimeout::Rebind(token, addr)    => self.rebind_socket(event_loop, token, addr),
+			EventLoopTimeout::CancelSend(token)      => self.on_send_timeout(event_loop, token)
 		}
 	}
 

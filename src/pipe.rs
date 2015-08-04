@@ -104,7 +104,10 @@ impl Pipe {
 			|| Err(global::other_io_error("cannot send when pipe is dead")),
 			|mut connected| connected.send(msg))		
 	}
-	
+
+	pub fn on_send_timeout(&mut self) {
+		self.connected_state.as_mut().map(|mut connected| connected.on_send_timeout());
+	}
 }
 
 
@@ -278,6 +281,10 @@ impl ConnectedPipeState {
 		self.resume_sending()
 	}
 
+	fn on_send_timeout(&mut self) {
+		self.pending_send = None;
+	}
+
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -389,5 +396,4 @@ impl SendOperation {
 			Ok(0)
 		}
 	}
-
 }

@@ -21,11 +21,15 @@ impl Acceptor {
 		}
 	}
 
-	pub fn init(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+	pub fn open(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
 		let io = self.listener.as_evented();
 		let interest = mio::EventSet::error() | mio::EventSet::readable();
 
 		event_loop.register_opt(io, self.token, interest, mio::PollOpt::edge())
+	}
+
+	pub fn close(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+		event_loop.deregister(self.listener.as_evented())
 	}
 
 	pub fn ready(&mut self, _: &mut EventLoop, events: mio::EventSet) -> io::Result<Vec<Box<Connection>>> {

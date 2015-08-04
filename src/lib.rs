@@ -1,6 +1,8 @@
 #![crate_name = "scaproust"]
 
 #![feature(drain)]
+#![feature(fnbox)]
+#![feature(unboxed_closures)]
 
 #[macro_use] extern crate log;
 extern crate byteorder;

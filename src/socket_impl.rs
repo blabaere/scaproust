@@ -66,6 +66,17 @@ impl SocketImpl {
 			unwrap_or_else(|e| self.on_pipe_error(event_loop, token, e));
 	}
 
+	fn on_pipe_error(&mut self, event_loop: &mut EventLoop, token: mio::Token, err: io::Error) {
+		debug!("[{:?}] pipe [{:?}] error: '{:?}'", self.id, token, err);
+
+		if let Some(pipe) = self.protocol.remove_pipe(token) {
+			let _ = pipe.close(event_loop);
+			if let Some(addr) = pipe.addr() {
+				event_loop.timeout_ms(EventLoopTimeout::Reconnect(token, addr), 200);
+			}
+		}
+	}
+
 	fn create_connection(&self, addr: &str) -> io::Result<Box<Connection>> {
 
 		let addr_parts: Vec<&str> = addr.split("://").collect();
@@ -113,20 +124,15 @@ impl SocketImpl {
 	fn on_listener_created(&mut self, addr: String, event_loop: &mut EventLoop, id: mio::Token, listener: Box<Listener>) -> io::Result<()> {
 		let mut acceptor = Acceptor::new(id, addr, listener);
 
-		acceptor.init(event_loop).and_then(|_| Ok(self.add_acceptor(id, acceptor)))
+		acceptor.open(event_loop).and_then(|_| Ok(self.add_acceptor(id, acceptor)))
 	}
 
 	fn add_acceptor(&mut self, token: mio::Token, acceptor: Acceptor) {
 		self.acceptors.insert(token, acceptor);
 	}
 
-	fn remove_acceptor(&mut self, token: mio::Token) -> Option<String> {
-		self.acceptors.remove(&token).map(|a| a.addr())
-	}
-
-	pub fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
-		debug!("[{:?}] send", self.id);
-		self.protocol.send(event_loop, msg);
+	fn remove_acceptor(&mut self, token: mio::Token) -> Option<Acceptor> {
+		self.acceptors.remove(&token)
 	}
 
 	pub fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> Option<Vec<mio::Token>> {
@@ -180,21 +186,29 @@ impl SocketImpl {
 	fn on_acceptor_error(&mut self, event_loop: &mut EventLoop, token: mio::Token, err: io::Error) {
 		debug!("[{:?}] acceptor [{:?}] error: '{:?}'", self.id, token, err);
 
-		//event_loop.deregister(io)
+		if let Some(mut acceptor) = self.remove_acceptor(token) {
+			acceptor.
+				close(event_loop).
+				unwrap_or_else(|err| debug!("[{:?}] acceptor [{:?}] error while closing: '{:?}'", self.id, token, err));
+			let _ = event_loop.
+				timeout_ms(EventLoopTimeout::Rebind(token, acceptor.addr()), 200).
+				map_err(|err| error!("[{:?}] acceptor [{:?}] reconnected timeout failed: '{:?}'", self.id, token, err));
 
-		if let Some(addr) = self.remove_acceptor(token) {
-			event_loop.timeout_ms(EventLoopTimeout::Rebind(token, addr), 200);	
 		}
 	}
 
-	fn on_pipe_error(&mut self, event_loop: &mut EventLoop, token: mio::Token, err: io::Error) {
-		debug!("[{:?}] pipe [{:?}] error: '{:?}'", self.id, token, err);
+	pub fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
+		debug!("[{:?}] send", self.id);
+		let SocketId(id) = self.id;
+		let token = mio::Token(id);
 
-		if let Some(pipe) = self.protocol.remove_pipe(token) {
-			let _ = pipe.close(event_loop);
-			if let Some(addr) = pipe.addr() {
-				event_loop.timeout_ms(EventLoopTimeout::Reconnect(token, addr), 200);
-			}
-		}
+		event_loop.timeout_ms(EventLoopTimeout::CancelSend(token), 1000).
+			map(|timeout| self.protocol.send(event_loop, msg, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
+			map_err(|err| error!("[{:?}] failed to set timeout on send", self.id));
+	}
+
+	pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
+		debug!("[{:?}] on_send_timeout", self.id);
+		self.protocol.on_send_timeout(event_loop);
 	}
 }
