@@ -126,7 +126,7 @@ impl SessionImpl {
 	fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, token: mio::Token) {
 		let socket_id = SocketId(token.as_usize());
 		if let Some(socket) = self.sockets.get_mut(&socket_id) {
-			socket.on_send_timeout(event_loop);
+			socket.on_recv_timeout(event_loop);
 		}
 	}
 

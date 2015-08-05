@@ -229,4 +229,9 @@ impl SocketImpl {
 			map(|timeout| self.protocol.recv(event_loop, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
 			map_err(|err| error!("[{:?}] failed to set timeout on recv: '{:?}'", self.id, err));
 	}
+
+	pub fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
+		debug!("[{:?}] on_recv_timeout", self.id);
+		self.protocol.on_recv_timeout(event_loop);
+	}
 }
