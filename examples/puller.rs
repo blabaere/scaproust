@@ -9,7 +9,7 @@ use scaproust::{Session, SocketType, Socket};
 fn handle_comand(cmd: &str, socket: &mut Socket) {
 	println!("User command: {:?}", cmd);
     match socket.recv_msg() {
-        Ok(msg) => info!("message received '{:?}'!", msg.get_body()),
+        Ok(msg) => info!("message received '{:?}'!", msg.len()),
         Err(e) => error!("message NOT received: {} !", e)
     }
 }
