@@ -29,7 +29,6 @@ pub use global::SocketType;
 type EventLoop = mio::EventLoop<session_impl::SessionImpl>;
 
 pub struct Message {
-	// one day these vec should come from a pool
     header: Vec<u8>,
     body: Vec<u8>
 }
@@ -52,5 +51,9 @@ impl Message {
 
 	pub fn get_body<'a>(&'a self) -> &'a [u8] {
 		&self.body
+	}
+
+	pub fn to_buffer(self) -> Vec<u8> {
+		self.body
 	}
 }

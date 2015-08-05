@@ -2,24 +2,11 @@ use std::sync::mpsc;
 use std::io;
 
 use mio;
-use mio::NotifyError;
 
 use global::*;
 use event_loop_msg::*;
 
 use Message;
-
-fn convert_notify_err<T>(err: NotifyError<T>) -> io::Error {
-	match err {
-		NotifyError::Io(e) => e,
-		NotifyError::Closed(_) => {
-			io::Error::new(io::ErrorKind::Other, "cmd channel closed")
-		},
-		NotifyError::Full(_) => {
-			io::Error::new(io::ErrorKind::WouldBlock, "cmd channel full")
-		}
-	}
-}
 
 pub struct Socket {
 	id: SocketId,
@@ -48,19 +35,8 @@ impl Socket {
 
 		self.cmd_sender.send(cmd).map_err(|e| convert_notify_err(e))
 	}
-	
-	pub fn ping(&self) -> Result<(), io::Error> {
-		try!(self.send_cmd(SocketCmd::Ping));
 
-		match self.evt_receiver.recv() {
-			Ok(SocketEvt::Pong) => Ok(()),
-			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
-			Err(_) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
-		}
-	}
-
-	// TODO: return an Endpoint struct with a shutdown method instead of '()'
-	pub fn connect(&self, addr: &str) -> Result<(), io::Error> {
+	pub fn connect(&mut self, addr: &str) -> Result<(), io::Error> {
 		let cmd = SocketCmd::Connect(addr.to_owned());
 		
 		try!(self.send_cmd(cmd));
@@ -73,8 +49,7 @@ impl Socket {
 		}
 	}
 
-	// TODO: return an Endpoint struct with a shutdown method instead of '()'
-	pub fn bind(&self, addr: &str) -> Result<(), io::Error> {
+	pub fn bind(&mut self, addr: &str) -> Result<(), io::Error> {
 		let cmd = SocketCmd::Bind(addr.to_owned());
 		
 		try!(self.send_cmd(cmd));
@@ -87,11 +62,11 @@ impl Socket {
 		}
 	}
 
-	pub fn send(&self, buffer: Vec<u8>) -> Result<(), io::Error> {
+	pub fn send(&mut self, buffer: Vec<u8>) -> Result<(), io::Error> {
 		self.send_msg(Message::new(buffer))
 	}
 
-	pub fn send_msg(&self, msg: Message) -> Result<(), io::Error> {
+	pub fn send_msg(&mut self, msg: Message) -> Result<(), io::Error> {
 		let cmd = SocketCmd::SendMsg(msg);
 
 		try!(self.send_cmd(cmd));
@@ -104,7 +79,11 @@ impl Socket {
 		}
 	}
 
-	pub fn recv_msg(&self) -> Result<Message, io::Error> {
+	pub fn recv(&mut self) -> Result<Vec<u8>, io::Error> {
+		self.recv_msg().map(|msg| msg.to_buffer())
+	}
+
+	pub fn recv_msg(&mut self) -> Result<Message, io::Error> {
 		try!(self.send_cmd(SocketCmd::RecvMsg));
 
 		match self.evt_receiver.recv() {

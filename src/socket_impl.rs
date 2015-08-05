@@ -40,8 +40,12 @@ impl SocketImpl {
 		}
 	}
 
-	pub fn pong(&self) {
-		self.evt_sender.send(SocketEvt::Pong);
+	fn send_evt(&self, evt: SocketEvt) {
+		let send_res = self.evt_sender.send(evt);
+
+		if send_res.is_err() {
+			error!("failed to notify event to session: '{:?}'", send_res.err());
+		} 
 	}
 
 	pub fn connect(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {
@@ -55,7 +59,7 @@ impl SocketImpl {
 			Err(e) => SocketEvt::NotConnected(e)
 		};
 
-		self.evt_sender.send(evt);
+		self.send_evt(evt);
 	}
 
 	pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {
@@ -72,7 +76,9 @@ impl SocketImpl {
 		if let Some(pipe) = self.protocol.remove_pipe(token) {
 			let _ = pipe.close(event_loop);
 			if let Some(addr) = pipe.addr() {
-				event_loop.timeout_ms(EventLoopTimeout::Reconnect(token, addr), 200);
+				let _ = event_loop.
+					timeout_ms(EventLoopTimeout::Reconnect(token, addr), 200).
+					map_err(|err| error!("[{:?}] pipe [{:?}] reconnect timeout failed: '{:?}'", self.id, token, err));
 			}
 		}
 	}
@@ -102,13 +108,15 @@ impl SocketImpl {
 			Err(e) => SocketEvt::NotBound(e)
 		};
 
-		self.evt_sender.send(evt);
+		self.send_evt(evt);
 	}
 
 	pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {
 		debug!("[{:?}] acceptor [{:?}] rebind: '{}'", self.id, token, addr);
 
-		self.create_listener(&addr).and_then(|c| self.on_listener_created(addr, event_loop, token, c));
+		self.create_listener(&addr).
+			and_then(|c| self.on_listener_created(addr, event_loop, token, c)).
+			unwrap_or_else(|e| self.on_acceptor_error(event_loop, token, e));
 	}
 
 	fn create_listener(&self, addr: &str) -> io::Result<Box<Listener>> {
@@ -192,7 +200,7 @@ impl SocketImpl {
 				unwrap_or_else(|err| debug!("[{:?}] acceptor [{:?}] error while closing: '{:?}'", self.id, token, err));
 			let _ = event_loop.
 				timeout_ms(EventLoopTimeout::Rebind(token, acceptor.addr()), 200).
-				map_err(|err| error!("[{:?}] acceptor [{:?}] reconnected timeout failed: '{:?}'", self.id, token, err));
+				map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, token, err));
 
 		}
 	}
@@ -202,9 +210,9 @@ impl SocketImpl {
 		let SocketId(id) = self.id;
 		let token = mio::Token(id);
 
-		event_loop.timeout_ms(EventLoopTimeout::CancelSend(token), 1000).
+		let _ = event_loop.timeout_ms(EventLoopTimeout::CancelSend(token), 1000).
 			map(|timeout| self.protocol.send(event_loop, msg, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
-			map_err(|err| error!("[{:?}] failed to set timeout on send", self.id));
+			map_err(|err| error!("[{:?}] failed to set timeout on send: '{:?}'", self.id, err));
 	}
 
 	pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -217,8 +225,8 @@ impl SocketImpl {
 		let SocketId(id) = self.id;
 		let token = mio::Token(id);
 
-		event_loop.timeout_ms(EventLoopTimeout::CancelRecv(token), 1000).
+		let _ = event_loop.timeout_ms(EventLoopTimeout::CancelRecv(token), 1000).
 			map(|timeout| self.protocol.recv(event_loop, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
-			map_err(|err| error!("[{:?}] failed to set timeout on recv", self.id));
+			map_err(|err| error!("[{:?}] failed to set timeout on recv: '{:?}'", self.id, err));
 	}
 }

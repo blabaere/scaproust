@@ -34,7 +34,6 @@ impl SessionImpl {
 
 	fn handle_session_cmd(&mut self, event_loop: &mut EventLoop, cmd: SessionCmd) {
 		match cmd {
-			SessionCmd::Ping => self.pong(),
 			SessionCmd::CreateSocket(socket_type) => self.create_socket(socket_type),
 			SessionCmd::Shutdown => event_loop.shutdown()
 		}
@@ -42,7 +41,6 @@ impl SessionImpl {
 
 	fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: SocketId, cmd: SocketCmd) {
 		match cmd {
-			SocketCmd::Ping          => self.ping_socket(id),
 			SocketCmd::Connect(addr) => self.connect_socket(id, event_loop, addr),
 			SocketCmd::Bind(addr)    => self.bind_socket(id, event_loop, addr),
 			SocketCmd::SendMsg(msg)  => self.send(id, event_loop, msg),
@@ -50,8 +48,12 @@ impl SessionImpl {
 		}
 	}
 
-	fn pong(&self) {
-		self.event_sender.send(SessionEvt::Pong);
+	fn send_evt(&self, evt: SessionEvt) {
+		let send_res = self.event_sender.send(evt);
+
+		if send_res.is_err() {
+			error!("failed to notify event to session: '{:?}'", send_res.err());
+		} 
 	}
 
 	fn create_socket(&mut self, socket_type: SocketType) {
@@ -62,13 +64,8 @@ impl SessionImpl {
 		let socket = SocketImpl::new(id, protocol, shared_tx.clone(), self.id_seq.clone());
 
 		self.sockets.insert(id, socket);
-		self.event_sender.send(SessionEvt::SocketCreated(id, rx));
-	}
-	
-	fn ping_socket(&mut self, id: SocketId) {
-		if let Some(socket) = self.sockets.get_mut(&id) {
-			socket.pong();
-		}
+
+		self.send_evt(SessionEvt::SocketCreated(id, rx));
 	}
 
 	fn connect_socket(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {

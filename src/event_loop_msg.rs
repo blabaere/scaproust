@@ -12,13 +12,11 @@ pub enum EventLoopCmd {
 }
 
 pub enum SessionCmd {
-	Ping,
 	CreateSocket(SocketType),
 	Shutdown
 }
 
 pub enum SocketCmd {
-	Ping,
 	Connect(String),
 	Bind(String),
 	SendMsg(Message),
@@ -33,12 +31,10 @@ pub enum EventLoopTimeout {
 }
 
 pub enum SessionEvt {
-	Pong,
 	SocketCreated(SocketId, mpsc::Receiver<SocketEvt>),
-	SocketNotCreated}
+}
 
 pub enum SocketEvt {
-    Pong,
     Connected,
     NotConnected(io::Error),
     Bound,

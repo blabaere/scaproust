@@ -6,13 +6,14 @@ use std::sync::mpsc;
 use event_loop_msg:: {
 	EventLoopCmd,
 	SessionCmd,
-	SessionEvt
+	SessionEvt,
+	SocketEvt
 };
 
-use session_impl::SessionImpl as SessionImpl;
+use session_impl::SessionImpl;
 
-use socket::Socket as Socket;
-use global::SocketType as SocketType;
+use socket::Socket;
+use global::*;
 
 pub struct Session {
 	cmd_sender: mio::Sender<EventLoopCmd>,
@@ -42,28 +43,25 @@ impl Session {
 		}
 	}
 
-	fn ping_event_loop(&self) {
-		let session_cmd = SessionCmd::Ping;
+	fn send_cmd(&self, session_cmd: SessionCmd) -> Result<(), io::Error> {
 		let cmd = EventLoopCmd::SessionLevel(session_cmd);
 
-		self.cmd_sender.send(cmd);
-		self.evt_receiver.recv().unwrap();
+		self.cmd_sender.send(cmd).map_err(|e| convert_notify_err(e))
 	}
 
-	pub fn create_socket(&self, socket_type: SocketType) -> Option<Socket> {
+	pub fn create_socket(&self, socket_type: SocketType) -> io::Result<Socket> {
 		let session_cmd = SessionCmd::CreateSocket(socket_type);
-		let cmd = EventLoopCmd::SessionLevel(session_cmd);
-		self.cmd_sender.send(cmd);
 
-		match self.evt_receiver.recv().unwrap() {
-			SessionEvt::SocketCreated(id, rx) => {
-				let cmd_sender = self.cmd_sender.clone();
-				let socket = Socket::new(id, cmd_sender, rx);
+		try!(self.send_cmd(session_cmd));
 
-				Some(socket)
-			}
-			_ => None
+		match self.evt_receiver.recv() {
+			Ok(SessionEvt::SocketCreated(id, rx)) => Ok(self.new_socket(id, rx)),
+			Err(_)                                => Err(other_io_error("evt channel closed"))
 		}
+	}
+
+	fn new_socket(&self, id: SocketId, rx: mpsc::Receiver<SocketEvt>) -> Socket {
+		Socket::new(id, self.cmd_sender.clone(), rx)
 	}
 }
 
@@ -72,7 +70,7 @@ impl Drop for Session {
 		let session_cmd = SessionCmd::Shutdown;
 		let cmd = EventLoopCmd::SessionLevel(session_cmd);
 		
-		self.cmd_sender.send(cmd);
+		let _ = self.cmd_sender.send(cmd);
 	}
 }
 
@@ -82,32 +80,17 @@ mod tests {
     use global::SocketType;
 
     #[test]
-    fn session_can_be_created() {
-    	let session = Session::new().unwrap();
-
-    	session.ping_event_loop();
-    }
-
-    #[test]
     fn session_can_create_a_socket() {
     	let session = Session::new().unwrap();
-    	let socket = session.create_socket(SocketType::Push);
+    	let socket = session.create_socket(SocketType::Push).unwrap();
 
     	drop(socket);
     }
 
     #[test]
-    fn can_ping_socket() {
-    	let session = Session::new().unwrap();
-    	let socket = session.create_socket(SocketType::Push).unwrap();
-
-    	socket.ping().unwrap();
-    }
-
-    #[test]
     fn can_connect_socket() {
     	let session = Session::new().unwrap();
-    	let socket = session.create_socket(SocketType::Push).unwrap();
+    	let mut socket = session.create_socket(SocketType::Push).unwrap();
 
     	assert!(socket.connect("tcp://127.0.0.1:5454").is_ok());
     }
@@ -115,7 +98,7 @@ mod tests {
     #[test]
     fn can_try_connect_socket() {
     	let session = Session::new().unwrap();
-    	let socket = session.create_socket(SocketType::Push).unwrap();
+    	let mut socket = session.create_socket(SocketType::Push).unwrap();
 
     	assert!(socket.connect("tcp://this should not work").is_err());
     }

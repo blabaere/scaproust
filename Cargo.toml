@@ -1,7 +1,13 @@
 [package]
-name = "scaproust"
-version = "0.1.0"
-authors = ["blabaere <benoit.labaere@gmail.com>"]
+name      = "scaproust"
+version   = "0.1.0"
+authors   = ["blabaere <benoit.labaere@gmail.com>"]
+keywords  = ["io", "nanomsg", "messaging"]
+exclude   = [
+  ".gitignore",
+  ".travis.yml",
+  "test/**/*",
+]
 
 [dependencies]
 log = "0.3.1"
@@ -14,6 +20,6 @@ git = "https://github.com/carllerche/mio"
 [dev-dependencies]
 env_logger = "0.3.0"
 
-#[[test]]
-#name = "test"
-#path = "test/test.rs"
+[[test]]
+name = "test"
+path = "test/test.rs"

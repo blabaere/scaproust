@@ -1,5 +1,8 @@
 use std::rc::Rc;
 use std::cell::Cell;
+use std::io::{ Error, ErrorKind };
+
+use mio::NotifyError;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SocketType {
@@ -10,8 +13,8 @@ pub enum SocketType {
 	Rep        = (3 * 16) + 1,
 	Push       = (5 * 16),
 	Pull       = (5 * 16) + 1,
-	Surveyor   = (6 * 16),
-	Respondent = (6 * 16) + 1,
+	Surveyor   = (6 * 16) + 2,
+	Respondent = (6 * 16) + 3,
 	Bus        = (7 * 16)
 }
 
@@ -42,8 +45,16 @@ impl IdSequence {
 	}
 }
 
-pub fn other_io_error(msg: &'static str) -> ::std::io::Error {
-	::std::io::Error::new(::std::io::ErrorKind::Other, msg)
+pub fn other_io_error(msg: &'static str) -> Error {
+	Error::new(ErrorKind::Other, msg)
+}
+
+pub fn convert_notify_err<T>(err: NotifyError<T>) -> Error {
+	match err {
+		NotifyError::Io(e)     => e,
+		NotifyError::Closed(_) => other_io_error("cmd channel closed"),
+		NotifyError::Full(_)   => Error::new(ErrorKind::WouldBlock, "cmd channel full")
+	}
 }
 
 #[cfg(test)]

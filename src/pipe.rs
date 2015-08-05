@@ -12,7 +12,7 @@ use global;
 
 // A pipe is responsible for handshaking with its peer and transfering messages over a connection.
 // That means send/receive size prefix and then message payload
-// according to the connection readiness and the operation progress
+// according to the connection readiness and the requested operation progress
 pub struct Pipe {
 	token: mio::Token, 
 	addr: Option<String>,
@@ -472,22 +472,22 @@ impl RecvOperationStep {
 }
 
 struct RecvOperation {
+    step: RecvOperationStep,
+    read: usize,
 	prefix: [u8; 8],
     msg_len: u64,
-    step: RecvOperationStep,
-    buffer: Option<Vec<u8>>,
-    read: usize
+    buffer: Option<Vec<u8>>
 }
 
 impl RecvOperation {
 
 	fn new() -> RecvOperation {
 		RecvOperation {
+			step: RecvOperationStep::Prefix,
+			read: 0,
 			prefix: [0u8; 8],
 			msg_len: 0,
-			step: RecvOperationStep::Prefix,
-			buffer: None,
-			read: 0
+			buffer: None
 		}
 	}
 
