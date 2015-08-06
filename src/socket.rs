@@ -1,7 +1,7 @@
-use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
 use std::io;
 
-use mio;
+use mio::Sender;
 
 use global::*;
 use event_loop_msg::*;
@@ -10,24 +10,15 @@ use Message;
 
 pub struct Socket {
 	id: SocketId,
-	cmd_sender: mio::Sender<EventLoopCmd>,
-	evt_receiver: mpsc::Receiver<SocketEvt>
+	cmd_sender: Sender<EventLoopCmd>,
+	evt_receiver: Receiver<SocketEvt>
 	// Could use https://github.com/polyfractal/bounded-spsc-queue ?
 	// Maybe once a smart waiting strategy is available (like spin, then sleep 0, then sleep 1, then mutex ?)
 }
 
 impl Socket {
-	pub fn new(
-		id: SocketId,
-		cmd_sender: mio::Sender<EventLoopCmd>,
-		evt_receiver: mpsc::Receiver<SocketEvt>) -> Socket {
-
-		Socket {
-			id: id,
-			cmd_sender: cmd_sender,
-			evt_receiver: evt_receiver
-		}
-
+	pub fn new(id: SocketId, cmd_tx: Sender<EventLoopCmd>, evt_rx: Receiver<SocketEvt>) -> Socket {
+		Socket { id: id, cmd_sender: cmd_tx, evt_receiver: evt_rx }
 	}
 
 	fn send_cmd(&self, socket_cmd: SocketCmd) -> Result<(), io::Error> {
@@ -42,10 +33,10 @@ impl Socket {
 		try!(self.send_cmd(cmd));
 
 		match self.evt_receiver.recv() {
-			Ok(SocketEvt::Connected) => Ok(()),
+			Ok(SocketEvt::Connected)       => Ok(()),
 			Ok(SocketEvt::NotConnected(e)) => Err(e),
-			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
-			Err(_) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
+			Ok(_)                          => Err(other_io_error("unexpected evt")),
+			Err(_)                         => Err(other_io_error("evt channel closed"))
 		}
 	}
 
@@ -55,10 +46,10 @@ impl Socket {
 		try!(self.send_cmd(cmd));
 
 		match self.evt_receiver.recv() {
-			Ok(SocketEvt::Bound) => Ok(()),
+			Ok(SocketEvt::Bound)       => Ok(()),
 			Ok(SocketEvt::NotBound(e)) => Err(e),
-			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
-			Err(_) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
+			Ok(_)                      => Err(other_io_error("unexpected evt")),
+			Err(_)                     => Err(other_io_error("evt channel closed"))
 		}
 	}
 
@@ -72,10 +63,10 @@ impl Socket {
 		try!(self.send_cmd(cmd));
 
 		match self.evt_receiver.recv() {
-			Ok(SocketEvt::MsgSent) => Ok(()),
+			Ok(SocketEvt::MsgSent)       => Ok(()),
 			Ok(SocketEvt::MsgNotSent(e)) => Err(e),
-			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
-			Err(_) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
+			Ok(_)                        => Err(other_io_error("unexpected evt")),
+			Err(_)                       => Err(other_io_error("evt channel closed"))
 		}
 	}
 
@@ -87,10 +78,10 @@ impl Socket {
 		try!(self.send_cmd(SocketCmd::RecvMsg));
 
 		match self.evt_receiver.recv() {
-			Ok(SocketEvt::MsgRecv(msg)) => Ok(msg),
+			Ok(SocketEvt::MsgRecv(msg))  => Ok(msg),
 			Ok(SocketEvt::MsgNotRecv(e)) => Err(e),
-			Ok(_) => Err(io::Error::new(io::ErrorKind::Other, "unexpected evt")),
-			Err(_) => Err(io::Error::new(io::ErrorKind::Other, "evt channel closed"))
+			Ok(_)                        => Err(other_io_error("unexpected evt")),
+			Err(_)                       => Err(other_io_error("evt channel closed"))
 		}
 	}
 }

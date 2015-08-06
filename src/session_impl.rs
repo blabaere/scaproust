@@ -41,8 +41,8 @@ impl SessionImpl {
 
 	fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: SocketId, cmd: SocketCmd) {
 		match cmd {
-			SocketCmd::Connect(addr) => self.connect_socket(id, event_loop, addr),
-			SocketCmd::Bind(addr)    => self.bind_socket(id, event_loop, addr),
+			SocketCmd::Connect(addr) => self.connect(id, event_loop, addr),
+			SocketCmd::Bind(addr)    => self.bind(id, event_loop, addr),
 			SocketCmd::SendMsg(msg)  => self.send(id, event_loop, msg),
 			SocketCmd::RecvMsg       => self.recv(id, event_loop)
 		}
@@ -68,7 +68,7 @@ impl SessionImpl {
 		self.send_evt(SessionEvt::SocketCreated(id, rx));
 	}
 
-	fn connect_socket(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {
+	fn connect(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {
 		let token = mio::Token(self.id_seq.next());
 
 		self.socket_ids.insert(token, id);
@@ -78,7 +78,7 @@ impl SessionImpl {
 		}
 	}
 
-	fn reconnect_socket(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
+	fn reconnect(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
 		if let Some(socket_id) = self.socket_ids.get_mut(&token) {
 			if let Some(socket) = self.sockets.get_mut(&socket_id) {
 				socket.reconnect(addr, event_loop, token);
@@ -86,7 +86,7 @@ impl SessionImpl {
 		}
 	}
 
-	fn bind_socket(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {
+	fn bind(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {
 		let token = mio::Token(self.id_seq.next());
 
 		self.socket_ids.insert(token, id);
@@ -96,7 +96,7 @@ impl SessionImpl {
 		}
 	}
 
-	fn rebind_socket(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
+	fn rebind(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
 		if let Some(socket_id) = self.socket_ids.get_mut(&token) {
 			if let Some(socket) = self.sockets.get_mut(&socket_id) {
 				socket.rebind(addr, event_loop, token);
@@ -172,8 +172,8 @@ impl mio::Handler for SessionImpl {
 		debug!("timeout");
 
 		match timeout {
-			EventLoopTimeout::Reconnect(token, addr) => self.reconnect_socket(event_loop, token, addr),
-			EventLoopTimeout::Rebind(token, addr)    => self.rebind_socket(event_loop, token, addr),
+			EventLoopTimeout::Reconnect(token, addr) => self.reconnect(event_loop, token, addr),
+			EventLoopTimeout::Rebind(token, addr)    => self.rebind(event_loop, token, addr),
 			EventLoopTimeout::CancelSend(token)      => self.on_send_timeout(event_loop, token),
 			EventLoopTimeout::CancelRecv(token)      => self.on_recv_timeout(event_loop, token)
 		}

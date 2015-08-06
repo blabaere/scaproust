@@ -1,6 +1,6 @@
 use std::rc::Rc;
 use std::collections::hash_map::*;
-use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 use std::io;
 
 use mio;
@@ -19,7 +19,7 @@ use Message;
 pub struct SocketImpl {
 	id: SocketId,
 	protocol: Box<Protocol>,
-	evt_sender: Rc<mpsc::Sender<SocketEvt>>,
+	evt_sender: Rc<Sender<SocketEvt>>,
 	acceptors: HashMap<mio::Token, Acceptor>,
 	id_seq: IdSequence,
 	added_tokens: Option<Vec<mio::Token>>,
@@ -28,7 +28,7 @@ pub struct SocketImpl {
 
 impl SocketImpl {
 
-	pub fn new(id: SocketId, proto: Box<Protocol>, evt_tx: Rc<mpsc::Sender<SocketEvt>>, id_seq: IdSequence) -> SocketImpl {
+	pub fn new(id: SocketId, proto: Box<Protocol>, evt_tx: Rc<Sender<SocketEvt>>, id_seq: IdSequence) -> SocketImpl {
 		SocketImpl { 
 			id: id,
 			protocol: proto, 
@@ -183,6 +183,8 @@ impl SocketImpl {
 
 	fn on_connection_accepted(&mut self, event_loop: &mut EventLoop, conn: Box<Connection>) -> mio::Token {
 		let token = mio::Token(self.id_seq.next());
+
+		debug!("[{:?}] on connection accepted: '{:?}'", self.id, token);
 
 		self.
 			on_connected(None, event_loop, token, conn).
