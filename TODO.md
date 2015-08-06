@@ -5,8 +5,8 @@ General:
  - setup CI with appveyor once mio is compatible with windows
 
 Refactors:
- - Remove association between token and socketid when a pipe is dead
  - make the timeout enum hold a socket id rather than a token ?
+ - Remove association between token and socketid when a pipe is dead
  - Register to readable or writable only when required, that is when operation status is in progress ? 
  - find a better name for socket_impl and session_impl
  - maybe the acceptor could create pipes instead of connections ?

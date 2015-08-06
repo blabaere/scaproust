@@ -87,3 +87,35 @@ fn test_recv_timeout() {
 
 	assert_eq!(io::ErrorKind::TimedOut, err.kind());
 }
+
+#[test]
+fn test_pair_connected_to_bound() {
+	let session = Session::new().unwrap();
+	let mut bound = session.create_socket(SocketType::Pair).unwrap();
+	let mut connected = session.create_socket(SocketType::Pair).unwrap();
+
+	bound.bind("tcp://127.0.0.1:5460").unwrap();
+	connected.connect("tcp://127.0.0.1:5460").unwrap();
+
+	let sent = vec![65, 66, 67];
+	connected.send(sent).unwrap();
+	let received = bound.recv().unwrap();
+
+	assert_eq!(vec![65, 66, 67], received)
+}
+
+#[test]
+fn test_pair_bound_to_connected() {
+	let session = Session::new().unwrap();
+	let mut bound = session.create_socket(SocketType::Pair).unwrap();
+	let mut connected = session.create_socket(SocketType::Pair).unwrap();
+
+	bound.bind("tcp://127.0.0.1:5461").unwrap();
+	connected.connect("tcp://127.0.0.1:5461").unwrap();
+
+	let sent = vec![65, 66, 67];
+	bound.send(sent).unwrap();
+	let received = connected.recv().unwrap();
+
+	assert_eq!(vec![65, 66, 67], received)
+}

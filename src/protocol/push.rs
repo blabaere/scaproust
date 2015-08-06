@@ -9,7 +9,7 @@ use mio;
 use super::Protocol;
 use pipe::*;
 use global::*;
-use event_loop_msg::SocketEvt as SocketEvt;
+use event_loop_msg::SocketEvt;
 use EventLoop;
 use Message;
 
