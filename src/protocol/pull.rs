@@ -35,7 +35,7 @@ impl Pull {
 	}
 
 	fn on_msg_recv_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
-		let _ = self.evt_sender.send(SocketEvt::MsgNotSent(err));
+		let _ = self.evt_sender.send(SocketEvt::MsgNotRecv(err));
 
 		self.cancel_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
 	}
