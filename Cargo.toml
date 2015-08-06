@@ -2,6 +2,7 @@
 name      = "scaproust"
 version   = "0.1.0"
 authors   = ["blabaere <benoit.labaere@gmail.com>"]
+readme    = "README.md"
 keywords  = ["io", "nanomsg", "messaging"]
 exclude   = [
   ".gitignore",

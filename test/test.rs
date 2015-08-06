@@ -1,13 +1,11 @@
 extern crate scaproust;
 
 use std::io;
-use std::error::*;
 
 use scaproust::*;
 
-
 #[test]
-fn test_push_pull_one_to_one() {
+fn test_push_pull_one_to_one_cb() {
 	let session = Session::new().unwrap();
 	let mut pull = session.create_socket(SocketType::Pull).unwrap();
 	let mut push = session.create_socket(SocketType::Push).unwrap();
@@ -23,11 +21,27 @@ fn test_push_pull_one_to_one() {
 }
 
 #[test]
+fn test_push_pull_one_to_one_bc() {
+	let session = Session::new().unwrap();
+	let mut pull = session.create_socket(SocketType::Pull).unwrap();
+	let mut push = session.create_socket(SocketType::Push).unwrap();
+
+	push.bind("tcp://127.0.0.1:5455").unwrap();
+	pull.connect("tcp://127.0.0.1:5455").unwrap();
+
+	let sent = vec![65, 66, 67];
+	push.send(sent).unwrap();
+	let received = pull.recv().unwrap();
+
+	assert_eq!(vec![65, 66, 67], received)
+}
+
+#[test]
 fn test_send_while_not_connected() {
 	let session = Session::new().unwrap();
 	let mut push = session.create_socket(SocketType::Push).unwrap();
 
-	push.connect("tcp://127.0.0.1:5455").unwrap();
+	push.connect("tcp://127.0.0.1:5456").unwrap();
 
 	let err = push.send(vec![65, 66, 67]).unwrap_err();
 
@@ -40,8 +54,8 @@ fn test_send_timeout() {
 	let mut pull = session.create_socket(SocketType::Pull).unwrap();
 	let mut push = session.create_socket(SocketType::Push).unwrap();
 
-	pull.bind("tcp://127.0.0.1:5456").unwrap();
-	push.connect("tcp://127.0.0.1:5456").unwrap();
+	pull.bind("tcp://127.0.0.1:5457").unwrap();
+	push.connect("tcp://127.0.0.1:5457").unwrap();
 
 	let err = push.send(vec![0; 5 * 1024 * 1024]).unwrap_err();
 
@@ -53,7 +67,7 @@ fn test_recv_while_not_connected() {
 	let session = Session::new().unwrap();
 	let mut pull = session.create_socket(SocketType::Pull).unwrap();
 
-	pull.bind("tcp://127.0.0.1:5457").unwrap();
+	pull.bind("tcp://127.0.0.1:5458").unwrap();
 
 	let err = pull.recv().unwrap_err();
 
@@ -66,8 +80,8 @@ fn test_recv_timeout() {
 	let mut pull = session.create_socket(SocketType::Pull).unwrap();
 	let mut push = session.create_socket(SocketType::Push).unwrap();
 
-	pull.bind("tcp://127.0.0.1:5458").unwrap();
-	push.connect("tcp://127.0.0.1:5458").unwrap();
+	pull.bind("tcp://127.0.0.1:5459").unwrap();
+	push.connect("tcp://127.0.0.1:5459").unwrap();
 
 	let err = pull.recv().unwrap_err();
 
