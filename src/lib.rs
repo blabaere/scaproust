@@ -29,16 +29,20 @@ pub use global::SocketType;
 type EventLoop = mio::EventLoop<session_impl::SessionImpl>;
 
 pub struct Message {
-    header: Vec<u8>,
-    body: Vec<u8>
+    pub header: Vec<u8>,
+    pub body: Vec<u8>
 }
 
 impl Message {
-	pub fn new(buffer: Vec<u8>) -> Message {
+	pub fn with_body(buffer: Vec<u8>) -> Message {
 		Message {
 			header: Vec::new(),
 			body: buffer
 		}
+	}
+
+	pub fn with_header_and_body(header: Vec<u8>, buffer: Vec<u8>) -> Message {
+		Message { header: header, body: buffer }
 	}
 
 	pub fn len(&self) -> usize {
@@ -55,5 +59,12 @@ impl Message {
 
 	pub fn to_buffer(self) -> Vec<u8> {
 		self.body
+	}
+
+	pub fn shift_bytes_from_body_to_header(&mut self, count: usize) {
+		for _ in 0..count {
+			let b = self.body.remove(0);
+			self.header.push(b);
+		}
 	}
 }

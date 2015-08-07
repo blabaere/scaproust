@@ -5,7 +5,7 @@ use std::io;
 use scaproust::*;
 
 #[test]
-fn test_push_pull_one_to_one_cb() {
+fn test_pipeline_connected_to_bound() {
 	let session = Session::new().unwrap();
 	let mut pull = session.create_socket(SocketType::Pull).unwrap();
 	let mut push = session.create_socket(SocketType::Push).unwrap();
@@ -21,7 +21,7 @@ fn test_push_pull_one_to_one_cb() {
 }
 
 #[test]
-fn test_push_pull_one_to_one_bc() {
+fn test_pipeline_bound_to_connected() {
 	let session = Session::new().unwrap();
 	let mut pull = session.create_socket(SocketType::Pull).unwrap();
 	let mut push = session.create_socket(SocketType::Push).unwrap();

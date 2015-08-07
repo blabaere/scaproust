@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::io;
 
-use byteorder::{BigEndian, WriteBytesExt, ReadBytesExt};
+use byteorder::{ BigEndian, WriteBytesExt, ReadBytesExt };
 
 use mio;
 
@@ -10,7 +10,7 @@ use Message;
 use transport::Connection;
 use global;
 
-// A pipe is responsible for handshaking with its peer and transfering messages over a connection.
+// A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
 // That means send/receive size prefix and then message payload
 // according to the connection readiness and the requested operation progress
 pub struct Pipe {
@@ -305,7 +305,6 @@ impl ConnectedPipeState {
 	}
 
 	fn resume_receiving(&mut self) -> io::Result<RecvStatus> {
-		debug!("[{:?}] resume_receiving", self.token);
 		let mut operation = self.pending_recv.take().unwrap();
 		let progress = match try!(operation.recv(&mut *self.connection)) {
 			RecvStatus::Postponed      => RecvStatus::Postponed,
@@ -520,7 +519,7 @@ impl RecvOperation {
 			if self.read as u64 == self.msg_len {
 				self.step_forward();
 
-				return Ok(RecvStatus::Completed(Message::new(buffer)));
+				return Ok(RecvStatus::Completed(Message::with_body(buffer)));
 			} else {
 				self.buffer = Some(buffer);
 

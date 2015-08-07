@@ -54,7 +54,7 @@ impl Socket {
 	}
 
 	pub fn send(&mut self, buffer: Vec<u8>) -> Result<(), io::Error> {
-		self.send_msg(Message::new(buffer))
+		self.send_msg(Message::with_body(buffer))
 	}
 
 	pub fn send_msg(&mut self, msg: Message) -> Result<(), io::Error> {

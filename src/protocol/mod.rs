@@ -14,6 +14,7 @@ use Message;
 pub mod push;
 pub mod pull;
 pub mod pair;
+pub mod req;
 
 pub trait Protocol {
 	fn id(&self) -> u16;
@@ -37,6 +38,7 @@ pub fn create_protocol(socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketEv
 		SocketType::Push => Box::new(push::Push::new(evt_tx)),
 		SocketType::Pull => Box::new(pull::Pull::new(evt_tx)),
 		SocketType::Pair => Box::new(pair::Pair::new(evt_tx)),
+		SocketType::Req => Box::new(req::Req::new(evt_tx)),
 		_ => panic!("")
 	}
 }
