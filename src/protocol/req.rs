@@ -111,6 +111,10 @@ impl Req {
 	}
 
 	fn on_raw_msg_recv(&mut self, event_loop: &mut EventLoop, raw_msg: Message) {
+		if raw_msg.get_body().len() < 4 {
+			return;
+		}
+
 		match self.raw_msg_to_msg(raw_msg) {
 			Ok((msg, req_id)) => {
 				let expected_id = self.pending_req_id.take().unwrap();
@@ -120,7 +124,6 @@ impl Req {
 				} else {
 					self.pending_req_id = Some(expected_id);
 				}
-
 			},
 			Err(e) => {
 				self.on_msg_recv_err(event_loop, e);

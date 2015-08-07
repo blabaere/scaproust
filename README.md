@@ -1,4 +1,4 @@
-# scaproust <img src=albertine-like.jpg align=right width=300 height=300>
+# scaproust <img src=albertine-like.jpg align=right width=200 height=200>
 
 Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "Scalability Protocols" in rust.
 
