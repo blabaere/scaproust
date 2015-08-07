@@ -8,14 +8,77 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS
 ## Goals
 * Support for all of nanomsg's protocols.
 * Support for TCP and IPC transports.
-* Idiomatic rust API first, mimic the original CAPI second.
-* Zero-copy, minimal allocations.
-
-## Non goals
-* Ability to use a socket as a raw file descriptor with system level functions.
+* Idiomatic rust API first, mimic the original C API second.
 
 ## Maybe
+* Zero-copy, minimal allocations.
 * Polling on several sockets.
 * Low-latency (current design use channels between user facing functions and system functions).
 * Other transports (Inproc, TLS, WebSockets).
 * Async API, using future/promise to represent send/recv results.
+* Efficient nonblocking operations (difficult due to the aboce mentioned use of channels).
+
+## Non goals
+* Ability to use a socket as a raw file descriptor with system level functions.
+
+## Progress
+- [ ] Protocols
+  - [x] PAIR
+  - [ ] BUS
+  - [ ] REQREP
+    - [x] REQ
+    - [ ] REQ resend
+    - [ ] REP
+  - [ ] PUBSUB
+    - [ ] PUB
+    - [ ] SUB
+  - [x] PIPELINE
+    - [x] PUSH
+    - [x] PULL
+  - [ ] SURVEY
+    - [ ] SURVEYOR
+    - [ ] RESPONDENT  
+
+- [ ] Transports
+  - [x] TCP
+  - [ ] IPC
+  - [ ] INPROC  
+
+- [ ] Basic features
+  - [x] Send (buffer only)
+  - [x] Recv (buffer only)
+  - [x] Connect 
+  - [x] Reconnect on failure
+  - [x] Bind
+  - [x] Rebind on failure
+  - [ ] Device
+  - [ ] Logs
+  - [ ] Statistics
+
+- [ ] Advanced features
+  - [ ] Send (scatter array + control header)
+  - [ ] Recv (scatter array + control header)
+  - [ ] Fair queuing
+  - [ ] Load balancing
+  - [ ] Send priority
+  - [ ] Recv priority
+
+- [ ] Socket options
+  - [ ] Linger
+  - [ ] Send buffer size
+  - [ ] Recv buffer size
+  - [ ] Send timeout
+  - [ ] Recv timeout
+  - [ ] Reconnect interval
+  - [ ] Reconnect interval max
+  - [ ] Send priority
+  - [ ] Recv priority
+  - [ ] IPV4 only
+  - [ ] Socket name
+
+- [ ] Protocol options
+    - [ ] REQ resend interval
+    - [ ] SURVEYOR deadline
+
+- [ ] Transport options
+    - [ ] TCP no delay

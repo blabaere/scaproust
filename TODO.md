@@ -1,5 +1,6 @@
 General:
  - put description and objective in README
+ - put a tree list of feature with check boxes to follow progress
  - setup CI with travis once there are some unit tests
  - setup documentation generation and site and github pages
  - setup CI with appveyor once mio is compatible with windows
