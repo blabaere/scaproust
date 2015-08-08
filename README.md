@@ -28,9 +28,9 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS
   - [ ] REQREP
     - [x] REQ
     - [ ] REQ resend
-    - [ ] REP
+    - [x] REP
   - [ ] PUBSUB
-    - [ ] PUB
+    - [x] PUB
     - [ ] SUB
   - [x] PIPELINE
     - [x] PUSH
