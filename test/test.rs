@@ -142,3 +142,19 @@ fn test_req_rep() {
 
 	assert_eq!(vec!(67, 66, 65), client_reply);
 }
+
+#[test]
+fn test_pub_sub() {
+	let session = Session::new().unwrap();
+	let mut server = session.create_socket(SocketType::Pub).unwrap();
+	let mut client = session.create_socket(SocketType::Sub).unwrap();
+
+	server.bind("tcp://127.0.0.1:5463").unwrap();
+	client.connect("tcp://127.0.0.1:5463").unwrap();
+
+	let sent = vec![65, 66, 67];
+	server.send(sent).unwrap();
+	let received = client.recv().unwrap();
+
+	assert_eq!(vec![65, 66, 67], received)
+}

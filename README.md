@@ -31,7 +31,8 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS
     - [x] REP
   - [ ] PUBSUB
     - [x] PUB
-    - [ ] SUB
+    - [x] SUB
+    - [ ] SUB subscription filter
   - [x] PIPELINE
     - [x] PUSH
     - [x] PULL
@@ -79,6 +80,8 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS
 - [ ] Protocol options
     - [ ] REQ resend interval
     - [ ] SURVEYOR deadline
+    - [ ] SUB subscribe
+    - [ ] SUB unsubscribe
 
 - [ ] Transport options
     - [ ] TCP no delay
