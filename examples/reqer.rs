@@ -14,7 +14,7 @@ fn handle_comand(cmd: &str, socket: &mut Socket) {
     }
 
     match socket.recv_msg() {
-        Ok(msg) => info!("reply received '{:?}'!", msg.get_body()),
+        Ok(msg) => info!("reply received '{:?}' !", msg.get_body()),
         Err(e) => error!("reply NOT received: {} !", e)
     }
 }

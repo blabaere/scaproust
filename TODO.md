@@ -8,6 +8,7 @@ General:
 Refactors:
  - make the timeout enum hold a socket id rather than a token ?
  - Remove association between token and socketid when a pipe is dead
+ - Find a way to avoid all that copy/paste between protocols !!!
  - Register to readable or writable only when required, that is when operation status is in progress ? 
  - find a better name for socket_impl and session_impl
  - maybe the acceptor could create pipes instead of connections ?
