@@ -205,6 +205,7 @@ impl HandshakePipeState {
 		if both.all(|(l,r)| l == r) {
 			Ok(())
 		} else {
+			error!("expected '{:?}' but received '{:?}' !", expected_handshake, handshake);
 			Err(io::Error::new(io::ErrorKind::InvalidData, "received bad handshake"))
 		}
 	}
