@@ -119,3 +119,26 @@ fn test_pair_bound_to_connected() {
 
 	assert_eq!(vec![65, 66, 67], received)
 }
+
+#[test]
+fn test_req_rep() {
+	let session = Session::new().unwrap();
+	let mut server = session.create_socket(SocketType::Rep).unwrap();
+	let mut client = session.create_socket(SocketType::Req).unwrap();
+
+	server.bind("tcp://127.0.0.1:5462").unwrap();
+	client.connect("tcp://127.0.0.1:5462").unwrap();
+
+	let client_request = vec!(65, 66, 67);
+	client.send(client_request).unwrap();
+
+	let server_request = server.recv().unwrap();
+	assert_eq!(vec!(65, 66, 67), server_request);
+
+	let server_reply = vec!(67, 66, 65);
+	server.send(server_reply).unwrap();
+
+	let client_reply = client.recv().unwrap();
+
+	assert_eq!(vec!(67, 66, 65), client_reply);
+}

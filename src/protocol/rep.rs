@@ -1,10 +1,8 @@
 use std::rc::Rc;
-use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 use std::collections::HashMap;
 use std::io;
 use std::boxed::FnBox;
-
-use time;
 
 use mio;
 
@@ -17,24 +15,24 @@ use event_loop_msg::SocketEvt;
 use EventLoop;
 use Message;
 
-pub struct Req {
-	pipes: HashMap<mio::Token, ReqPipe>,
-	evt_sender: Rc<mpsc::Sender<SocketEvt>>,
+pub struct Rep {
+	pipes: HashMap<mio::Token, RepPipe>,
+	evt_sender: Rc<Sender<SocketEvt>>,
 	cancel_send_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
 	cancel_recv_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
-	pending_req_id: Option<u32>,
-	req_id_seq: u32
+	backtrace: Vec<u8>,
+	ttl: u8
 }
 
-impl Req {
-	pub fn new(evt_sender: Rc<mpsc::Sender<SocketEvt>>) -> Req {
-		Req { 
+impl Rep {
+	pub fn new(evt_sender: Rc<Sender<SocketEvt>>) -> Rep {
+		Rep { 
 			pipes: HashMap::new(),
 			evt_sender: evt_sender,
 			cancel_send_timeout: None,
 			cancel_recv_timeout: None,
-			pending_req_id: None,
-			req_id_seq: time::get_time().nsec as u32
+			backtrace: Vec::with_capacity(64),
+			ttl: 8
 		}
 	}
 
@@ -53,18 +51,23 @@ impl Req {
 	}
 
 	fn on_msg_recv_ok(&mut self, event_loop: &mut EventLoop, msg: Message) {
+		self.save_received_header_to_backtrace(&msg);
+
 		let evt = SocketEvt::MsgRecv(msg);
 		let timeout = self.cancel_recv_timeout.take();
 
-		self.pending_req_id = None;
 		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
+	}
+
+	fn save_received_header_to_backtrace(&mut self, msg: &Message) {
+		self.backtrace.clear();
+		self.backtrace.push_all(msg.get_header());
 	}
 
 	fn on_msg_recv_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
 		let evt = SocketEvt::MsgNotRecv(err);
 		let timeout = self.cancel_recv_timeout.take();
 
-		self.pending_req_id = None;
 		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
 	}
 
@@ -78,73 +81,84 @@ impl Req {
 		timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
 	}
 
-	fn next_req_id(&mut self) -> u32 {
-		let next_id = self.req_id_seq | 0x80000000;
+	fn raw_msg_to_msg(&mut self, pipe_token: mio::Token, raw_msg: Message) -> io::Result<Option<Message>> {
+		let (mut header, mut body) = raw_msg.explode();
+		let pipe_id = pipe_token.as_usize() as u32;
 
-		self.req_id_seq += 1;
+		header.reserve(4);
+		try!(header.write_u32::<BigEndian>(pipe_id));
 
-		next_id
-	}
-
-	fn raw_msg_to_msg(&mut self, raw_msg: Message) -> io::Result<(Message, u32)> {
-		let (mut header, mut payload) = raw_msg.explode();
-		let body = payload.split_off(4);
-		let mut req_id_reader = io::Cursor::new(payload);
-
-		let req_id = try!(req_id_reader.read_u32::<BigEndian>());
-
-		if header.len() == 0 {
-			header = req_id_reader.into_inner();
-		} else {
-			let req_id_bytes = req_id_reader.into_inner();
-			header.push_all(&req_id_bytes);
-		}
-
-		Ok((Message::with_header_and_body(header, body), req_id))
-	}
-
-	fn msg_to_raw_msg(&mut self, msg: Message, req_id: u32) -> io::Result<Message> {
-		let mut raw_msg = msg;
-
-		raw_msg.header.reserve(4);
-		try!(raw_msg.header.write_u32::<BigEndian>(req_id));
-
-		Ok(raw_msg)
-	}
-
-	fn on_raw_msg_recv(&mut self, event_loop: &mut EventLoop, raw_msg: Message) {
-		if raw_msg.get_body().len() < 4 {
-			return;
-		}
-
-		match self.raw_msg_to_msg(raw_msg) {
-			Ok((msg, req_id)) => {
-				let expected_id = self.pending_req_id.take().unwrap();
-
-				if req_id == expected_id {
-					self.on_msg_recv_ok(event_loop, msg);
-				} else {
-					self.pending_req_id = Some(expected_id);
-				}
-			},
-			Err(e) => {
-				self.on_msg_recv_err(event_loop, e);
+		let mut hops = 0;
+		loop {
+			if hops >= self.ttl {
+				return Ok(None);
 			}
+
+			hops += 1;
+
+			if body.len() < 4 {
+				return Ok(None);
+			}
+
+			let tail = body.split_off(4);
+			header.push_all(&body);
+
+			let position = header.len() - 4;
+			if header[position] & 0x80 != 0 {
+				let msg = Message::with_header_and_body(header, tail);
+
+				return Ok(Some(msg));
+			}
+			body = tail;
+		}
+
+	}
+
+	fn msg_to_raw_msg(&mut self, msg: Message) -> io::Result<(Message, mio::Token)> {
+		let (mut header, body) = msg.explode();
+		let pipe_id_bytes = vec!(
+			self.backtrace[0],
+			self.backtrace[1],
+			self.backtrace[2],
+			self.backtrace[3]
+		);
+		let mut req_id_reader = io::Cursor::new(pipe_id_bytes);
+		let pipe_id = try!(req_id_reader.read_u32::<BigEndian>());
+		let pipe_token = mio::Token(pipe_id as usize);
+
+		self.restore_saved_backtrace_to_header(&mut header);
+		self.backtrace.clear();
+
+		Ok((Message::with_header_and_body(header, body), pipe_token))
+	}
+
+	fn restore_saved_backtrace_to_header(&self, header: &mut Vec<u8>) {
+		let backtrace = &self.backtrace[4..];
+		
+		header.reserve(backtrace.len());
+		header.push_all(backtrace);
+	}
+
+	fn on_raw_msg_recv(&mut self, event_loop: &mut EventLoop, pipe_token: mio::Token, raw_msg: Message) {
+		match self.raw_msg_to_msg(pipe_token, raw_msg) {
+			Ok(None)      => {}
+			Ok(Some(msg)) => self.on_msg_recv_ok(event_loop, msg),
+			Err(e)        => self.on_msg_recv_err(event_loop, e)
 		}
 	}
 }
 
-impl Protocol for Req {
+impl Protocol for Rep {
 	fn id(&self) -> u16 {
-		SocketType::Req.id()
-	}
-
-	fn peer_id(&self) -> u16 {
 		SocketType::Rep.id()
 	}
 
+	fn peer_id(&self) -> u16 {
+		SocketType::Req.id()
+	}
+
 	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {
-		self.pipes.insert(token, ReqPipe::new(pipe));
+		self.pipes.insert(token, RepPipe::new(pipe));
 	}
 
 	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
@@ -197,27 +211,24 @@ impl Protocol for Req {
 			}
 		}
 
-		if received_msg.is_some() && self.pending_req_id.is_some() {
+		if received_msg.is_some() {
 			let raw_msg = received_msg.unwrap();
 
-			self.on_raw_msg_recv(event_loop, raw_msg);
+			self.on_raw_msg_recv(event_loop, token, raw_msg);
 		}
 
 		Ok(())
 	}
 
 	fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
-		let req_id = self.next_req_id();
-
 		self.cancel_send_timeout = Some(cancel_timeout);
-		self.pending_req_id = Some(req_id);
 
-		let raw_msg = match self.msg_to_raw_msg(msg, req_id) {
+		let (raw_msg, pipe_token) = match self.msg_to_raw_msg(msg) {
 			Err(e) => {
 				self.on_msg_send_err(event_loop, e);
 				return;
 			},
-			Ok(raw_msg) => raw_msg
+			Ok((raw_msg, pipe_token)) => (raw_msg, pipe_token)
 		};
 
 		let mut sent = false;
@@ -225,17 +236,13 @@ impl Protocol for Req {
 		let mut pending = false;
 		let shared_msg = Rc::new(raw_msg);
 
-		for (_, pipe) in self.pipes.iter_mut() {
+		if let Some(pipe) = self.pipes.get_mut(&pipe_token) {
 			match pipe.send(shared_msg.clone()) {
 				Ok(Some(true))  => sent = true,
 				Ok(Some(false)) => sending = true,
 				Ok(None)        => pending = true,
-				Err(_)          => continue 
+				Err(_)          => {}
 				// this pipe looks dead, but it will be taken care of during next ready notification
-			}
-
-			if sent | sending {
-				break;
 			}
 		}
 
@@ -268,12 +275,16 @@ impl Protocol for Req {
 		self.cancel_recv_timeout = Some(cancel_timeout);
 
 		let mut received = None;
+		let mut received_from = None;
 		let mut receiving = false;
 		let mut pending = false;
 
-		for (_, pipe) in self.pipes.iter_mut() {
+		for (token, pipe) in self.pipes.iter_mut() {
 			match pipe.recv() {
-				Ok(RecvStatus::Completed(msg)) => received = Some(msg),
+				Ok(RecvStatus::Completed(msg)) => {
+					received = Some(msg);
+					received_from = Some(token.clone());
+				},
 				Ok(RecvStatus::InProgress)     => receiving = true,
 				Ok(RecvStatus::Postponed)      => pending = true,
 				Err(_)                         => continue
@@ -294,10 +305,11 @@ impl Protocol for Req {
 			self.on_msg_recv_err(event_loop, err);
 		}
 
-		if received.is_some() && self.pending_req_id.is_some() {
+		if received.is_some() && received_from.is_some() {
+			let pipe_token = received_from.unwrap();
 			let raw_msg = received.unwrap();
 
-			self.on_raw_msg_recv(event_loop, raw_msg);
+			self.on_raw_msg_recv(event_loop, pipe_token, raw_msg);
 		}
 	}
 
@@ -312,15 +324,15 @@ impl Protocol for Req {
 	}
 }
 
-struct ReqPipe {
+struct RepPipe {
     pipe: Pipe,
     pending_send: Option<Rc<Message>>,
     pending_recv: bool
 }
 
-impl ReqPipe {
-	fn new(pipe: Pipe) -> ReqPipe {
-		ReqPipe { 
+impl RepPipe {
+	fn new(pipe: Pipe) -> RepPipe {
+		RepPipe { 
 			pipe: pipe,
 			pending_send: None,
 			pending_recv: false

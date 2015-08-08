@@ -3,6 +3,8 @@
 #![feature(drain)]
 #![feature(fnbox)]
 #![feature(unboxed_closures)]
+#![feature(split_off)]
+#![feature(vec_push_all)]
 
 #[macro_use] extern crate log;
 extern crate byteorder;
@@ -61,10 +63,7 @@ impl Message {
 		self.body
 	}
 
-	pub fn shift_bytes_from_body_to_header(&mut self, count: usize) {
-		for _ in 0..count {
-			let b = self.body.remove(0);
-			self.header.push(b);
-		}
+	pub fn explode(self) -> (Vec<u8>, Vec<u8>) {
+		(self.header, self.body)
 	}
 }
