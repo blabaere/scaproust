@@ -156,5 +156,24 @@ fn test_pub_sub() {
 	server.send(sent).unwrap();
 	let received = client.recv().unwrap();
 
-	assert_eq!(vec![65, 66, 67], received)
+	assert_eq!(vec![65, 66, 67], received);
+}
+
+#[test]
+fn test_bus() {
+	let session = Session::new().unwrap();
+	let mut server = session.create_socket(SocketType::Bus).unwrap();
+	let mut client1 = session.create_socket(SocketType::Bus).unwrap();
+	let mut client2 = session.create_socket(SocketType::Bus).unwrap();
+
+	server.bind("tcp://127.0.0.1:5464").unwrap();
+	client1.connect("tcp://127.0.0.1:5464").unwrap();
+	client2.connect("tcp://127.0.0.1:5464").unwrap();
+
+	let sent = vec![65, 66, 67];
+	server.send(sent).unwrap();
+	let received1 = client1.recv().unwrap();
+	assert_eq!(vec![65, 66, 67], received1);
+	let received2 = client2.recv().unwrap();
+	assert_eq!(vec![65, 66, 67], received2);
 }

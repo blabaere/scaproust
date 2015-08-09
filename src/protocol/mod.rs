@@ -18,6 +18,7 @@ pub mod req;
 pub mod rep;
 pub mod pbu;
 pub mod sub;
+pub mod bus;
 
 pub trait Protocol {
 	fn id(&self) -> u16;
@@ -45,6 +46,7 @@ pub fn create_protocol(socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketEv
 		SocketType::Rep  => Box::new(rep::Rep::new(evt_tx)),
 		SocketType::Pub  => Box::new(pbu::Pub::new(evt_tx)),
 		SocketType::Sub  => Box::new(sub::Sub::new(evt_tx)),
+		SocketType::Bus  => Box::new(bus::Bus::new(evt_tx)),
 		_ => panic!("")
 	}
 }

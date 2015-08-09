@@ -1,6 +1,4 @@
 General:
- - put description and objective in README
- - put a tree list of feature with check boxes to follow progress
  - setup CI with travis once there are some unit tests
  - setup documentation generation and site and github pages
  - setup CI with appveyor once mio is compatible with windows
@@ -16,6 +14,8 @@ Refactors:
  - Use a pool for payloads
 
 Features:
+ - For raw bus socket, store the pipe token in the header when receving a message  
+   When sending, check if there is a pipe token in the header and skip the specified pipe
  - Check what to do when send/recv timeout is reached and parts of the message has already been transfered !
  - Now that there is send & receive, connect & bind : TEST ALL THE THINGS !!!
  - Implement the other protocols ...
@@ -27,8 +27,9 @@ Features:
 
 
 Stuff to look at :
+https://github.com/diwic/fdringbuf-rs                    FOR IPC
+
 https://github.com/dpc/mioco
 https://github.com/dwrensha/gj
 https://github.com/calc0000/tcp-loop
-https://github.com/diwic/fdringbuf-rs
 https://github.com/zonyitoo/simplesched

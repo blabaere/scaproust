@@ -81,9 +81,10 @@ impl Protocol for Pub {
 			if sent {
 				msg_sent = true;
 			} else {
-				match try!(pipe.resume_pending_send()) {
-					Some(true)  => msg_sent = true,
-					_           => {}
+				match pipe.resume_pending_send() {
+					Ok(Some(true)) => msg_sent = true,
+					Err(e)         => result = Err(e),
+					_              => {}
 				}
 			}
 		}
