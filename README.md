@@ -24,7 +24,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS
 ## Progress
 - [ ] Protocols
   - [x] PAIR
-  - [ ] BUS
+  - [x] BUS
   - [ ] REQREP
     - [x] REQ
     - [ ] REQ resend
