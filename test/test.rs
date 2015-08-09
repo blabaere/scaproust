@@ -185,9 +185,9 @@ fn test_survey() {
 	let mut client1 = session.create_socket(SocketType::Respondent).unwrap();
 	let mut client2 = session.create_socket(SocketType::Respondent).unwrap();
 
-	server.bind("tcp://127.0.0.1:5463").unwrap();
-	client1.connect("tcp://127.0.0.1:5463").unwrap();
-	client2.connect("tcp://127.0.0.1:5463").unwrap();
+	server.bind("tcp://127.0.0.1:5465").unwrap();
+	client1.connect("tcp://127.0.0.1:5465").unwrap();
+	client2.connect("tcp://127.0.0.1:5465").unwrap();
 
 	let server_survey = vec!(65, 66, 67);
 	server.send(server_survey).unwrap();
@@ -212,7 +212,7 @@ fn test_send_reply_before_send_request() {
 	let session = Session::new().unwrap();
 	let mut server = session.create_socket(SocketType::Rep).unwrap();
 
-	server.bind("tcp://127.0.0.1:5464").unwrap();
+	server.bind("tcp://127.0.0.1:5466").unwrap();
 	server.send(vec!(67, 66, 65)).unwrap_err();
 }
 
@@ -222,8 +222,8 @@ fn test_recv_reply_before_send_request() {
 	let mut server = session.create_socket(SocketType::Rep).unwrap();
 	let mut client = session.create_socket(SocketType::Req).unwrap();
 
-	server.bind("tcp://127.0.0.1:5465").unwrap();
-	client.connect("tcp://127.0.0.1:5465").unwrap();
+	server.bind("tcp://127.0.0.1:5467").unwrap();
+	client.connect("tcp://127.0.0.1:5467").unwrap();
 
 	let err = client.recv().unwrap_err();
 	assert_eq!(io::ErrorKind::Other, err.kind());
