@@ -40,6 +40,7 @@ impl Rep {
 		let evt = SocketEvt::MsgSent;
 		let timeout = self.cancel_send_timeout.take();
 
+		self.backtrace.clear();
 		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
 	}
 
@@ -47,6 +48,7 @@ impl Rep {
 		let evt = SocketEvt::MsgNotSent(err);
 		let timeout = self.cancel_send_timeout.take();
 
+		self.backtrace.clear();
 		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
 	}
 
@@ -111,32 +113,44 @@ impl Rep {
 			}
 			body = tail;
 		}
-
 	}
 
 	fn msg_to_raw_msg(&mut self, msg: Message) -> io::Result<(Message, mio::Token)> {
-		let (mut header, body) = msg.explode();
+		let (header, body) = msg.explode();
+		let pipe_token = try!(self.restore_pipe_id_from_backtrace());
+		let header = try!(self.restore_header_from_backtrace(header));
+
+		Ok((Message::with_header_and_body(header, body), pipe_token))
+	}
+
+	fn restore_pipe_id_from_backtrace(&self) -> io::Result<mio::Token> {
+		if self.backtrace.len() < 4 {
+			return Err(other_io_error("no backtrace from received message"));
+		}
 		let pipe_id_bytes = vec!(
 			self.backtrace[0],
 			self.backtrace[1],
 			self.backtrace[2],
 			self.backtrace[3]
 		);
-		let mut req_id_reader = io::Cursor::new(pipe_id_bytes);
-		let pipe_id = try!(req_id_reader.read_u32::<BigEndian>());
+		let mut pipe_id_reader = io::Cursor::new(pipe_id_bytes);
+		let pipe_id = try!(pipe_id_reader.read_u32::<BigEndian>());
 		let pipe_token = mio::Token(pipe_id as usize);
 
-		self.restore_saved_backtrace_to_header(&mut header);
-		self.backtrace.clear();
-
-		Ok((Message::with_header_and_body(header, body), pipe_token))
+		Ok(pipe_token)
 	}
 
-	fn restore_saved_backtrace_to_header(&self, header: &mut Vec<u8>) {
+	fn restore_header_from_backtrace(&self, mut header: Vec<u8>) -> io::Result<Vec<u8>> {
+		if self.backtrace.len() < 8 {
+			return Err(other_io_error("no header in backtrace from received message"));
+		}
+
 		let backtrace = &self.backtrace[4..];
 		
 		header.reserve(backtrace.len());
 		header.push_all(backtrace);
+
+		Ok(header)
 	}
 
 	fn on_raw_msg_recv(&mut self, event_loop: &mut EventLoop, pipe_token: mio::Token, raw_msg: Message) {

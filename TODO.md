@@ -5,7 +5,6 @@ General:
  - setup CI with appveyor once mio is compatible with windows
 
 Refactors:
- - make the timeout enum hold a socket id rather than a token ?
  - Remove association between token and socketid when a pipe is dead
  - Find a way to avoid all that copy/paste between protocols !!!
  - Register to readable or writable only when required, that is when operation status is in progress ? 

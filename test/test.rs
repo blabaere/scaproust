@@ -206,3 +206,25 @@ fn test_survey() {
 	let server_resp2 = server.recv().unwrap();
 	assert_eq!(vec!(67, 66, 67), server_resp2);
 }
+
+#[test]
+fn test_send_reply_before_send_request() {
+	let session = Session::new().unwrap();
+	let mut server = session.create_socket(SocketType::Rep).unwrap();
+
+	server.bind("tcp://127.0.0.1:5464").unwrap();
+	server.send(vec!(67, 66, 65)).unwrap_err();
+}
+
+#[test]
+fn test_recv_reply_before_send_request() {
+	let session = Session::new().unwrap();
+	let mut server = session.create_socket(SocketType::Rep).unwrap();
+	let mut client = session.create_socket(SocketType::Req).unwrap();
+
+	server.bind("tcp://127.0.0.1:5465").unwrap();
+	client.connect("tcp://127.0.0.1:5465").unwrap();
+
+	let err = client.recv().unwrap_err();
+	assert_eq!(io::ErrorKind::Other, err.kind());
+}

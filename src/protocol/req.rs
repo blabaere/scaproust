@@ -267,6 +267,12 @@ impl Protocol for Req {
 	fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
 		self.cancel_recv_timeout = Some(cancel_timeout);
 
+		if self.pending_req_id.is_none() {
+			let err = other_io_error("no pending request sent");
+			self.on_msg_recv_err(event_loop, err);
+			return;
+		}
+
 		let mut received = None;
 		let mut receiving = false;
 		let mut pending = false;
@@ -294,7 +300,7 @@ impl Protocol for Req {
 			self.on_msg_recv_err(event_loop, err);
 		}
 
-		if received.is_some() && self.pending_req_id.is_some() {
+		if received.is_some() {
 			let raw_msg = received.unwrap();
 
 			self.on_raw_msg_recv(event_loop, raw_msg);
