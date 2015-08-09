@@ -1,0 +1,10 @@
+language: rust
+sudo: false
+rust:
+  - nightly
+
+os:
+  - linux
+
+script:
+  - cargo test
