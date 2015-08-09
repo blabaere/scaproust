@@ -1,5 +1,6 @@
 General:
- - setup CI with travis once there are some unit tests
+ - write documentation
+ - adds embedded code example to the front page
  - setup documentation generation and site and github pages
  - setup CI with appveyor once mio is compatible with windows
 

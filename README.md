@@ -1,5 +1,7 @@
 # scaproust <img src=albertine-like.jpg align=right width=200 height=200>
 
+[![Linux build](https://travis-ci.org/blabaere/scaproust.svg?branch=master)](https://travis-ci.org/blabaere/scaproust)
+
 Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "Scalability Protocols" in rust.
 
 **Experimental work !** For working stuff, please see [nanomsg-rs](https://github.com/blabaere/nanomsg.rs).  
