@@ -38,7 +38,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS
     - [x] PULL
   - [ ] SURVEY
     - [ ] SURVEYOR
-    - [ ] RESPONDENT  
+    - [x] RESPONDENT  
 
 - [ ] Transports
   - [x] TCP
