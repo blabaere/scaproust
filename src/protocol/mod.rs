@@ -19,6 +19,7 @@ pub mod rep;
 pub mod pbu;
 pub mod sub;
 pub mod bus;
+pub mod surv;
 pub mod resp;
 
 pub trait Protocol {
@@ -48,7 +49,7 @@ pub fn create_protocol(socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketEv
 		SocketType::Pub        => Box::new(pbu::Pub::new(evt_tx)),
 		SocketType::Sub        => Box::new(sub::Sub::new(evt_tx)),
 		SocketType::Bus        => Box::new(bus::Bus::new(evt_tx)),
-		SocketType::Respondent => Box::new(resp::Resp::new(evt_tx)),
-		_ => panic!("")
+		SocketType::Surveyor   => Box::new(surv::Surv::new(evt_tx)),
+		SocketType::Respondent => Box::new(resp::Resp::new(evt_tx))
 	}
 }

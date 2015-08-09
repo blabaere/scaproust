@@ -167,7 +167,7 @@ impl Protocol for Bus {
 
 		if received_msg.is_some() | receiving_msg {
 			for (_, pipe) in self.pipes.iter_mut() {
-				pipe.reset_pending_send();
+				pipe.reset_pending_recv();
 			}
 		}
 

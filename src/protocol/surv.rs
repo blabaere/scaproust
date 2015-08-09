@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 use std::collections::HashMap;
 use std::io;
 use std::boxed::FnBox;
@@ -17,24 +17,24 @@ use event_loop_msg::SocketEvt;
 use EventLoop;
 use Message;
 
-pub struct Req {
-	pipes: HashMap<mio::Token, ReqPipe>,
-	evt_sender: Rc<mpsc::Sender<SocketEvt>>,
+pub struct Surv {
+	pipes: HashMap<mio::Token, SurvPipe>,
+	evt_sender: Rc<Sender<SocketEvt>>,
 	cancel_send_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
 	cancel_recv_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
-	pending_req_id: Option<u32>,
-	req_id_seq: u32
+	pending_survey_id: Option<u32>,
+	survey_id_seq: u32
 }
 
-impl Req {
-	pub fn new(evt_sender: Rc<mpsc::Sender<SocketEvt>>) -> Req {
-		Req { 
+impl Surv {
+	pub fn new(evt_tx: Rc<Sender<SocketEvt>>) -> Surv {
+		Surv { 
 			pipes: HashMap::new(),
-			evt_sender: evt_sender,
+			evt_sender: evt_tx,
 			cancel_send_timeout: None,
 			cancel_recv_timeout: None,
-			pending_req_id: None,
-			req_id_seq: time::get_time().nsec as u32
+			pending_survey_id: None,
+			survey_id_seq: time::get_time().nsec as u32
 		}
 	}
 
@@ -42,6 +42,7 @@ impl Req {
 		let evt = SocketEvt::MsgSent;
 		let timeout = self.cancel_send_timeout.take();
 
+		self.on_msg_sending_finished();
 		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
 	}
 
@@ -49,14 +50,20 @@ impl Req {
 		let evt = SocketEvt::MsgNotSent(err);
 		let timeout = self.cancel_send_timeout.take();
 
+		self.on_msg_sending_finished();
 		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
+	}
+
+	fn on_msg_sending_finished(&mut self) {
+		for (_, pipe) in self.pipes.iter_mut() {
+			pipe.on_msg_sending_finished();
+		}
 	}
 
 	fn on_msg_recv_ok(&mut self, event_loop: &mut EventLoop, msg: Message) {
 		let evt = SocketEvt::MsgRecv(msg);
 		let timeout = self.cancel_recv_timeout.take();
 
-		self.pending_req_id = None;
 		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
 	}
 
@@ -64,7 +71,6 @@ impl Req {
 		let evt = SocketEvt::MsgNotRecv(err);
 		let timeout = self.cancel_recv_timeout.take();
 
-		self.pending_req_id = None;
 		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
 	}
 
@@ -78,10 +84,10 @@ impl Req {
 		timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
 	}
 
-	fn next_req_id(&mut self) -> u32 {
-		let next_id = self.req_id_seq | 0x80000000;
+	fn next_survey_id(&mut self) -> u32 {
+		let next_id = self.survey_id_seq | 0x80000000;
 
-		self.req_id_seq += 1;
+		self.survey_id_seq += 1;
 
 		next_id
 	}
@@ -118,13 +124,9 @@ impl Req {
 		}
 
 		match self.raw_msg_to_msg(raw_msg) {
-			Ok((msg, req_id)) => {
-				let expected_id = self.pending_req_id.take().unwrap();
-
-				if req_id == expected_id {
+			Ok((msg, survey_id)) => {
+				if self.pending_survey_id == Some(survey_id) {
 					self.on_msg_recv_ok(event_loop, msg);
-				} else {
-					self.pending_req_id = Some(expected_id);
 				}
 			},
 			Err(e) => {
@@ -134,17 +136,17 @@ impl Req {
 	}
 }
 
-impl Protocol for Req {
+impl Protocol for Surv {
 	fn id(&self) -> u16 {
-		SocketType::Req.id()
+		SocketType::Surveyor.id()
 	}
 
 	fn peer_id(&self) -> u16 {
-		SocketType::Rep.id()
+		SocketType::Respondent.id()
 	}
 
 	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {
-		self.pipes.insert(token, ReqPipe::new(pipe));
+		self.pipes.insert(token, SurvPipe::new(pipe));
 	}
 
 	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
@@ -152,42 +154,73 @@ impl Protocol for Req {
 	}
 
 	fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
-		let mut msg_sending = false;
-		let mut msg_sent = false;
+		let mut result = Ok(());
+		let mut sent_msg = false;
+		let mut send_msg_error = false;
 		let mut received_msg = None;
 		let mut receiving_msg = false;
 
 		if let Some(pipe) = self.pipes.get_mut(&token) {
-			let (sent, received) = try!(pipe.ready(event_loop, events));
+			match pipe.ready(event_loop, events) {
+				Ok((sent, received))  => {
 
-			if sent {
-				msg_sent = true;
-			} else {
-				match try!(pipe.resume_pending_send()) {
-					Some(true)  => msg_sent = true,
-					Some(false) => msg_sending = true,
-					None        => {}
-				}
-			}
+					if sent {
+						sent_msg = true;
+					} else {
+						match pipe.resume_pending_send() {
+							Ok(Some(true)) => sent_msg = true,
+							Err(e)         =>  {
+								send_msg_error = true;
+								result = Err(e);
+							},
+							_              => {}
+						}
+					}
 
-			if received.is_some() {
-				received_msg = received;
-			} else {
-				match try!(pipe.resume_pending_recv()) {
-					Some(RecvStatus::Completed(msg))   => received_msg = Some(msg),
-					Some(RecvStatus::InProgress)       => receiving_msg = true,
-					Some(RecvStatus::Postponed) | None => {}
+					if received.is_some() {
+						received_msg = received;
+					} else {
+						match pipe.resume_pending_recv() {
+							Ok(Some(RecvStatus::Completed(msg))) => received_msg = Some(msg),
+							Ok(Some(RecvStatus::InProgress))     => receiving_msg = true,
+							Ok(Some(RecvStatus::Postponed))      => {},
+							Ok(None)                             => {},
+							Err(e)                               => result = Err(e)
+						}
+					}
+				},
+				Err(e)    => {
+					send_msg_error = true;
+					result = Err(e);
 				}
 			}
 		}
 
-		if msg_sent {
-			self.on_msg_send_ok(event_loop);
-		}
+		let mut notify_sent = false;
+		if sent_msg | send_msg_error {
+			let mut pipe_count = 0;
+			let mut pipe_done_count = 0;
 
-		if msg_sending | msg_sent {
 			for (_, pipe) in self.pipes.iter_mut() {
-				pipe.reset_pending_send();
+				match pipe.send_status() {
+					Some(true) => {
+						pipe_count += 1;
+						pipe_done_count += 1;
+					},
+					Some(false) => {
+						pipe_count += 1;
+					}
+					None => continue
+				}
+
+				notify_sent = pipe_count > 0 && pipe_count == pipe_done_count;
+			}
+
+			if notify_sent {
+				for (_, pipe) in self.pipes.iter_mut() {
+					pipe.reset_pending_send();
+				}
+				self.on_msg_send_ok(event_loop);
 			}
 		}
 
@@ -197,22 +230,22 @@ impl Protocol for Req {
 			}
 		}
 
-		if received_msg.is_some() && self.pending_req_id.is_some() {
+		if received_msg.is_some() && self.pending_survey_id.is_some() {
 			let raw_msg = received_msg.unwrap();
 
 			self.on_raw_msg_recv(event_loop, raw_msg);
 		}
 
-		Ok(())
+		result
 	}
 
 	fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
-		let req_id = self.next_req_id();
+		let survey_id = self.next_survey_id();
 
 		self.cancel_send_timeout = Some(cancel_timeout);
-		self.pending_req_id = Some(req_id);
+		self.pending_survey_id = Some(survey_id);
 
-		let raw_msg = match self.msg_to_raw_msg(msg, req_id) {
+		let raw_msg = match self.msg_to_raw_msg(msg, survey_id) {
 			Err(e) => {
 				self.on_msg_send_err(event_loop, e);
 				return;
@@ -220,34 +253,34 @@ impl Protocol for Req {
 			Ok(raw_msg) => raw_msg
 		};
 
-		let mut sent = false;
-		let mut sending = false;
-		let mut pending = false;
+		let mut sent_count = 0;
+		let mut sending_count = 0;
+		let mut pending_count = 0;
 		let shared_msg = Rc::new(raw_msg);
 
 		for (_, pipe) in self.pipes.iter_mut() {
 			match pipe.send(shared_msg.clone()) {
-				Ok(Some(true))  => sent = true,
-				Ok(Some(false)) => sending = true,
-				Ok(None)        => pending = true,
-				Err(_)          => continue 
+				Ok(Some(true))  => sent_count    += 1,
+				Ok(Some(false)) => sending_count += 1,
+				Ok(None)        => pending_count += 1,
+				Err(_)          => {}
 				// this pipe looks dead, but it will be taken care of during next ready notification
 			}
-
-			if sent | sending {
-				break;
-			}
 		}
+
+		let sent = sent_count == self.pipes.len();
+		let sending = sending_count > 0;
+		let pending = pending_count > 0;
 
 		if sent {
 			self.on_msg_send_ok(event_loop);
 		}
 
-		if sent | sending {
+		if sent {
 			for (_, pipe) in self.pipes.iter_mut() {
 				pipe.reset_pending_send();
 			}
-		} else if pending == false {
+		} else if pending == false && sending == false {
 			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
 
 			self.on_msg_send_err(event_loop, err);
@@ -264,6 +297,8 @@ impl Protocol for Req {
 		}
 	}
 
+	// TODO do not cancel any pending recv, since we must receive a response from all peers ...
+	// This stuff should look like pub sending
 	fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
 		self.cancel_recv_timeout = Some(cancel_timeout);
 
@@ -294,13 +329,13 @@ impl Protocol for Req {
 			self.on_msg_recv_err(event_loop, err);
 		}
 
-		if received.is_some() && self.pending_req_id.is_some() {
+		if received.is_some() && self.pending_survey_id.is_some() {
 			let raw_msg = received.unwrap();
 
 			self.on_raw_msg_recv(event_loop, raw_msg);
 		}
 	}
-
+	
 	fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
 		let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
 
@@ -312,19 +347,25 @@ impl Protocol for Req {
 	}
 }
 
-struct ReqPipe {
+struct SurvPipe {
     pipe: Pipe,
     pending_send: Option<Rc<Message>>,
-    pending_recv: bool
+    pending_recv: bool,
+    send_done: Option<bool>
 }
 
-impl ReqPipe {
-	fn new(pipe: Pipe) -> ReqPipe {
-		ReqPipe { 
+impl SurvPipe {
+	fn new(pipe: Pipe) -> SurvPipe {
+		SurvPipe { 
 			pipe: pipe,
 			pending_send: None,
-			pending_recv: false
+			pending_recv: false,
+			send_done: None
 		}
+	}
+
+	fn send_status(&self) -> Option<bool> {
+		self.send_done.clone()
 	}
 
 	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<(bool, Option<Message>)> {
@@ -332,28 +373,38 @@ impl ReqPipe {
 	}
 
 	fn send(&mut self, msg: Rc<Message>) -> io::Result<Option<bool>> {
-		let progress = match try!(self.pipe.send(msg)) {
-			SendStatus::Completed => {
+		let result = match self.pipe.send(msg) {
+			Ok(SendStatus::Completed) => {
 				self.pipe.cancel_sending();
 				self.pending_send = None;
-				Some(true)
+				self.send_done = Some(true);
+				Ok(Some(true))
 			},
-			SendStatus::InProgress => {
+			Ok(SendStatus::InProgress) => {
 				self.pending_send = None;
-				Some(false)
+				self.send_done = Some(false);
+				Ok(Some(false))
 			},
-			SendStatus::Postponed(message) => {
+			Ok(SendStatus::Postponed(message)) => {
 				self.pipe.cancel_sending();
 				self.pending_send = Some(message);
-				None
+				self.send_done = Some(false);
+				Ok(None)
+			}
+			Err(e) => {
+				self.pipe.cancel_sending();
+				self.pending_send = None;
+				self.send_done = Some(true);
+				Err(e)
 			}
 		};
 
-		Ok(progress)
+		result
 	}
 
 	fn on_send_timeout(&mut self) {
 		self.pending_send = None;
+		self.send_done = None;
 		self.pipe.cancel_sending();
 	}
 
@@ -366,6 +417,12 @@ impl ReqPipe {
 
 	fn reset_pending_send(&mut self) {
 		self.pending_send = None;
+	}
+
+	fn on_msg_sending_finished(&mut self) {
+		self.pending_send = None;
+		self.send_done = None;
+		self.pipe.cancel_sending();
 	}
 
 	fn recv(&mut self) -> io::Result<RecvStatus> {

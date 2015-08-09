@@ -37,7 +37,8 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS
     - [x] PUSH
     - [x] PULL
   - [ ] SURVEY
-    - [ ] SURVEYOR
+    - [x] SURVEYOR
+    - [ ] SURVEYOR deadline
     - [x] RESPONDENT  
 
 - [ ] Transports

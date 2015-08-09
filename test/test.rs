@@ -177,3 +177,32 @@ fn test_bus() {
 	let received2 = client2.recv().unwrap();
 	assert_eq!(vec![65, 66, 67], received2);
 }
+
+#[test]
+fn test_survey() {
+	let session = Session::new().unwrap();
+	let mut server = session.create_socket(SocketType::Surveyor).unwrap();
+	let mut client1 = session.create_socket(SocketType::Respondent).unwrap();
+	let mut client2 = session.create_socket(SocketType::Respondent).unwrap();
+
+	server.bind("tcp://127.0.0.1:5463").unwrap();
+	client1.connect("tcp://127.0.0.1:5463").unwrap();
+	client2.connect("tcp://127.0.0.1:5463").unwrap();
+
+	let server_survey = vec!(65, 66, 67);
+	server.send(server_survey).unwrap();
+
+	let client1_survey = client1.recv().unwrap();
+	assert_eq!(vec!(65, 66, 67), client1_survey);
+
+	let client2_survey = client2.recv().unwrap();
+	assert_eq!(vec!(65, 66, 67), client2_survey);
+
+	client1.send(vec!(65, 66, 65)).unwrap();
+	let server_resp1 = server.recv().unwrap();
+	assert_eq!(vec!(65, 66, 65), server_resp1);
+
+	client2.send(vec!(67, 66, 67)).unwrap();
+	let server_resp2 = server.recv().unwrap();
+	assert_eq!(vec!(67, 66, 67), server_resp2);
+}
