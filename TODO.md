@@ -19,11 +19,7 @@ Features:
    When sending, check if there is a pipe token in the header and skip the specified pipe
  - Check what to do when send/recv timeout is reached and parts of the message has already been transfered !
  - Now that there is send & receive, connect & bind : TEST ALL THE THINGS !!!
- - Implement the other protocols ...
- - Implement socket options ...
- - Implement load balancing and fair queuing
  - Have Socket::connect & bind return an Endpoint that can be shut down
- - Implement device
  - Implement nanocat
 
 

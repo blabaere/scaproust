@@ -110,8 +110,7 @@ impl SessionImpl {
 		}
 	}
 
-	fn on_send_timeout(&mut self, event_loop: &mut EventLoop, token: mio::Token) {
-		let socket_id = SocketId(token.as_usize());
+	fn on_send_timeout(&mut self, event_loop: &mut EventLoop, socket_id: SocketId) {
 		if let Some(socket) = self.sockets.get_mut(&socket_id) {
 			socket.on_send_timeout(event_loop);
 		}
@@ -123,8 +122,7 @@ impl SessionImpl {
 		}
 	}
 
-	fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, token: mio::Token) {
-		let socket_id = SocketId(token.as_usize());
+	fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, socket_id: SocketId) {
 		if let Some(socket) = self.sockets.get_mut(&socket_id) {
 			socket.on_recv_timeout(event_loop);
 		}
@@ -169,13 +167,11 @@ impl mio::Handler for SessionImpl {
     }
 
 	fn timeout(&mut self, event_loop: &mut EventLoop, timeout: Self::Timeout) {
-		debug!("timeout");
-
 		match timeout {
 			EventLoopTimeout::Reconnect(token, addr) => self.reconnect(event_loop, token, addr),
 			EventLoopTimeout::Rebind(token, addr)    => self.rebind(event_loop, token, addr),
-			EventLoopTimeout::CancelSend(token)      => self.on_send_timeout(event_loop, token),
-			EventLoopTimeout::CancelRecv(token)      => self.on_recv_timeout(event_loop, token)
+			EventLoopTimeout::CancelSend(socket_id)  => self.on_send_timeout(event_loop, socket_id),
+			EventLoopTimeout::CancelRecv(socket_id)  => self.on_recv_timeout(event_loop, socket_id)
 		}
 	}
 

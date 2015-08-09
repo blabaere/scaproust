@@ -44,7 +44,7 @@ impl SocketImpl {
 		let send_res = self.evt_sender.send(evt);
 
 		if send_res.is_err() {
-			error!("failed to notify event to session: '{:?}'", send_res.err());
+			error!("[{:?}] failed to notify event to session: '{:?}'", self.id, send_res.err());
 		} 
 	}
 
@@ -209,10 +209,8 @@ impl SocketImpl {
 
 	pub fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
 		debug!("[{:?}] send", self.id);
-		let SocketId(id) = self.id;
-		let token = mio::Token(id);
 
-		let _ = event_loop.timeout_ms(EventLoopTimeout::CancelSend(token), 1000).
+		let _ = event_loop.timeout_ms(EventLoopTimeout::CancelSend(self.id), 1000).
 			map(|timeout| self.protocol.send(event_loop, msg, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
 			map_err(|err| error!("[{:?}] failed to set timeout on send: '{:?}'", self.id, err));
 	}
@@ -224,10 +222,8 @@ impl SocketImpl {
 
 	pub fn recv(&mut self, event_loop: &mut EventLoop) {
 		debug!("[{:?}] recv", self.id);
-		let SocketId(id) = self.id;
-		let token = mio::Token(id);
 
-		let _ = event_loop.timeout_ms(EventLoopTimeout::CancelRecv(token), 1000).
+		let _ = event_loop.timeout_ms(EventLoopTimeout::CancelRecv(self.id), 1000).
 			map(|timeout| self.protocol.recv(event_loop, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
 			map_err(|err| error!("[{:?}] failed to set timeout on recv: '{:?}'", self.id, err));
 	}
