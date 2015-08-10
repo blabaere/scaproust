@@ -31,7 +31,10 @@ impl Ipc {
 	}
 	
 	fn bind(&self, path: &path::Path) -> Result<Box<Listener>, io::Error> {
-		let _ = fs::remove_file(path);
+		if fs::metadata(path).is_ok() {
+			let _ = fs::remove_file(path);
+		}
+
 		let ipc_listener = try!(unix::UnixListener::bind(path));
 		let listener = IpcListener { listener: ipc_listener };
 
