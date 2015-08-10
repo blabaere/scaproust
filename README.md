@@ -45,7 +45,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS
 
 - [ ] Transports
   - [x] TCP
-  - [ ] IPC
+  - [x] IPC (*nix only)
   - [ ] INPROC  
 
 - [ ] Basic features

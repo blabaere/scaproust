@@ -88,8 +88,8 @@ impl SocketImpl {
 		let addr_parts: Vec<&str> = addr.split("://").collect();
 		let scheme = addr_parts[0];
 		let specific_addr = addr_parts[1];
-		let transport = create_transport(scheme);
-		
+		let transport = try!(create_transport(scheme));
+
 		transport.connect(specific_addr)
 	}
 
@@ -124,7 +124,7 @@ impl SocketImpl {
 		let addr_parts: Vec<&str> = addr.split("://").collect();
 		let scheme = addr_parts[0];
 		let specific_addr = addr_parts[1];
-		let transport = create_transport(scheme);
+		let transport = try!(create_transport(scheme));
 		
 		transport.bind(specific_addr)
 	}

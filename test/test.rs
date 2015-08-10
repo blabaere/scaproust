@@ -228,3 +228,21 @@ fn test_recv_reply_before_send_request() {
 	let err = client.recv().unwrap_err();
 	assert_eq!(io::ErrorKind::Other, err.kind());
 }
+
+#[test]
+fn test_ipc() {
+	let session = Session::new().unwrap();
+	let mut bound = session.create_socket(SocketType::Pair).unwrap();
+	let mut connected = session.create_socket(SocketType::Pair).unwrap();
+
+	bound.bind("ipc:///tmp/test_ipc.ipc").unwrap();
+	connected.connect("ipc:///tmp/test_ipc.ipc").unwrap();
+
+	connected.send(vec!(65, 66, 67)).unwrap();
+	let received = bound.recv().unwrap();
+	assert_eq!(vec![65, 66, 67], received);
+
+	bound.send(vec!(67, 66, 65)).unwrap();
+	let received = connected.recv().unwrap();
+	assert_eq!(vec!(67, 66, 65), received);
+}

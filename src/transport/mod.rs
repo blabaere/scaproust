@@ -2,7 +2,7 @@ use std::io;
 use mio;
 
 pub mod tcp;
-//pub mod ipc;
+pub mod ipc;
 
 // represents the transport media 
 pub trait Transport {
@@ -25,6 +25,11 @@ pub trait Listener {
 	fn accept(&mut self) -> io::Result<Vec<Box<Connection>>>;
 }
 
-pub fn create_transport(_: &str) -> Box<Transport> {
-	Box::new(tcp::Tcp)
+pub fn create_transport(name: &str) -> io::Result<Box<Transport>> {
+	match name {
+		"tcp" => Ok(Box::new(tcp::Tcp)),
+		"ipc" => Ok(Box::new(ipc::Ipc)),
+		_     => Err(io::Error::new(io::ErrorKind::InvalidData, format!("'{}' is not a supported protocol (tcp or ipc)", name)))
+	}
+	
 }

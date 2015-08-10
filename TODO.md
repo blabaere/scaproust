@@ -6,7 +6,7 @@ General:
 
 Current problem:  
 If no pipe is available when sending or receiving, an error is returned.
-The expected behavior is to wait the timeout for a pipe to be added.
+The expected behavior is to wait the timeout for a pipe to be added (via reconnect or accept).
 To be able to do that, it would require to move the pending message from proto-pipe to protocol.
 Each proto-pipe would then keep the progress status.
 In that case, status should be: sent, sending, postponed, failed, or none if no operation is in progress.
@@ -35,6 +35,7 @@ Some header related code could also be shared:
  
 
 Refactors:
+ - Rename session into something less oriented ? (context, environment ...)
  - Remove association between token and socketid when a pipe is dead
  - Find a way to avoid all that copy/paste between protocols !!!
  - Register to readable or writable only when required, that is when operation status is in progress ? 
