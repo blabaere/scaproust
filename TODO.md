@@ -4,6 +4,36 @@ General:
  - setup documentation generation and site and github pages
  - setup CI with appveyor once mio is compatible with windows
 
+Current problem:  
+If no pipe is available when sending or receiving, an error is returned.
+The expected behavior is to wait the timeout for a pipe to be added.
+To be able to do that, it would require to move the pending message from proto-pipe to protocol.
+Each proto-pipe would then keep the progress status.
+In that case, status should be: sent, sending, postponed, failed, or none if no operation is in progress.
+When a proto-pipe, become ready and any pending operation should be handed to that proto-pipe.
+When the operation is finished, each proto-pipe is notified of the operation completion.
+
+For protocol that are sent to single, when a proto pipe status becomes sending or receiving,
+the other proto-pipes should have their current operation cancelled.
+
+Next problem:
+There is too much code duplication in the protocol part.
+Refactor the proto pipes with some traits to share more code.
+Traits could be:
+ - SenderPipe
+ - ReceiverPipe
+ - TwoWayPipe
+
+Refactoring the protocols may be harder but there are some crosscutting aspects:
+ - Send to single (pair, push, req, rep, resp)
+ - Send to many (bus, pub, surv)
+ - No sending (pull, sub)
+
+Some header related code could also be shared:
+ - Message with id (req/rep, surv/resp)
+ - Send back to originator only (req/rep, surv/resp)
+ 
+
 Refactors:
  - Remove association between token and socketid when a pipe is dead
  - Find a way to avoid all that copy/paste between protocols !!!
