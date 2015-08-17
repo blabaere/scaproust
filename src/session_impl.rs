@@ -41,10 +41,11 @@ impl SessionImpl {
 
 	fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: SocketId, cmd: SocketCmd) {
 		match cmd {
-			SocketCmd::Connect(addr) => self.connect(id, event_loop, addr),
-			SocketCmd::Bind(addr)    => self.bind(id, event_loop, addr),
-			SocketCmd::SendMsg(msg)  => self.send(id, event_loop, msg),
-			SocketCmd::RecvMsg       => self.recv(id, event_loop)
+			SocketCmd::Connect(addr)  => self.connect(event_loop, id, addr),
+			SocketCmd::Bind(addr)     => self.bind(event_loop, id, addr),
+			SocketCmd::SendMsg(msg)   => self.send(event_loop, id, msg),
+			SocketCmd::RecvMsg        => self.recv(event_loop, id),
+			SocketCmd::SetOption(opt) => self.set_option(event_loop, id, opt)
 		}
 	}
 
@@ -68,7 +69,7 @@ impl SessionImpl {
 		self.send_evt(SessionEvt::SocketCreated(id, rx));
 	}
 
-	fn connect(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {
+	fn connect(&mut self, event_loop: &mut EventLoop, id: SocketId, addr: String) {
 		let token = mio::Token(self.id_seq.next());
 
 		self.socket_ids.insert(token, id);
@@ -86,7 +87,7 @@ impl SessionImpl {
 		}
 	}
 
-	fn bind(&mut self, id: SocketId, event_loop: &mut EventLoop, addr: String) {
+	fn bind(&mut self, event_loop: &mut EventLoop, id: SocketId, addr: String) {
 		let token = mio::Token(self.id_seq.next());
 
 		self.socket_ids.insert(token, id);
@@ -104,7 +105,7 @@ impl SessionImpl {
 		}
 	}
 
-	fn send(&mut self, id: SocketId, event_loop: &mut EventLoop, msg: Message) {
+	fn send(&mut self, event_loop: &mut EventLoop, id: SocketId, msg: Message) {
 		if let Some(socket) = self.sockets.get_mut(&id) {
 			socket.send(event_loop, msg);
 		}
@@ -116,7 +117,7 @@ impl SessionImpl {
 		}
 	}
 
-	fn recv(&mut self, id: SocketId, event_loop: &mut EventLoop) {
+	fn recv(&mut self, event_loop: &mut EventLoop, id: SocketId) {
 		if let Some(socket) = self.sockets.get_mut(&id) {
 			socket.recv(event_loop);
 		}
@@ -131,6 +132,12 @@ impl SessionImpl {
     fn link(&mut self, mut tokens: Vec<mio::Token>, socket_id: SocketId) {
 		for token in tokens.drain(..) {
 			self.socket_ids.insert(token, socket_id);
+		}
+    }
+
+	fn set_option(&mut self, event_loop: &mut EventLoop, socket_id: SocketId, opt: SocketOption) {
+		if let Some(socket) = self.sockets.get_mut(&socket_id) {
+			socket.set_option(event_loop, opt);
 		}
     }
 }

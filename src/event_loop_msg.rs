@@ -1,5 +1,6 @@
 use std::sync::mpsc;
 use std::io;
+use std::time;
 
 use mio;
 
@@ -20,7 +21,13 @@ pub enum SocketCmd {
 	Connect(String),
 	Bind(String),
 	SendMsg(Message),
-	RecvMsg
+	RecvMsg,
+	SetOption(SocketOption)
+}
+
+pub enum SocketOption {
+	SendTimeout(time::Duration),
+	RecvTimeout(time::Duration)
 }
 
 pub enum EventLoopTimeout {
@@ -42,5 +49,7 @@ pub enum SocketEvt {
 	MsgSent,
 	MsgNotSent(io::Error),
 	MsgRecv(Message),
-	MsgNotRecv(io::Error)
+	MsgNotRecv(io::Error),
+	OptionSet,
+	OptionNotSet(io::Error)
 }

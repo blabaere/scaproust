@@ -22,7 +22,15 @@ pub struct Session {
 
 impl Session {
 	pub fn new() -> io::Result<Session> {
-		let mut event_loop = try!(mio::EventLoop::new());
+	    let config = mio::EventLoopConfig {
+            io_poll_timeout_ms: 250,
+            notify_capacity: 4_096,
+            messages_per_tick: 256,
+            timer_tick_ms: 15,
+            timer_wheel_size: 1_024,
+            timer_capacity: 4_096
+        };
+		let mut event_loop = try!(mio::EventLoop::configured(config));
 		let (tx, rx) = mpsc::channel();
 		let session = Session { 
 			cmd_sender: event_loop.channel(),

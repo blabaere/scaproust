@@ -1,5 +1,6 @@
 use std::sync::mpsc::Receiver;
 use std::io;
+use std::time;
 
 use mio::Sender;
 
@@ -83,5 +84,26 @@ impl Socket {
 			Ok(_)                        => Err(other_io_error("unexpected evt")),
 			Err(_)                       => Err(other_io_error("evt channel closed"))
 		}
+	}
+
+	fn set_option(&mut self, option: SocketOption) -> io::Result<()> {
+		let cmd = SocketCmd::SetOption(option);
+
+		try!(self.send_cmd(cmd));
+
+		match self.evt_receiver.recv() {
+			Ok(SocketEvt::OptionSet)       => Ok(()),
+			Ok(SocketEvt::OptionNotSet(e)) => Err(e),
+			Ok(_)                          => Err(other_io_error("unexpected evt")),
+			Err(_)                         => Err(other_io_error("evt channel closed"))
+		}
+	}
+
+	pub fn set_send_timeout(&mut self, timeout: time::Duration) -> io::Result<()> {
+		self.set_option(SocketOption::SendTimeout(timeout))
+	}
+
+	pub fn set_recv_timeout(&mut self, timeout: time::Duration) -> io::Result<()> {
+		self.set_option(SocketOption::RecvTimeout(timeout))
 	}
 }

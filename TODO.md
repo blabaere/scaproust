@@ -1,4 +1,7 @@
+Expose the event loop configuration
+
 General:
+ - choose a licence
  - write documentation
  - adds embedded code example to the front page
  - setup documentation generation and site and github pages

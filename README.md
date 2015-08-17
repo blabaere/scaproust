@@ -71,8 +71,8 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS
   - [ ] Linger
   - [ ] Send buffer size
   - [ ] Recv buffer size
-  - [ ] Send timeout
-  - [ ] Recv timeout
+  - [x] Send timeout
+  - [x] Recv timeout
   - [ ] Reconnect interval
   - [ ] Reconnect interval max
   - [ ] Send priority

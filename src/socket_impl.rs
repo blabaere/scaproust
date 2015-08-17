@@ -2,6 +2,7 @@ use std::rc::Rc;
 use std::collections::hash_map::*;
 use std::sync::mpsc::Sender;
 use std::io;
+use std::time;
 
 use mio;
 
@@ -23,7 +24,8 @@ pub struct SocketImpl {
 	acceptors: HashMap<mio::Token, Acceptor>,
 	id_seq: IdSequence,
 	added_tokens: Option<Vec<mio::Token>>,
-	removed_tokens: Option<Vec<mio::Token>>
+	removed_tokens: Option<Vec<mio::Token>>,
+	options: SocketImplOptions
 }
 
 impl SocketImpl {
@@ -36,7 +38,8 @@ impl SocketImpl {
 			acceptors: HashMap::new(),
 			id_seq: id_seq,
 			added_tokens: None,
-			removed_tokens: None
+			removed_tokens: None,
+			options: SocketImplOptions::new()
 		}
 	}
 
@@ -210,9 +213,13 @@ impl SocketImpl {
 	pub fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
 		debug!("[{:?}] send", self.id);
 
-		let _ = event_loop.timeout_ms(EventLoopTimeout::CancelSend(self.id), 1000).
-			map(|timeout| self.protocol.send(event_loop, msg, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
-			map_err(|err| error!("[{:?}] failed to set timeout on send: '{:?}'", self.id, err));
+		if let Some(timeout) = self.options.send_timeout_ms {
+			let _ = event_loop.timeout_ms(EventLoopTimeout::CancelSend(self.id), timeout).
+				map(|timeout| self.protocol.send(event_loop, msg, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
+				map_err(|err| error!("[{:?}] failed to set timeout on send: '{:?}'", self.id, err));
+		} else {
+			self.protocol.send(event_loop, msg, Box::new(move |_: &mut EventLoop| {true}));
+		}
 	}
 
 	pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -223,13 +230,73 @@ impl SocketImpl {
 	pub fn recv(&mut self, event_loop: &mut EventLoop) {
 		debug!("[{:?}] recv", self.id);
 
-		let _ = event_loop.timeout_ms(EventLoopTimeout::CancelRecv(self.id), 1000).
-			map(|timeout| self.protocol.recv(event_loop, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
-			map_err(|err| error!("[{:?}] failed to set timeout on recv: '{:?}'", self.id, err));
+		if let Some(timeout) = self.options.recv_timeout_ms {
+			let _ = event_loop.timeout_ms(EventLoopTimeout::CancelRecv(self.id), timeout).
+				map(|timeout| self.protocol.recv(event_loop, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
+				map_err(|err| error!("[{:?}] failed to set timeout on recv: '{:?}'", self.id, err));
+		} else {
+			self.protocol.recv(event_loop, Box::new(move |_: &mut EventLoop| {true}));
+		}
 	}
 
 	pub fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
 		debug!("[{:?}] on_recv_timeout", self.id);
 		self.protocol.on_recv_timeout(event_loop);
 	}
+
+	pub fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) {
+		let set_res = match option {
+			SocketOption::SendTimeout(timeout) => self.options.set_send_timeout(timeout),
+			SocketOption::RecvTimeout(timeout) => self.options.set_recv_timeout(timeout)
+		};
+		let evt = match set_res {
+			Ok(_)  => SocketEvt::OptionSet,
+			Err(e) => SocketEvt::OptionNotSet(e)
+		};
+
+		self.send_evt(evt);
+	}
+}
+
+struct SocketImplOptions {
+	pub send_timeout_ms: Option<u64>,
+	pub recv_timeout_ms: Option<u64>
+}
+
+impl SocketImplOptions {
+	fn new() -> SocketImplOptions {
+		SocketImplOptions {
+			send_timeout_ms: None,
+			recv_timeout_ms: None
+		}
+	}
+
+	fn set_send_timeout(&mut self, timeout: time::Duration) -> io::Result<()> {
+		self.send_timeout_ms = duration_to_timeout(timeout);
+
+		Ok(())
+	}
+
+	fn set_recv_timeout(&mut self, timeout: time::Duration) -> io::Result<()> {
+		self.recv_timeout_ms = duration_to_timeout(timeout);
+
+		Ok(())
+	}
+}
+
+fn duration_to_timeout(duration: time::Duration) -> Option<u64> {
+	let millis = duration_to_millis(duration);
+
+	if millis == 0u64 {
+		None
+	} else {
+		Some(millis)
+	}
+}
+
+fn duration_to_millis(duration: time::Duration) -> u64 {
+	let millis_from_secs = duration.secs() * 1_000;
+	let millis_from_nanos = duration.extra_nanos() as f64 / 1_000_000f64;
+
+	millis_from_secs + millis_from_nanos as u64
 }
