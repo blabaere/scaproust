@@ -18,7 +18,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS
 * Low-latency (current design use channels between user facing functions and system functions).
 * Other transports (Inproc, TLS, WebSockets).
 * Async API, using future/promise to represent send/recv results.
-* Efficient nonblocking operations (difficult due to the aboce mentioned use of channels).
+* Efficient nonblocking operations (difficult due to the above mentioned use of channels).
 
 ## Non goals
 * Ability to use a socket as a raw file descriptor with system level functions.

@@ -295,8 +295,8 @@ fn duration_to_timeout(duration: time::Duration) -> Option<u64> {
 }
 
 fn duration_to_millis(duration: time::Duration) -> u64 {
-	let millis_from_secs = duration.secs() * 1_000;
-	let millis_from_nanos = duration.extra_nanos() as f64 / 1_000_000f64;
+	let millis_from_secs = duration.as_secs() * 1_000;
+	let millis_from_nanos = duration.subsec_nanos() as f64 / 1_000_000f64;
 
 	millis_from_secs + millis_from_nanos as u64
 }
