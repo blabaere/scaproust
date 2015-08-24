@@ -1,3 +1,8 @@
+// Copyright 2015 Copyright (c) 2015 Benoît Labaere (benoit.labaere@gmail.com)
+//
+// Licensed under the MIT license LICENSE or <http://opensource.org/licenses/MIT>
+// This file may not be copied, modified, or distributed except according to those terms.
+
 #![feature(time)]
 #![feature(duration)]
 

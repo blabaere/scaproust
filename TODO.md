@@ -1,7 +1,6 @@
-Expose the event loop configuration
+
 
 General:
- - choose a licence
  - write documentation
  - adds embedded code example to the front page
  - setup documentation generation and site and github pages
@@ -54,12 +53,11 @@ Features:
  - Now that there is send & receive, connect & bind : TEST ALL THE THINGS !!!
  - Have Socket::connect & bind return an Endpoint that can be shut down
  - Implement nanocat
+ - Expose the event loop configuration ?
 
 
 Stuff to look at :
-https://github.com/diwic/fdringbuf-rs                    FOR IPC
-
-https://github.com/dpc/mioco
-https://github.com/dwrensha/gj
-https://github.com/calc0000/tcp-loop
-https://github.com/zonyitoo/simplesched
+https://github.com/dpc/mioco  
+https://github.com/dwrensha/gj  
+https://github.com/calc0000/tcp-loop  
+https://github.com/zonyitoo/simplesched  
