@@ -10,8 +10,6 @@
 #![feature(unboxed_closures)]
 #![feature(split_off)]
 #![feature(vec_push_all)]
-#![feature(duration)]
-#![feature(time)]
 
 #[macro_use] extern crate log;
 extern crate byteorder;

@@ -28,7 +28,8 @@ pub struct Req {
 	cancel_send_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
 	cancel_recv_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
 	pending_req_id: Option<u32>,
-	req_id_seq: u32
+	req_id_seq: u32,
+	resend_interval: Option<u64>
 }
 
 impl Req {
@@ -39,7 +40,8 @@ impl Req {
 			cancel_send_timeout: None,
 			cancel_recv_timeout: None,
 			pending_req_id: None,
-			req_id_seq: time::get_time().nsec as u32
+			req_id_seq: time::get_time().nsec as u32,
+			resend_interval: Some(60_000)
 		}
 	}
 
@@ -246,6 +248,8 @@ impl Protocol for Req {
 
 		if sent {
 			self.on_msg_send_ok(event_loop);
+		} else {
+
 		}
 
 		if sent | sending {
