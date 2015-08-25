@@ -39,11 +39,12 @@ pub enum EventLoopTimeout {
 	Reconnect(mio::Token, String),
 	Rebind(mio::Token, String),
 	CancelSend(SocketId),
-	CancelRecv(SocketId)
+	CancelRecv(SocketId)/*,
+	Resend(SocketId)*/
 }
 
 pub enum SessionEvt {
-	SocketCreated(SocketId, mpsc::Receiver<SocketEvt>),
+	SocketCreated(SocketId, mpsc::Receiver<SocketEvt>)
 }
 
 pub enum SocketEvt {

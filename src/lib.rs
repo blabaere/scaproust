@@ -18,22 +18,22 @@ extern crate time;
 
 mod global;
 mod event_loop_msg;
+mod facade;
 mod session;
-mod session_impl;
 mod socket;
-mod socket_impl;
 mod protocol;
 mod transport;
 mod pipe;
 mod acceptor;
 
-pub use session::Session;
-
-pub use socket::Socket;
+pub use facade::{
+	SessionFacade as Session,
+	SocketFacade as Socket
+};
 
 pub use global::SocketType;
 
-type EventLoop = mio::EventLoop<session_impl::SessionImpl>;
+type EventLoop = mio::EventLoop<session::Session>;
 
 pub struct Message {
     pub header: Vec<u8>,

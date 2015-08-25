@@ -45,7 +45,6 @@ Some header related code could also be shared:
 ### Features:
 - For raw bus socket, store the pipe token in the header when receving a message. When sending, check if there is a pipe token in the header and skip the specified pipe
 - Check what to do when send/recv timeout is reached and parts of the message has already been transfered !
-- Now that there is send & receive, connect & bind : TEST ALL THE THINGS !!!
 - Have Socket::connect & bind return an Endpoint that can be shut down
 - Implement nanocat
 - Expose the event loop configuration ?
@@ -53,5 +52,4 @@ Some header related code could also be shared:
 ### Stuff to look at:
 https://github.com/dpc/mioco  
 https://github.com/dwrensha/gj  
-https://github.com/calc0000/tcp-loop  
 https://github.com/zonyitoo/simplesched  

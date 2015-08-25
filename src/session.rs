@@ -3,116 +3,191 @@
 // Licensed under the MIT license LICENSE or <http://opensource.org/licenses/MIT>
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use mio;
-use std::io;
-use std::thread;
+use std::rc::Rc;
+use std::collections::HashMap;
+
 use std::sync::mpsc;
 
-use event_loop_msg:: {
-	EventLoopCmd,
-	SessionCmd,
-	SessionEvt,
-	SocketEvt
-};
+use mio;
 
-use session_impl::SessionImpl;
+use global::*;
+use event_loop_msg::*;
 
 use socket::Socket;
-use global::*;
+use protocol;
+
+use EventLoop;
+use Message;
 
 pub struct Session {
-	cmd_sender: mio::Sender<EventLoopCmd>,
-	evt_receiver: mpsc::Receiver<SessionEvt>
+	event_sender: mpsc::Sender<SessionEvt>,
+	sockets: HashMap<SocketId, Socket>,
+	socket_ids: HashMap<mio::Token, SocketId>,
+	id_seq: IdSequence
 }
 
 impl Session {
-	pub fn new() -> io::Result<Session> {
-	    let config = mio::EventLoopConfig {
-            io_poll_timeout_ms: 250,
-            notify_capacity: 4_096,
-            messages_per_tick: 256,
-            timer_tick_ms: 15,
-            timer_wheel_size: 1_024,
-            timer_capacity: 4_096
-        };
-		let mut event_loop = try!(mio::EventLoop::configured(config));
+
+	pub fn new(event_tx: mpsc::Sender<SessionEvt>) -> Session {
+		Session {
+			event_sender: event_tx,
+			sockets: HashMap::new(),
+			socket_ids: HashMap::new(),
+			id_seq: IdSequence::new()
+		}
+	}
+
+	fn handle_session_cmd(&mut self, event_loop: &mut EventLoop, cmd: SessionCmd) {
+		match cmd {
+			SessionCmd::CreateSocket(socket_type) => self.create_socket(socket_type),
+			SessionCmd::Shutdown => event_loop.shutdown()
+		}
+	}
+
+	fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: SocketId, cmd: SocketCmd) {
+		match cmd {
+			SocketCmd::Connect(addr)  => self.connect(event_loop, id, addr),
+			SocketCmd::Bind(addr)     => self.bind(event_loop, id, addr),
+			SocketCmd::SendMsg(msg)   => self.send(event_loop, id, msg),
+			SocketCmd::RecvMsg        => self.recv(event_loop, id),
+			SocketCmd::SetOption(opt) => self.set_option(event_loop, id, opt)
+		}
+	}
+
+	fn send_evt(&self, evt: SessionEvt) {
+		let send_res = self.event_sender.send(evt);
+
+		if send_res.is_err() {
+			error!("failed to notify event to session: '{:?}'", send_res.err());
+		} 
+	}
+
+	fn create_socket(&mut self, socket_type: SocketType) {
 		let (tx, rx) = mpsc::channel();
-		let session = Session { 
-			cmd_sender: event_loop.channel(),
-			evt_receiver: rx };
+		let shared_tx = Rc::new(tx);
+		let protocol = protocol::create_protocol(socket_type, shared_tx.clone());
+		let id = SocketId(self.id_seq.next());
+		let socket = Socket::new(id, protocol, shared_tx.clone(), self.id_seq.clone());
 
-		thread::spawn(move || Session::run_event_loop(&mut event_loop, tx));
+		self.sockets.insert(id, socket);
 
-		Ok(session)
+		self.send_evt(SessionEvt::SocketCreated(id, rx));
 	}
 
-	fn run_event_loop(event_loop: &mut mio::EventLoop<SessionImpl>, evt_tx: mpsc::Sender<SessionEvt>) {
-		let mut handler = SessionImpl::new(evt_tx);
-		let exec = event_loop.run(&mut handler);
+	fn connect(&mut self, event_loop: &mut EventLoop, id: SocketId, addr: String) {
+		let token = mio::Token(self.id_seq.next());
 
-		match exec {
-			Ok(_) => debug!("event loop exited"),
-			Err(e) => error!("event loop failed to run: {}", e)
+		self.socket_ids.insert(token, id);
+
+		if let Some(socket) = self.sockets.get_mut(&id) {
+			socket.connect(addr, event_loop, token);
 		}
 	}
 
-	fn send_cmd(&self, session_cmd: SessionCmd) -> Result<(), io::Error> {
-		let cmd = EventLoopCmd::SessionLevel(session_cmd);
-
-		self.cmd_sender.send(cmd).map_err(|e| convert_notify_err(e))
-	}
-
-	pub fn create_socket(&self, socket_type: SocketType) -> io::Result<Socket> {
-		let session_cmd = SessionCmd::CreateSocket(socket_type);
-
-		try!(self.send_cmd(session_cmd));
-
-		match self.evt_receiver.recv() {
-			Ok(SessionEvt::SocketCreated(id, rx)) => Ok(self.new_socket(id, rx)),
-			Err(_)                                => Err(other_io_error("evt channel closed"))
+	fn reconnect(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
+		if let Some(socket_id) = self.socket_ids.get_mut(&token) {
+			if let Some(socket) = self.sockets.get_mut(&socket_id) {
+				socket.reconnect(addr, event_loop, token);
+			}
 		}
 	}
 
-	fn new_socket(&self, id: SocketId, rx: mpsc::Receiver<SocketEvt>) -> Socket {
-		Socket::new(id, self.cmd_sender.clone(), rx)
+	fn bind(&mut self, event_loop: &mut EventLoop, id: SocketId, addr: String) {
+		let token = mio::Token(self.id_seq.next());
+
+		self.socket_ids.insert(token, id);
+
+		if let Some(socket) = self.sockets.get_mut(&id) {
+			socket.bind(addr, event_loop, token);
+		}
 	}
-}
 
-impl Drop for Session {
-	fn drop(&mut self) {
-		let session_cmd = SessionCmd::Shutdown;
-		let cmd = EventLoopCmd::SessionLevel(session_cmd);
-		
-		let _ = self.cmd_sender.send(cmd);
+	fn rebind(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
+		if let Some(socket_id) = self.socket_ids.get_mut(&token) {
+			if let Some(socket) = self.sockets.get_mut(&socket_id) {
+				socket.rebind(addr, event_loop, token);
+			}
+		}
 	}
-}
 
-#[cfg(test)]
-mod tests {
-    use super::Session;
-    use global::SocketType;
+	fn send(&mut self, event_loop: &mut EventLoop, id: SocketId, msg: Message) {
+		if let Some(socket) = self.sockets.get_mut(&id) {
+			socket.send(event_loop, msg);
+		}
+	}
 
-    #[test]
-    fn session_can_create_a_socket() {
-    	let session = Session::new().unwrap();
-    	let socket = session.create_socket(SocketType::Push).unwrap();
+	fn on_send_timeout(&mut self, event_loop: &mut EventLoop, socket_id: SocketId) {
+		if let Some(socket) = self.sockets.get_mut(&socket_id) {
+			socket.on_send_timeout(event_loop);
+		}
+	}
 
-    	drop(socket);
+	fn recv(&mut self, event_loop: &mut EventLoop, id: SocketId) {
+		if let Some(socket) = self.sockets.get_mut(&id) {
+			socket.recv(event_loop);
+		}
+	}
+
+	fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, socket_id: SocketId) {
+		if let Some(socket) = self.sockets.get_mut(&socket_id) {
+			socket.on_recv_timeout(event_loop);
+		}
+	}
+
+    fn link(&mut self, mut tokens: Vec<mio::Token>, socket_id: SocketId) {
+		for token in tokens.drain(..) {
+			self.socket_ids.insert(token, socket_id);
+		}
     }
 
-    #[test]
-    fn can_connect_socket() {
-    	let session = Session::new().unwrap();
-    	let mut socket = session.create_socket(SocketType::Push).unwrap();
+	fn set_option(&mut self, event_loop: &mut EventLoop, socket_id: SocketId, opt: SocketOption) {
+		if let Some(socket) = self.sockets.get_mut(&socket_id) {
+			socket.set_option(event_loop, opt);
+		}
+    }
+}
 
-    	assert!(socket.connect("tcp://127.0.0.1:5454").is_ok());
+impl mio::Handler for Session {
+    type Timeout = EventLoopTimeout;
+    type Message = EventLoopCmd;
+
+    fn notify(&mut self, event_loop: &mut EventLoop, msg: Self::Message) {
+    	debug!("session backend received a command");
+    	match msg {
+    		EventLoopCmd::SessionLevel(cmd) => self.handle_session_cmd(event_loop, cmd),
+    		EventLoopCmd::SocketLevel(id, cmd) => self.handle_socket_cmd(event_loop, id, cmd)
+    	}
     }
 
-    #[test]
-    fn can_try_connect_socket() {
-    	let session = Session::new().unwrap();
-    	let mut socket = session.create_socket(SocketType::Push).unwrap();
+    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
+    	let mut target_socket_id = None;
+    	let mut added_tokens = None;
 
-    	assert!(socket.connect("tcp://this should not work").is_err());
+    	if let Some(socket_id) = self.socket_ids.get(&token) {
+    		if let Some(socket) = self.sockets.get_mut(&socket_id) {
+	    		target_socket_id = Some(socket_id.clone());
+	    		added_tokens = socket.ready(event_loop, token, events);
+			}
+		}
+
+    	if let Some(socket_id) = target_socket_id {
+    		if let Some(tokens) = added_tokens {
+    			self.link(tokens, socket_id);
+    		}
+    	}
+    	
+    }
+
+	fn timeout(&mut self, event_loop: &mut EventLoop, timeout: Self::Timeout) {
+		match timeout {
+			EventLoopTimeout::Reconnect(token, addr) => self.reconnect(event_loop, token, addr),
+			EventLoopTimeout::Rebind(token, addr)    => self.rebind(event_loop, token, addr),
+			EventLoopTimeout::CancelSend(socket_id)  => self.on_send_timeout(event_loop, socket_id),
+			EventLoopTimeout::CancelRecv(socket_id)  => self.on_recv_timeout(event_loop, socket_id)
+		}
+	}
+
+    fn interrupted(&mut self, _: &mut EventLoop) {
+
     }
 }
