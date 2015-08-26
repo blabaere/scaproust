@@ -1,8 +1,8 @@
 # scaproust <img src=albertine-like.jpg align=right width=200 height=200>
 
-[![Linux build](https://travis-ci.org/blabaere/scaproust.svg?branch=master)](https://travis-ci.org/blabaere/scaproust)
-[![Windows build](https://ci.appveyor.com/api/projects/status/kpqdm42mhlki39fq?svg=true)](https://ci.appveyor.com/project/blabaere/scaproust)
-[![License](https://img.shields.io/github/license/blabaere/scaproust.svg)](https://github.com/blabaere/scaproust)
+[![Linux build](https://img.shields.io/travis/blabaere/scaproust.svg?label=linux)](https://travis-ci.org/blabaere/scaproust)
+[![Windows build](https://img.shields.io/appveyor/ci/blabaere/scaproust.svg?label=windows)](https://ci.appveyor.com/project/blabaere/scaproust)
+[![License](https://img.shields.io/github/license/blabaere/scaproust.svg)](https://github.com/blabaere/scaproust/blob/master/LICENSE)
 
 Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "Scalability Protocols" in rust.
 
