@@ -5,7 +5,6 @@
 
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
-use std::collections::HashMap;
 use std::io;
 use std::boxed::FnBox;
 
@@ -21,7 +20,7 @@ use EventLoop;
 use Message;
 
 pub struct Resp {
-	pipes: HashMap<mio::Token, RespPipe>,
+	pipe: Option<RespPipe>,
 	evt_sender: Rc<Sender<SocketEvt>>,
 	cancel_send_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
 	cancel_recv_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
@@ -32,7 +31,7 @@ pub struct Resp {
 impl Resp {
 	pub fn new(evt_sender: Rc<Sender<SocketEvt>>) -> Resp {
 		Resp { 
-			pipes: HashMap::new(),
+			pipe: None,
 			evt_sender: evt_sender,
 			cancel_send_timeout: None,
 			cancel_recv_timeout: None,
@@ -127,8 +126,8 @@ impl Resp {
 			self.backtrace[2],
 			self.backtrace[3]
 		);
-		let mut req_id_reader = io::Cursor::new(pipe_id_bytes);
-		let pipe_id = try!(req_id_reader.read_u32::<BigEndian>());
+		let mut pipe_id_reader = io::Cursor::new(pipe_id_bytes);
+		let pipe_id = try!(pipe_id_reader.read_u32::<BigEndian>());
 		let pipe_token = mio::Token(pipe_id as usize);
 
 		self.restore_saved_backtrace_to_header(&mut header);
@@ -163,40 +162,50 @@ impl Protocol for Resp {
 	}
 
 	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {
-		self.pipes.insert(token, RespPipe::new(pipe));
+		self.pipe = Some(RespPipe::new(token, pipe));
 	}
 
 	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
-		self.pipes.remove(&token).map(|p| p.remove())
+		if Some(token) == self.pipe.as_ref().map(|p| p.token()) {
+			self.pipe.take().map(|p| p.remove())
+		} else {
+			None
+		}
 	}
 
 	fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
+		if self.pipe.is_none() {
+			return Ok(());
+		}
+		if Some(token) != self.pipe.as_ref().map(|p| p.token()) {
+			return Ok(());
+		}
+
+		let mut pipe = self.pipe.take().unwrap();
 		let mut msg_sending = false;
 		let mut msg_sent = false;
 		let mut received_msg = None;
 		let mut receiving_msg = false;
 
-		if let Some(pipe) = self.pipes.get_mut(&token) {
-			let (sent, received) = try!(pipe.ready(event_loop, events));
+		let (sent, received) = try!(pipe.ready(event_loop, events));
 
-			if sent {
-				msg_sent = true;
-			} else {
-				match try!(pipe.resume_pending_send()) {
-					Some(true)  => msg_sent = true,
-					Some(false) => msg_sending = true,
-					None        => {}
-				}
+		if sent {
+			msg_sent = true;
+		} else {
+			match try!(pipe.resume_pending_send()) {
+				Some(true)  => msg_sent = true,
+				Some(false) => msg_sending = true,
+				None        => {}
 			}
+		}
 
-			if received.is_some() {
-				received_msg = received;
-			} else {
-				match try!(pipe.resume_pending_recv()) {
-					Some(RecvStatus::Completed(msg))   => received_msg = Some(msg),
-					Some(RecvStatus::InProgress)       => receiving_msg = true,
-					Some(RecvStatus::Postponed) | None => {}
-				}
+		if received.is_some() {
+			received_msg = received;
+		} else {
+			match try!(pipe.resume_pending_recv()) {
+				Some(RecvStatus::Completed(msg))   => received_msg = Some(msg),
+				Some(RecvStatus::InProgress)       => receiving_msg = true,
+				Some(RecvStatus::Postponed) | None => {}
 			}
 		}
 
@@ -205,15 +214,11 @@ impl Protocol for Resp {
 		}
 
 		if msg_sending | msg_sent {
-			for (_, pipe) in self.pipes.iter_mut() {
-				pipe.reset_pending_send();
-			}
+			pipe.reset_pending_send();
 		}
 
 		if received_msg.is_some() | receiving_msg {
-			for (_, pipe) in self.pipes.iter_mut() {
-				pipe.reset_pending_recv();
-			}
+			pipe.reset_pending_recv();
 		}
 
 		if received_msg.is_some() {
@@ -222,10 +227,22 @@ impl Protocol for Resp {
 			self.on_raw_msg_recv(event_loop, token, raw_msg);
 		}
 
+		self.pipe = Some(pipe);
+
 		Ok(())
 	}
 
 	fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
+		if self.pipe.is_none() {
+			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
+
+			self.on_msg_send_err(event_loop, err);
+
+			return;
+		}
+
+		let mut pipe = self.pipe.take().unwrap();
+
 		self.cancel_send_timeout = Some(cancel_timeout);
 
 		let (raw_msg, pipe_token) = match self.msg_to_raw_msg(msg) {
@@ -236,19 +253,24 @@ impl Protocol for Resp {
 			Ok((raw_msg, pipe_token)) => (raw_msg, pipe_token)
 		};
 
+		if pipe_token != pipe.token() {
+			let err = io::Error::new(io::ErrorKind::NotConnected, "original surveyor disconnected");
+
+			self.on_msg_send_err(event_loop, err);
+
+			return;
+		}
+
 		let mut sent = false;
 		let mut sending = false;
 		let mut pending = false;
-		let shared_msg = Rc::new(raw_msg);
 
-		if let Some(pipe) = self.pipes.get_mut(&pipe_token) {
-			match pipe.send(shared_msg.clone()) {
-				Ok(Some(true))  => sent = true,
-				Ok(Some(false)) => sending = true,
-				Ok(None)        => pending = true,
-				Err(_)          => {}
-				// this pipe looks dead, but it will be taken care of during next ready notification
-			}
+		match pipe.send(Rc::new(raw_msg)) {
+			Ok(Some(true))  => sent = true,
+			Ok(Some(false)) => sending = true,
+			Ok(None)        => pending = true,
+			Err(_)          => {} 
+			// this pipe looks dead, but it will be taken care of during next ready notification
 		}
 
 		if sent {
@@ -256,14 +278,14 @@ impl Protocol for Resp {
 		}
 
 		if sent | sending {
-			for (_, pipe) in self.pipes.iter_mut() {
-				pipe.reset_pending_send();
-			}
+			pipe.reset_pending_send();
 		} else if pending == false {
 			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
 
 			self.on_msg_send_err(event_loop, err);
 		}
+
+		self.pipe = Some(pipe);
 	}
 
 	fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -271,51 +293,51 @@ impl Protocol for Resp {
 
 		self.on_msg_send_err(event_loop, err);
 
-		for (_, pipe) in self.pipes.iter_mut() {
+		if let Some(pipe) = self.pipe.as_mut() {
 			pipe.on_send_timeout();
 		}
 	}
 
 	fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
+		if self.pipe.is_none() {
+			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
+
+			self.on_msg_send_err(event_loop, err);
+
+			return;
+		}
+
+		let mut pipe = self.pipe.take().unwrap();
+
 		self.cancel_recv_timeout = Some(cancel_timeout);
 
 		let mut received = None;
-		let mut received_from = None;
 		let mut receiving = false;
 		let mut pending = false;
 
-		for (token, pipe) in self.pipes.iter_mut() {
-			match pipe.recv() {
-				Ok(RecvStatus::Completed(msg)) => {
-					received = Some(msg);
-					received_from = Some(token.clone());
-				},
-				Ok(RecvStatus::InProgress)     => receiving = true,
-				Ok(RecvStatus::Postponed)      => pending = true,
-				Err(_)                         => continue
-			}
-
-			if received.is_some() | receiving {
-				break;
-			}
+		match pipe.recv() {
+			Ok(RecvStatus::Completed(msg)) => received = Some(msg),
+			Ok(RecvStatus::InProgress)     => receiving = true,
+			Ok(RecvStatus::Postponed)      => pending = true,
+			Err(_)                         => {}
 		}
 
 		if received.is_some() | receiving {
-			for (_, pipe) in self.pipes.iter_mut() {
-				pipe.reset_pending_recv();
-			}
+			pipe.reset_pending_recv();
 		} else if pending == false {
 			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
 
 			self.on_msg_recv_err(event_loop, err);
 		}
 
-		if received.is_some() && received_from.is_some() {
-			let pipe_token = received_from.unwrap();
+		if received.is_some() {
+			let pipe_token = pipe.token();
 			let raw_msg = received.unwrap();
 
 			self.on_raw_msg_recv(event_loop, pipe_token, raw_msg);
 		}
+
+		self.pipe = Some(pipe);
 	}
 
 	fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -323,25 +345,31 @@ impl Protocol for Resp {
 
 		self.on_msg_recv_err(event_loop, err);
 
-		for (_, pipe) in self.pipes.iter_mut() {
+		if let Some(pipe) = self.pipe.as_mut() {
 			pipe.on_recv_timeout();
 		}
 	}
 }
 
 struct RespPipe {
+	token: mio::Token,
     pipe: Pipe,
     pending_send: Option<Rc<Message>>,
     pending_recv: bool
 }
 
 impl RespPipe {
-	fn new(pipe: Pipe) -> RespPipe {
+	fn new(token: mio::Token, pipe: Pipe) -> RespPipe {
 		RespPipe { 
+			token: token,
 			pipe: pipe,
 			pending_send: None,
 			pending_recv: false
 		}
+	}
+
+	fn token(&self) -> mio::Token {
+		self.token
 	}
 
 	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<(bool, Option<Message>)> {

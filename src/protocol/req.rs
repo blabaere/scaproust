@@ -249,10 +249,7 @@ impl Protocol for Req {
 		if sent {
 			self.on_msg_send_ok(event_loop);
 		} else {
-			if let Some(timeout) = self.resend_interval {
-				/*let _ = event_loop.timeout_ms(EventLoopTimeout::CancelSend(self.id), timeout).
-					map(|timeout| self.protocol.send(event_loop, msg, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
-					map_err(|err| error!("[{:?}] failed to set timeout on send: '{:?}'", self.id, err));*/
+			if let Some(/*timeout*/_) = self.resend_interval {
 			}
 		}
 

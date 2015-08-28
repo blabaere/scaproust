@@ -10,11 +10,15 @@ The expected behavior is to wait the timeout for a pipe to be added (via reconne
 To be able to do that, it would require to move the pending message from proto-pipe to protocol.
 Each proto-pipe would then keep the progress status.
 In that case, status should be: sent, sending, postponed, failed, or none if no operation is in progress.
-When a proto-pipe, become ready and any pending operation should be handed to that proto-pipe.
+When a proto-pipe becomes ready, any pending operation should be handed to that proto-pipe.
 When the operation is finished, each proto-pipe is notified of the operation completion.
 
 For protocol that are sent to single, when a proto pipe status becomes sending or receiving,
 the other proto-pipes should have their current operation cancelled.
+
+Since pipe already holds the message to be sent of the on going operation, 
+it should be possible to avoid storing it in the proto-pipe.
+This requires to not clear the operation when it is postponed and to notify the protocol when a progress is started during readiness, in case it would be a send-to-single one.
 
 ### Next problem:
 There is too much code duplication in the protocol part.
