@@ -57,4 +57,4 @@ Some header related code could also be shared:
 https://github.com/dpc/mioco  
 https://github.com/dwrensha/gj  
 https://github.com/zonyitoo/simplesched  
-https://github.com/alexcrichton/wio (for appveyor ci script and doc publication)  
+https://github.com/alexcrichton/wio (for appveyor ci script and doc publication too)  
