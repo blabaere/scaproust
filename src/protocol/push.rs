@@ -171,22 +171,13 @@ impl PushPipe {
 	}
 
 	fn send(&mut self, msg: Rc<Message>) -> io::Result<Option<bool>> {
-		let progress = match try!(self.pipe.send(msg)) {
-			SendStatus::Completed => {
-				self.pipe.cancel_sending();
-				self.pending_send = None;
-				Some(true)
-			},
-			SendStatus::InProgress => {
-				self.pending_send = None;
-				Some(false)
-			},
-			SendStatus::Postponed(message) => {
-				self.pipe.cancel_sending();
-				self.pending_send = Some(message);
-				None
-			}
+		let (pending_send, progress) = match try!(self.pipe.send(msg)) {
+			SendStatus::Completed      => (None, Some(true)),
+			SendStatus::InProgress     => (None, Some(false)),
+			SendStatus::Postponed(msg) => (Some(msg), None)
 		};
+
+		self.pending_send = pending_send;
 
 		Ok(progress)
 	}

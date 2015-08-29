@@ -433,19 +433,11 @@ impl SurvPipe {
 	fn recv(&mut self) -> io::Result<RecvStatus> {
 		let progress = try!(self.pipe.recv());
 
-		match progress {
-			RecvStatus::Completed(_) => {
-				self.pipe.cancel_receiving();
-				self.pending_recv = false;
-			},
-			RecvStatus::InProgress => {
-				self.pending_recv = false;
-			},
-			RecvStatus::Postponed => {
-				self.pipe.cancel_receiving();
-				self.pending_recv = true;
-			}
-		}
+		self.pending_recv = match progress {
+			RecvStatus::Completed(_) => false,
+			RecvStatus::InProgress   => false,
+			RecvStatus::Postponed    => true
+		};
 
 		Ok(progress)
 	}

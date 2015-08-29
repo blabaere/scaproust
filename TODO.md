@@ -4,6 +4,33 @@
 - setup documentation generation and site and github pages
 - setup CI with appveyor once mio is compatible with windows
 
+### Small refactor to do before fixing problems:
+Create one ProtoPipe type to replace all exisiting protocol specific types.
+It only needs to:
+- Implement send
+- Implement recv
+- Store & expose its token
+- Store & expose the current send operation status
+- Store & expose the current recv operation status
+
+ProtoPipeSendStatus:
+Completed    // Message was successfully sent
+InProgress   // Message was partially sent, acquired by Endpoint
+Waiting(Msg) // Message was not send, postponed by Endpoint
+Failed       // Failure while trying to send
+None         // Nothing te be sent
+
+ProtoPipeRecvStatus:
+Completed    // Message was successfully received
+InProgress   // Message was partially received
+Waiting      // Message was not received, postponed by Endpoint
+Failed       // Failure while trying to received
+None         // Nothing te be received
+
+Only then, rename Pipe to Endpoint and ProtoPipe to Pipe.
+And find better name for the two SendStatus types.
+
+
 ### Current problem:  
 If no pipe is available when sending or receiving, an error is returned.
 The expected behavior is to wait the timeout for a pipe to be added (via reconnect or accept).
