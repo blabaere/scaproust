@@ -13,13 +13,14 @@ use mio;
 
 use super::Protocol;
 use pipe::*;
+use protopipe::*;
 use global::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
 use Message;
 
 pub struct Push {
-	pipes: HashMap<mio::Token, PushPipe>,
+	pipes: HashMap<mio::Token, ProtoPipe>,
 	evt_sender: Rc<mpsc::Sender<SocketEvt>>,
 	cancel_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>
 }
@@ -56,7 +57,7 @@ impl Protocol for Push {
 	}
 
 	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {
-		self.pipes.insert(token, PushPipe::new(pipe));
+		self.pipes.insert(token, ProtoPipe::new(token, pipe));
 	}
 
 	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
@@ -68,7 +69,7 @@ impl Protocol for Push {
 		let mut msg_sent = false;
 
 		if let Some(pipe) = self.pipes.get_mut(&token) {
-			let sent = try!(pipe.ready(event_loop, events));
+			let sent = try!(pipe.ready_tx(event_loop, events));
 
 			if sent {
 				msg_sent = true;
@@ -148,57 +149,5 @@ impl Protocol for Push {
 	}
 	
 	fn on_recv_timeout(&mut self, _: &mut EventLoop) {
-	}
-}
-
-struct PushPipe {
-    pipe: Pipe,
-    pending_send: Option<Rc<Message>>
-}
-
-impl PushPipe {
-	fn new(pipe: Pipe) -> PushPipe {
-		PushPipe { 
-			pipe: pipe,
-			pending_send: None
-		}
-	}
-
-	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<bool> {
-		let (sent, _) = try!(self.pipe.ready(event_loop, events));
-
-		Ok(sent)
-	}
-
-	fn send(&mut self, msg: Rc<Message>) -> io::Result<Option<bool>> {
-		let (pending_send, progress) = match try!(self.pipe.send(msg)) {
-			SendStatus::Completed      => (None, Some(true)),
-			SendStatus::InProgress     => (None, Some(false)),
-			SendStatus::Postponed(msg) => (Some(msg), None)
-		};
-
-		self.pending_send = pending_send;
-
-		Ok(progress)
-	}
-
-	fn on_send_timeout(&mut self) {
-		self.pending_send = None;
-		self.pipe.cancel_sending();
-	}
-
-	fn resume_pending_send(&mut self) -> io::Result<Option<bool>> {
-		match self.pending_send.take() {
-			None      => Ok(None),
-			Some(msg) => self.send(msg)
-		}
-	}
-
-	fn reset_pending_send(&mut self) {
-		self.pending_send = None;
-	}
-
-	fn remove(self) -> Pipe {
-		self.pipe
 	}
 }

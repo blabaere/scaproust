@@ -24,6 +24,7 @@ mod socket;
 mod protocol;
 mod transport;
 mod pipe;
+mod protopipe;
 mod acceptor;
 
 pub use facade::{

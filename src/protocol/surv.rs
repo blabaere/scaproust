@@ -17,13 +17,14 @@ use byteorder::{ BigEndian, WriteBytesExt, ReadBytesExt };
 
 use super::Protocol;
 use pipe::*;
+use protopipe::*;
 use global::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
 use Message;
 
 pub struct Surv {
-	pipes: HashMap<mio::Token, SurvPipe>,
+	pipes: HashMap<mio::Token, ProtoPipe>,
 	evt_sender: Rc<Sender<SocketEvt>>,
 	cancel_send_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
 	cancel_recv_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
@@ -151,7 +152,7 @@ impl Protocol for Surv {
 	}
 
 	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {
-		self.pipes.insert(token, SurvPipe::new(pipe));
+		self.pipes.insert(token, ProtoPipe::new(token, pipe));
 	}
 
 	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
@@ -349,120 +350,5 @@ impl Protocol for Surv {
 		for (_, pipe) in self.pipes.iter_mut() {
 			pipe.on_recv_timeout();
 		}
-	}
-}
-
-struct SurvPipe {
-    pipe: Pipe,
-    pending_send: Option<Rc<Message>>,
-    pending_recv: bool,
-    send_done: Option<bool>
-}
-
-impl SurvPipe {
-	fn new(pipe: Pipe) -> SurvPipe {
-		SurvPipe { 
-			pipe: pipe,
-			pending_send: None,
-			pending_recv: false,
-			send_done: None
-		}
-	}
-
-	fn send_status(&self) -> Option<bool> {
-		self.send_done.clone()
-	}
-
-	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<(bool, Option<Message>)> {
-		self.pipe.ready(event_loop, events)
-	}
-
-	fn send(&mut self, msg: Rc<Message>) -> io::Result<Option<bool>> {
-		let result = match self.pipe.send(msg) {
-			Ok(SendStatus::Completed) => {
-				self.pipe.cancel_sending();
-				self.pending_send = None;
-				self.send_done = Some(true);
-				Ok(Some(true))
-			},
-			Ok(SendStatus::InProgress) => {
-				self.pending_send = None;
-				self.send_done = Some(false);
-				Ok(Some(false))
-			},
-			Ok(SendStatus::Postponed(message)) => {
-				self.pipe.cancel_sending();
-				self.pending_send = Some(message);
-				self.send_done = Some(false);
-				Ok(None)
-			}
-			Err(e) => {
-				self.pipe.cancel_sending();
-				self.pending_send = None;
-				self.send_done = Some(true);
-				Err(e)
-			}
-		};
-
-		result
-	}
-
-	fn on_send_timeout(&mut self) {
-		self.pending_send = None;
-		self.send_done = None;
-		self.pipe.cancel_sending();
-	}
-
-	fn resume_pending_send(&mut self) -> io::Result<Option<bool>> {
-		match self.pending_send.take() {
-			None      => Ok(None),
-			Some(msg) => self.send(msg)
-		}
-	}
-
-	fn reset_pending_send(&mut self) {
-		self.pending_send = None;
-	}
-
-	fn on_msg_sending_finished(&mut self) {
-		self.pending_send = None;
-		self.send_done = None;
-		self.pipe.cancel_sending();
-	}
-
-	fn recv(&mut self) -> io::Result<RecvStatus> {
-		let progress = try!(self.pipe.recv());
-
-		self.pending_recv = match progress {
-			RecvStatus::Completed(_) => false,
-			RecvStatus::InProgress   => false,
-			RecvStatus::Postponed    => true
-		};
-
-		Ok(progress)
-	}
-
-	fn on_recv_timeout(&mut self) {
-		self.pending_recv = false;
-		self.pipe.cancel_receiving();
-	}
-
-	fn resume_pending_recv(&mut self) -> io::Result<Option<RecvStatus>> {
-		let result = if self.pending_recv {
-			let status = try!(self.pipe.recv());
-			Some(status)
-		} else {
-			None
-		};
-
-		Ok(result)
-	}
-
-	fn reset_pending_recv(&mut self) {
-		self.pending_recv = false;
-	}
-
-	fn remove(self) -> Pipe {
-		self.pipe
 	}
 }

@@ -13,13 +13,14 @@ use mio;
 
 use super::Protocol;
 use pipe::*;
+use protopipe::*;
 use global::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
 use Message;
 
 pub struct Pub {
-	pipes: HashMap<mio::Token, PubPipe>,
+	pipes: HashMap<mio::Token, ProtoPipe>,
 	evt_sender: Rc<Sender<SocketEvt>>,
 	cancel_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>
 }
@@ -64,7 +65,7 @@ impl Protocol for Pub {
 	}
 
 	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {
-		self.pipes.insert(token, PubPipe::new(pipe));
+		self.pipes.insert(token, ProtoPipe::new(token, pipe));
 	}
 
 	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
@@ -77,7 +78,7 @@ impl Protocol for Pub {
 
 		if let Some(pipe) = self.pipes.get_mut(&token) {
 			let mut sent = false;
-			match pipe.ready(event_loop, events) {
+			match pipe.ready_tx(event_loop, events) {
 				Ok(true)  => sent = true,
 				Ok(false) => {},
 				Err(e)    => result = Err(e)
@@ -179,88 +180,5 @@ impl Protocol for Pub {
 	}
 	
 	fn on_recv_timeout(&mut self, _: &mut EventLoop) {
-	}
-}
-
-struct PubPipe {
-    pipe: Pipe,
-    pending_send: Option<Rc<Message>>,
-    send_done: Option<bool> // if some, operation is finished or not ?
-}
-
-impl PubPipe {
-	fn new(pipe: Pipe) -> PubPipe {
-		PubPipe { 
-			pipe: pipe,
-			pending_send: None,
-			send_done: None
-		}
-	}
-
-	fn send_status(&self) -> Option<bool> {
-		self.send_done.clone()
-	}
-
-	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<bool> {
-		let (sent, _) = try!(self.pipe.ready(event_loop, events));
-
-		Ok(sent)
-	}
-
-	fn send(&mut self, msg: Rc<Message>) -> io::Result<Option<bool>> {
-		let result = match self.pipe.send(msg) {
-			Ok(SendStatus::Completed) => {
-				self.pipe.cancel_sending();
-				self.pending_send = None;
-				self.send_done = Some(true);
-				Ok(Some(true))
-			},
-			Ok(SendStatus::InProgress) => {
-				self.pending_send = None;
-				self.send_done = Some(false);
-				Ok(Some(false))
-			},
-			Ok(SendStatus::Postponed(message)) => {
-				self.pipe.cancel_sending();
-				self.pending_send = Some(message);
-				self.send_done = Some(false);
-				Ok(None)
-			}
-			Err(e) => {
-				self.pipe.cancel_sending();
-				self.pending_send = None;
-				self.send_done = Some(true);
-				Err(e)
-			}
-		};
-
-		result
-	}
-
-	fn on_send_timeout(&mut self) {
-		self.pending_send = None;
-		self.send_done = None;
-		self.pipe.cancel_sending();
-	}
-
-	fn resume_pending_send(&mut self) -> io::Result<Option<bool>> {
-		match self.pending_send.take() {
-			None      => Ok(None),
-			Some(msg) => self.send(msg)
-		}
-	}
-
-	fn reset_pending_send(&mut self) {
-		self.pending_send = None;
-	}
-
-	fn on_msg_sending_finished(&mut self) {
-		self.pending_send = None;
-		self.send_done = None;
-		self.pipe.cancel_sending();
-	}
-
-	fn remove(self) -> Pipe {
-		self.pipe
 	}
 }

@@ -13,13 +13,14 @@ use mio;
 
 use super::Protocol;
 use pipe::*;
+use protopipe::*;
 use global::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
 use Message;
 
 pub struct Pull {
-	pipes: HashMap<mio::Token, PullPipe>,
+	pipes: HashMap<mio::Token, ProtoPipe>,
 	evt_sender: Rc<mpsc::Sender<SocketEvt>>,
 	cancel_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>
 }
@@ -56,7 +57,7 @@ impl Protocol for Pull {
 	}
 
 	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {
-		self.pipes.insert(token, PullPipe::new(pipe));
+		self.pipes.insert(token, ProtoPipe::new(token, pipe));
 	}
 
 	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
@@ -68,7 +69,7 @@ impl Protocol for Pull {
 		let mut receiving_msg = false;
 
 		if let Some(pipe) = self.pipes.get_mut(&token) {
-			let received = try!(pipe.ready(event_loop, events));
+			let received = try!(pipe.ready_rx(event_loop, events));
 
 			if received.is_some() {
 				received_msg = received;
@@ -146,61 +147,5 @@ impl Protocol for Pull {
 		for (_, pipe) in self.pipes.iter_mut() {
 			pipe.on_recv_timeout();
 		}
-	}
-}
-
-struct PullPipe {
-    pipe: Pipe,
-    pending_recv: bool
-}
-
-impl PullPipe {
-	fn new(pipe: Pipe) -> PullPipe {
-		PullPipe { 
-			pipe: pipe,
-			pending_recv: false
-		}
-	}
-
-	fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<Option<Message>> {
-		let (_, received) = try!(self.pipe.ready(event_loop, events));
-
-		Ok(received)
-	}
-
-	fn recv(&mut self) -> io::Result<RecvStatus> {
-		let progress = try!(self.pipe.recv());
-
-		self.pending_recv = match progress {
-			RecvStatus::Completed(_) => false,
-			RecvStatus::InProgress   => false,
-			RecvStatus::Postponed    => true
-		};
-
-		Ok(progress)
-	}
-
-	fn on_recv_timeout(&mut self) {
-		self.pending_recv = false;
-		self.pipe.cancel_receiving();
-	}
-
-	fn resume_pending_recv(&mut self) -> io::Result<Option<RecvStatus>> {
-		let result = if self.pending_recv {
-			let status = try!(self.pipe.recv());
-			Some(status)
-		} else {
-			None
-		};
-
-		Ok(result)
-	}
-
-	fn reset_pending_recv(&mut self) {
-		self.pending_recv = false;
-	}
-
-	fn remove(self) -> Pipe {
-		self.pipe
 	}
 }
