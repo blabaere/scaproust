@@ -17,14 +17,14 @@ use byteorder::{ BigEndian, WriteBytesExt, ReadBytesExt };
 
 use super::Protocol;
 use pipe::*;
-use protopipe::*;
+use endpoint::*;
 use global::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
 use Message;
 
 pub struct Surv {
-	pipes: HashMap<mio::Token, ProtoPipe>,
+	pipes: HashMap<mio::Token, Pipe>,
 	evt_sender: Rc<Sender<SocketEvt>>,
 	cancel_send_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
 	cancel_recv_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
@@ -151,11 +151,11 @@ impl Protocol for Surv {
 		SocketType::Respondent.id()
 	}
 
-	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {
-		self.pipes.insert(token, ProtoPipe::new(token, pipe));
+	fn add_endpoint(&mut self, token: mio::Token, endpoint: Endpoint) {
+		self.pipes.insert(token, Pipe::new(token, endpoint));
 	}
 
-	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
+	fn remove_endpoint(&mut self, token: mio::Token) -> Option<Endpoint> {
 		self.pipes.remove(&token).map(|p| p.remove())
 	}
 

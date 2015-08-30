@@ -12,7 +12,7 @@ use mio;
 
 use global::SocketType as SocketType;
 use event_loop_msg::SocketEvt;
-use pipe::*;
+use endpoint::Endpoint;
 use EventLoop;
 use Message;
 
@@ -46,8 +46,8 @@ pub trait Protocol {
 	fn id(&self) -> u16;
 	fn peer_id(&self) -> u16;
 
-	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe);
-	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
+	fn add_endpoint(&mut self, token: mio::Token, endpoint: Endpoint);
+	fn remove_endpoint(&mut self, token: mio::Token) -> Option<Endpoint>;
 
 	fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()>;
 

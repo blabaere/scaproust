@@ -14,18 +14,18 @@ It only needs to:
 - Store & expose the current recv operation status
 
 ProtoPipeSendStatus:
-Completed    // Message was successfully sent
-InProgress   // Message was partially sent, acquired by Endpoint
-Waiting(Msg) // Message was not send, postponed by Endpoint
-Failed       // Failure while trying to send
-None         // Nothing te be sent
+- Completed    // Message was successfully sent
+- InProgress   // Message was partially sent, acquired by Endpoint
+- Waiting(Msg) // Message was not send, postponed by Endpoint
+- Failed       // Failure while trying to send
+- None         // Nothing te be sent
 
 ProtoPipeRecvStatus:
-Completed    // Message was successfully received
-InProgress   // Message was partially received
-Waiting      // Message was not received, postponed by Endpoint
-Failed       // Failure while trying to received
-None         // Nothing te be received
+- Completed    // Message was successfully received
+- InProgress   // Message was partially received
+- Waiting      // Message was not received, postponed by Endpoint
+- Failed       // Failure while trying to received
+- None         // Nothing te be received
 
 Only then, rename Pipe to Endpoint and ProtoPipe to Pipe.
 And find better name for the two SendStatus types.

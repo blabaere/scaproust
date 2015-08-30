@@ -23,8 +23,8 @@ mod session;
 mod socket;
 mod protocol;
 mod transport;
+mod endpoint;
 mod pipe;
-mod protopipe;
 mod acceptor;
 
 pub use facade::{

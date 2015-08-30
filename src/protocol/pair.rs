@@ -12,14 +12,14 @@ use mio;
 
 use super::Protocol;
 use pipe::*;
-use protopipe::*;
+use endpoint::*;
 use global::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
 use Message;
 
 pub struct Pair {
-	pipe: Option<ProtoPipe>,
+	pipe: Option<Pipe>,
 	evt_sender: Rc<Sender<SocketEvt>>,
 	cancel_send_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
 	cancel_recv_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>
@@ -83,11 +83,11 @@ impl Protocol for Pair {
 		SocketType::Pair.id()
 	}
 
-	fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {
-		self.pipe = Some(ProtoPipe::new(token, pipe));
+	fn add_endpoint(&mut self, token: mio::Token, endpoint: Endpoint) {
+		self.pipe = Some(Pipe::new(token, endpoint));
 	}
 
-	fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
+	fn remove_endpoint(&mut self, token: mio::Token) -> Option<Endpoint> {
 		if Some(token) == self.pipe.as_ref().map(|p| p.token()) {
 			self.pipe.take().map(|p| p.remove())
 		} else {
