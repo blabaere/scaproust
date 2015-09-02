@@ -11,243 +11,251 @@ use std::boxed::FnBox;
 use mio;
 
 use super::Protocol;
-use pipe::*;
+use pipe2::*;
 use endpoint::*;
 use global::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
+use EventLoopAction;
 use Message;
 
 pub struct Pair {
-	pipe: Option<Pipe>,
-	evt_sender: Rc<Sender<SocketEvt>>,
-	cancel_send_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
-	cancel_recv_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>
+    pipe: Option<Pipe>,
+    evt_sender: Rc<Sender<SocketEvt>>,
+    cancel_send_timeout: Option<EventLoopAction>,
+    cancel_recv_timeout: Option<EventLoopAction>,
+    pending_msg: Option<Rc<Message>>,
+    pending_recv: bool
 }
 
 impl Pair {
-	pub fn new(evt_sender: Rc<Sender<SocketEvt>>) -> Pair {
-		Pair { 
-			pipe: None,
-			evt_sender: evt_sender,
-			cancel_send_timeout: None,
-			cancel_recv_timeout: None
-		}
-	}
+    pub fn new(evt_sender: Rc<Sender<SocketEvt>>) -> Pair {
+        Pair { 
+            pipe: None,
+            evt_sender: evt_sender,
+            cancel_send_timeout: None,
+            cancel_recv_timeout: None,
+            pending_msg: None,
+            pending_recv: false
+        }
+    }
 
-	fn on_msg_send_ok(&mut self, event_loop: &mut EventLoop) {
-		let evt = SocketEvt::MsgSent;
-		let timeout = self.cancel_send_timeout.take();
+    fn on_msg_send_finished(&mut self, 
+        event_loop: &mut EventLoop, 
+        evt: SocketEvt, 
+        timeout: Option<EventLoopAction>) {
+        let _ = self.evt_sender.send(evt);
 
-		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
-	}
+        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
 
-	fn on_msg_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
-		let evt = SocketEvt::MsgNotSent(err);
-		let timeout = self.cancel_send_timeout.take();
+        self.pending_msg = None;
+    }
 
-		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
-	}
+    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop) {
+        let evt = SocketEvt::MsgSent;
+        let timeout = self.cancel_send_timeout.take();
 
-	fn on_msg_recv_ok(&mut self, event_loop: &mut EventLoop, msg: Message) {
-		let evt = SocketEvt::MsgRecv(msg);
-		let timeout = self.cancel_recv_timeout.take();
+        self.on_msg_send_finished(event_loop, evt, timeout);
 
-		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
-	}
+        if let Some(pipe) = self.pipe.as_mut() {
+            pipe.finish_send(); 
+        }
+    }
 
-	fn on_msg_recv_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
-		let evt = SocketEvt::MsgNotRecv(err);
-		let timeout = self.cancel_recv_timeout.take();
+    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
+        let evt = SocketEvt::MsgNotSent(err);
+        let timeout = self.cancel_send_timeout.take();
 
-		self.send_event_and_cancel_timeout(event_loop, evt, timeout)
-	}
+        self.on_msg_send_finished(event_loop, evt, timeout);
 
-	fn send_event_and_cancel_timeout(&self, 
-		event_loop: &mut EventLoop, 
-		evt: SocketEvt, 
-		timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>) {
-		
-		let _ = self.evt_sender.send(evt);
+        if let Some(pipe) = self.pipe.as_mut() {
+            pipe.cancel_send(); 
+        }
+    }
 
-		timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
-	}
+    fn on_msg_send_started(&mut self) {
+        self.pending_msg = None;
+    }
+
+    fn process_send_result(&mut self, event_loop: &mut EventLoop, sent: bool, sending: bool) {
+        if sent {
+            self.on_msg_send_finished_ok(event_loop);
+        } else if sending {
+            self.on_msg_send_started();
+        }
+    }
+
+    fn on_msg_recv_finished(&mut self, 
+        event_loop: &mut EventLoop, 
+        evt: SocketEvt, 
+        timeout: Option<EventLoopAction>) {
+        let _ = self.evt_sender.send(evt);
+
+        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+
+        self.pending_recv = false;
+    }
+
+    fn on_msg_recv_finished_ok(&mut self, event_loop: &mut EventLoop, msg: Message) {
+        let evt = SocketEvt::MsgRecv(msg);
+        let timeout = self.cancel_recv_timeout.take();
+
+        self.on_msg_recv_finished(event_loop, evt, timeout);
+
+        if let Some(pipe) = self.pipe.as_mut() {
+            pipe.finish_recv(); 
+        }
+    }
+
+    fn on_msg_recv_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
+        let evt = SocketEvt::MsgNotRecv(err);
+        let timeout = self.cancel_recv_timeout.take();
+
+        self.on_msg_recv_finished(event_loop, evt, timeout);
+
+        if let Some(pipe) = self.pipe.as_mut() {
+            pipe.cancel_recv(); 
+        }
+    }
+
+    fn on_msg_recv_started(&mut self, _: mio::Token) {
+        self.pending_recv = false;
+    }
+
+    fn process_recv_result(&mut self, event_loop: &mut EventLoop, received: Option<Message>, receiving: Option<mio::Token>) {
+        if let Some(msg) = received {
+            self.on_msg_recv_finished_ok(event_loop, msg);
+        }
+        else if let Some(token) = receiving {
+            self.on_msg_recv_started(token);
+        }
+    }
 }
 
 impl Protocol for Pair {
-	fn id(&self) -> u16 {
-		SocketType::Pair.id()
-	}
 
-	fn peer_id(&self) -> u16 {
-		SocketType::Pair.id()
-	}
+    fn id(&self) -> u16 {
+        SocketType::Pair.id()
+    }
 
-	fn add_endpoint(&mut self, token: mio::Token, endpoint: Endpoint) {
-		self.pipe = Some(Pipe::new(token, endpoint));
-	}
+    fn peer_id(&self) -> u16 {
+        SocketType::Pair.id()
+    }
 
-	fn remove_endpoint(&mut self, token: mio::Token) -> Option<Endpoint> {
-		if Some(token) == self.pipe.as_ref().map(|p| p.token()) {
-			self.pipe.take().map(|p| p.remove())
-		} else {
-			None
-		}
-	}
+    fn add_endpoint(&mut self, token: mio::Token, endpoint: Endpoint) {
+        self.pipe = Some(Pipe::new(token, endpoint));
+    }
 
-	fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
-		if self.pipe.is_none() {
-			return Ok(());
-		}
-		if Some(token) != self.pipe.as_ref().map(|p| p.token()) {
-			return Ok(());
-		}
+    fn remove_endpoint(&mut self, token: mio::Token) -> Option<Endpoint> {
+        if Some(token) == self.pipe.as_ref().map(|p| p.token()) {
+            self.pipe.take().map(|p| p.remove())
+        } else {
+            None
+        }
+    }
 
-		let mut pipe = self.pipe.take().unwrap();
-		let mut msg_sending = false;
-		let mut msg_sent = false;
-		let mut received_msg = None;
-		let mut receiving_msg = false;
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
+        self.cancel_send_timeout = Some(cancel_timeout);
 
-		let (sent, received) = try!(pipe.ready(event_loop, events));
+        if self.pipe.is_none() {
+            self.pending_msg = Some(Rc::new(msg));
+            return;
+        }
 
-		if sent {
-			msg_sent = true;
-		} else {
-			match try!(pipe.resume_pending_send()) {
-				Some(true)  => msg_sent = true,
-				Some(false) => msg_sending = true,
-				None        => {}
-			}
-		}
+        let mut pipe = self.pipe.take().unwrap();
+        let mut sent = false;
+        let mut sending = false;
+        let msg = Rc::new(msg);
 
-		if received.is_some() {
-			received_msg = received;
-		} else {
-			match try!(pipe.resume_pending_recv()) {
-				Some(RecvStatus::Completed(msg))   => received_msg = Some(msg),
-				Some(RecvStatus::InProgress)       => receiving_msg = true,
-				Some(RecvStatus::Postponed) | None => {}
-			}
-		}
+        match pipe.send(msg.clone()) {
+            Ok(SendStatus::Completed)  => sent = true,
+            Ok(SendStatus::InProgress) => sending = true,
+            _ => {}
+        }
 
-		if msg_sent {
-			self.on_msg_send_ok(event_loop);
-		}
+        self.pipe = Some(pipe);
+        self.pending_msg = Some(msg);
+        self.process_send_result(event_loop, sent, sending);
+    }
 
-		if msg_sending | msg_sent {
-			pipe.reset_pending_send();
-		}
+    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
 
-		if received_msg.is_some() | receiving_msg {
-			pipe.reset_pending_recv();
-		}
+        self.on_msg_send_finished_err(event_loop, err);
+    }
 
-		if received_msg.is_some() {
-			self.on_msg_recv_ok(event_loop, received_msg.unwrap());
-		}
+    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
+        self.cancel_recv_timeout = Some(cancel_timeout);
 
-		self.pipe = Some(pipe);
+        if self.pipe.is_none() {
+            self.pending_recv = true;
+            return;
+        }
 
-		Ok(())
-	}
+        let mut pipe = self.pipe.take().unwrap();
+        let mut received = None;
+        let mut receiving = None;
 
-	fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
-		if self.pipe.is_none() {
-			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
+        match pipe.recv() {
+            Ok(RecvStatus::Completed(msg)) => received = Some(msg),
+            Ok(RecvStatus::InProgress)     => receiving = Some(pipe.token()),
+            _ => {}
+        }
 
-			self.on_msg_send_err(event_loop, err);
+        self.pipe = Some(pipe);
+        self.pending_recv = true;
+        self.process_recv_result(event_loop, received, receiving);
+    }
+    
+    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
 
-			return;
-		}
+        self.on_msg_recv_finished_err(event_loop, err);
+    }
 
-		let mut pipe = self.pipe.take().unwrap();
+    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
+        if self.pipe.is_none() {
+            return Ok(());
+        }
+        if Some(token) != self.pipe.as_ref().map(|p| p.token()) {
+            return Ok(());
+        }
 
-		self.cancel_send_timeout = Some(cancel_timeout);
+        let mut pipe = self.pipe.take().unwrap();
+        let (sent, received) = try!(pipe.ready(event_loop, events));
 
-		let mut sent = false;
-		let mut sending = false;
-		let mut pending = false;
+        let has_pending_send = self.pending_msg.is_some();
+        let mut sent = sent;
+        let mut sending = false;
 
-		match pipe.send(Rc::new(msg)) {
-			Ok(Some(true))  => sent = true,
-			Ok(Some(false)) => sending = true,
-			Ok(None)        => pending = true,
-			Err(_)          => {} 
-			// this pipe looks dead, but it will be taken care of during next ready notification
-		}
+        if has_pending_send && !sent && pipe.can_resume_send() {
+            let msg = self.pending_msg.as_ref().unwrap();
 
-		if sent {
-			self.on_msg_send_ok(event_loop);
-		}
+            match try!(pipe.send(msg.clone())) {
+                SendStatus::Completed  => sent = true,
+                SendStatus::InProgress => sending = true,
+                _ => {}
+            }
+        }
 
-		if sent | sending {
-			pipe.reset_pending_send();
-		} else if pending == false {
-			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
+        self.process_send_result(event_loop, sent, sending);
 
-			self.on_msg_send_err(event_loop, err);
-		}
+        let has_pending_recv = self.pending_recv;
+        let mut received = received;
+        let mut receiving = None;
 
-		self.pipe = Some(pipe);
-	}
+        if has_pending_recv && received.is_none() && pipe.can_resume_recv() {
+            match try!(pipe.recv()) {
+                RecvStatus::Completed(msg) => received = Some(msg),
+                RecvStatus::InProgress     => receiving = Some(token),
+                _ => {}
+            }
+        }
 
-	fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-		let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
+        self.process_recv_result(event_loop, received, receiving);
 
-		self.on_msg_send_err(event_loop, err);
+        self.pipe = Some(pipe);
 
-		if let Some(pipe) = self.pipe.as_mut() {
-			pipe.on_send_timeout();
-		}
-	}
-
-	fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
-		if self.pipe.is_none() {
-			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
-
-			self.on_msg_send_err(event_loop, err);
-
-			return;
-		}
-
-		let mut pipe = self.pipe.take().unwrap();
-
-		self.cancel_recv_timeout = Some(cancel_timeout);
-
-		let mut received = None;
-		let mut receiving = false;
-		let mut pending = false;
-
-		match pipe.recv() {
-			Ok(RecvStatus::Completed(msg)) => received = Some(msg),
-			Ok(RecvStatus::InProgress)     => receiving = true,
-			Ok(RecvStatus::Postponed)      => pending = true,
-			Err(_)                         => {}
-		}
-
-		if received.is_some() | receiving {
-			pipe.reset_pending_recv();
-		} else if pending == false {
-			let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
-
-			self.on_msg_recv_err(event_loop, err);
-		}
-
-		if received.is_some() {
-			self.on_msg_recv_ok(event_loop, received.unwrap());
-		}
-
-		self.pipe = Some(pipe);
-	}
-	
-	fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-		let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
-
-		self.on_msg_recv_err(event_loop, err);
-
-		if let Some(pipe) = self.pipe.as_mut() {
-			pipe.on_recv_timeout();
-		}
-	}
+        Ok(())
+    }
 }

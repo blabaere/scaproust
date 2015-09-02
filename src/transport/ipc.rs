@@ -16,54 +16,54 @@ pub struct Ipc;
 
 impl Transport for Ipc {
 
-	fn connect(&self, addr: &str) -> io::Result<Box<Connection>> {
-		self.connect(path::Path::new(addr))
-	}
+    fn connect(&self, addr: &str) -> io::Result<Box<Connection>> {
+        self.connect(path::Path::new(addr))
+    }
 
-	fn bind(&self, addr: &str) -> io::Result<Box<Listener>> {
-		self.bind(path::Path::new(addr))
-	}
+    fn bind(&self, addr: &str) -> io::Result<Box<Listener>> {
+        self.bind(path::Path::new(addr))
+    }
 
 }
 
 impl Ipc {
 
-	fn connect(&self, addr: &path::Path) -> Result<Box<Connection>, io::Error> {
-		let ipc_stream = try!(unix::UnixStream::connect(&addr));
-		let connection = IpcConnection { stream: ipc_stream };
+    fn connect(&self, addr: &path::Path) -> Result<Box<Connection>, io::Error> {
+        let ipc_stream = try!(unix::UnixStream::connect(&addr));
+        let connection = IpcConnection { stream: ipc_stream };
 
-		Ok(Box::new(connection))
-	}
-	
-	fn bind(&self, path: &path::Path) -> Result<Box<Listener>, io::Error> {
-		if fs::metadata(path).is_ok() {
-			let _ = fs::remove_file(path);
-		}
+        Ok(Box::new(connection))
+    }
+    
+    fn bind(&self, path: &path::Path) -> Result<Box<Listener>, io::Error> {
+        if fs::metadata(path).is_ok() {
+            let _ = fs::remove_file(path);
+        }
 
-		let ipc_listener = try!(unix::UnixListener::bind(path));
-		let listener = IpcListener { listener: ipc_listener };
+        let ipc_listener = try!(unix::UnixListener::bind(path));
+        let listener = IpcListener { listener: ipc_listener };
 
-		Ok(Box::new(listener))
-	}
-	
+        Ok(Box::new(listener))
+    }
+    
 }
 
 struct IpcConnection {
-	stream: unix::UnixStream
+    stream: unix::UnixStream
 }
 
 impl Connection for IpcConnection {
-	fn try_read(&mut self, buf: &mut [u8]) -> Result<Option<usize>, io::Error> {
-		self.stream.try_read(buf)
-	}
+    fn try_read(&mut self, buf: &mut [u8]) -> Result<Option<usize>, io::Error> {
+        self.stream.try_read(buf)
+    }
 
-	fn try_write(&mut self, buf: &[u8]) -> Result<Option<usize>, io::Error> {
-		self.stream.try_write(buf)
-	}
+    fn try_write(&mut self, buf: &[u8]) -> Result<Option<usize>, io::Error> {
+        self.stream.try_write(buf)
+    }
 
-	fn as_evented(&self) -> &Evented {
-		&self.stream
-	}
+    fn as_evented(&self) -> &Evented {
+        &self.stream
+    }
 }
 
 struct IpcListener {
@@ -72,20 +72,20 @@ struct IpcListener {
 
 impl Listener for IpcListener {
 
-	fn as_evented(&self) -> &Evented {
-		&self.listener
-	}
+    fn as_evented(&self) -> &Evented {
+        &self.listener
+    }
 
-	fn accept(&mut self) -> io::Result<Vec<Box<Connection>>> {
-		let mut conns: Vec<Box<Connection>> = Vec::new();
+    fn accept(&mut self) -> io::Result<Vec<Box<Connection>>> {
+        let mut conns: Vec<Box<Connection>> = Vec::new();
 
-		loop {
-			match try!(self.listener.accept()) {
-				Some(s) => conns.push(Box::new(IpcConnection { stream: s })),
-				None    => break
-			}
-		}
+        loop {
+            match try!(self.listener.accept()) {
+                Some(s) => conns.push(Box::new(IpcConnection { stream: s })),
+                None    => break
+            }
+        }
 
-		Ok(conns)
-	}
+        Ok(conns)
+    }
 }

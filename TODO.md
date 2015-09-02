@@ -1,3 +1,6 @@
+Update rust-closure-playground repo with FnBox findings
+
+
 ### General:
 - write documentation
 - adds embedded code example to the front page

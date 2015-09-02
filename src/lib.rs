@@ -25,16 +25,20 @@ mod protocol;
 mod transport;
 mod endpoint;
 mod pipe;
+mod pipe2;
 mod acceptor;
 
+use std::boxed::FnBox;
+
 pub use facade::{
-	SessionFacade as Session,
-	SocketFacade as Socket
+    SessionFacade as Session,
+    SocketFacade as Socket
 };
 
 pub use global::SocketType;
 
 type EventLoop = mio::EventLoop<session::Session>;
+type EventLoopAction = Box<FnBox(&mut EventLoop) -> bool>;
 
 pub struct Message {
     pub header: Vec<u8>,
@@ -42,34 +46,34 @@ pub struct Message {
 }
 
 impl Message {
-	pub fn with_body(buffer: Vec<u8>) -> Message {
-		Message {
-			header: Vec::new(),
-			body: buffer
-		}
-	}
+    pub fn with_body(buffer: Vec<u8>) -> Message {
+        Message {
+            header: Vec::new(),
+            body: buffer
+        }
+    }
 
-	pub fn with_header_and_body(header: Vec<u8>, buffer: Vec<u8>) -> Message {
-		Message { header: header, body: buffer }
-	}
+    pub fn with_header_and_body(header: Vec<u8>, buffer: Vec<u8>) -> Message {
+        Message { header: header, body: buffer }
+    }
 
-	pub fn len(&self) -> usize {
-		self.header.len() + self.body.len()
-	}
+    pub fn len(&self) -> usize {
+        self.header.len() + self.body.len()
+    }
 
-	pub fn get_header<'a>(&'a self) -> &'a [u8] {
-		&self.header
-	}
+    pub fn get_header<'a>(&'a self) -> &'a [u8] {
+        &self.header
+    }
 
-	pub fn get_body<'a>(&'a self) -> &'a [u8] {
-		&self.body
-	}
+    pub fn get_body<'a>(&'a self) -> &'a [u8] {
+        &self.body
+    }
 
-	pub fn to_buffer(self) -> Vec<u8> {
-		self.body
-	}
+    pub fn to_buffer(self) -> Vec<u8> {
+        self.body
+    }
 
-	pub fn explode(self) -> (Vec<u8>, Vec<u8>) {
-		(self.header, self.body)
-	}
+    pub fn explode(self) -> (Vec<u8>, Vec<u8>) {
+        (self.header, self.body)
+    }
 }

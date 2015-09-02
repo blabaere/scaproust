@@ -13,38 +13,38 @@ use global::*;
 use Message;
 
 pub enum EventLoopCmd {
-	SessionLevel(SessionCmd),
-	SocketLevel(SocketId, SocketCmd)
+    SessionLevel(SessionCmd),
+    SocketLevel(SocketId, SocketCmd)
 }
 
 pub enum SessionCmd {
-	CreateSocket(SocketType),
-	Shutdown
+    CreateSocket(SocketType),
+    Shutdown
 }
 
 pub enum SocketCmd {
-	Connect(String),
-	Bind(String),
-	SendMsg(Message),
-	RecvMsg,
-	SetOption(SocketOption)
+    Connect(String),
+    Bind(String),
+    SendMsg(Message),
+    RecvMsg,
+    SetOption(SocketOption)
 }
 
 pub enum SocketOption {
-	SendTimeout(time::Duration),
-	RecvTimeout(time::Duration)
+    SendTimeout(time::Duration),
+    RecvTimeout(time::Duration)
 }
 
 pub enum EventLoopTimeout {
-	Reconnect(mio::Token, String),
-	Rebind(mio::Token, String),
-	CancelSend(SocketId),
-	CancelRecv(SocketId)/*,
-	Resend(SocketId)*/
+    Reconnect(mio::Token, String),
+    Rebind(mio::Token, String),
+    CancelSend(SocketId),
+    CancelRecv(SocketId)/*,
+    Resend(SocketId)*/
 }
 
 pub enum SessionEvt {
-	SocketCreated(SocketId, mpsc::Receiver<SocketEvt>)
+    SocketCreated(SocketId, mpsc::Receiver<SocketEvt>)
 }
 
 pub enum SocketEvt {
@@ -52,10 +52,10 @@ pub enum SocketEvt {
     NotConnected(io::Error),
     Bound,
     NotBound(io::Error),
-	MsgSent,
-	MsgNotSent(io::Error),
-	MsgRecv(Message),
-	MsgNotRecv(io::Error),
-	OptionSet,
-	OptionNotSet(io::Error)
+    MsgSent,
+    MsgNotSent(io::Error),
+    MsgRecv(Message),
+    MsgNotRecv(io::Error),
+    OptionSet,
+    OptionNotSet(io::Error)
 }
