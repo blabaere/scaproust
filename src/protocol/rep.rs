@@ -245,22 +245,21 @@ impl Protocol for Rep {
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
         self.cancel_send_timeout = Some(cancel_timeout);
 
-        let (raw_msg, pipe_token) = match self.msg_to_raw_msg(msg) {
+        let (raw_msg, token) = match self.msg_to_raw_msg(msg) {
             Err(e) => return self.on_msg_send_finished_err(event_loop, e),
-            Ok((raw_msg, pipe_token)) => (raw_msg, pipe_token)
+            Ok((raw_msg, token)) => (raw_msg, token)
         };
 
         let mut sent = false;
         let mut sending = None;
         let msg = Rc::new(raw_msg);
 
-        for (_, pipe) in self.pipes.iter_mut() {
+        if let Some(pipe) = self.pipes.get_mut(&token) {
             match pipe.send(msg.clone()) {
                 Ok(SendStatus::Completed)  => sent = true,
                 Ok(SendStatus::InProgress) => sending = Some(pipe.token()),
-                _ => continue
+                _ => {}
             }
-            break;
         }
 
         self.pending_send = Some(msg);

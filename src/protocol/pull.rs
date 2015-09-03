@@ -46,7 +46,7 @@ impl Pull {
     }
 
     fn on_msg_recv_finished_ok(&mut self, event_loop: &mut EventLoop, msg: Message) {
-        self.on_msg_recv_finished(SocketEvt::MsgRecv(msg));
+        self.on_msg_recv_finished(event_loop, SocketEvt::MsgRecv(msg));
 
         for (_, pipe) in self.pipes.iter_mut() {
             pipe.finish_recv(); 
@@ -54,7 +54,7 @@ impl Pull {
     }
 
     fn on_msg_recv_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
-        self.on_msg_recv_finished(SocketEvt::MsgNotRecv(err));
+        self.on_msg_recv_finished(event_loop, SocketEvt::MsgNotRecv(err));
 
         for (_, pipe) in self.pipes.iter_mut() {
             pipe.cancel_recv();
