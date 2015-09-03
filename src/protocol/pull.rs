@@ -7,7 +7,6 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::collections::HashMap;
 use std::io;
-use std::boxed::FnBox;
 
 use mio;
 
@@ -37,21 +36,26 @@ impl Pull {
         }
     }
 
-    fn on_msg_recv_finished_ok(&mut self, event_loop: &mut EventLoop, msg: Message) {
-        let _ = self.evt_sender.send(SocketEvt::MsgRecv(msg));
+    fn on_msg_recv_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
+        let _ = self.evt_sender.send(evt);
+        let timeout = self.cancel_timeout.take();
 
-        self.cancel_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+
         self.pending_recv = false;
+    }
+
+    fn on_msg_recv_finished_ok(&mut self, event_loop: &mut EventLoop, msg: Message) {
+        self.on_msg_recv_finished(SocketEvt::MsgRecv(msg));
+
         for (_, pipe) in self.pipes.iter_mut() {
             pipe.finish_recv(); 
         }
     }
 
     fn on_msg_recv_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
-        let _ = self.evt_sender.send(SocketEvt::MsgNotRecv(err));
+        self.on_msg_recv_finished(SocketEvt::MsgNotRecv(err));
 
-        self.cancel_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
-        self.pending_recv = false;
         for (_, pipe) in self.pipes.iter_mut() {
             pipe.cancel_recv();
         }
@@ -95,29 +99,7 @@ impl Protocol for Pull {
         self.pipes.remove(&token).map(|p| p.remove())
     }
 
-    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
-        let has_pending_recv = self.pending_recv;
-        let mut received = None;
-        let mut receiving = None;
-
-        if let Some(pipe) = self.pipes.get_mut(&token) {
-            received = try!(pipe.ready_rx(event_loop, events));
-
-            if has_pending_recv && received.is_none() && pipe.can_resume_recv() {
-                match try!(pipe.recv()) {
-                    RecvStatus::Completed(msg) => received = Some(msg),
-                    RecvStatus::InProgress     => receiving = Some(token),
-                    _ => {}
-                }
-            }
-        }
-
-        self.process_recv_result(event_loop, received, receiving);
-
-        Ok(())
-    }
-
-    fn send(&mut self, _: &mut EventLoop, _: Message, _: Box<FnBox(&mut EventLoop)-> bool>) {
+    fn send(&mut self, _: &mut EventLoop, _: Message, _: EventLoopAction) {
         let err = other_io_error("send not supported by protocol");
         let cmd = SocketEvt::MsgNotSent(err);
         let _ = self.evt_sender.send(cmd);
@@ -148,5 +130,27 @@ impl Protocol for Pull {
         let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
 
         self.on_msg_recv_finished_err(event_loop, err);
-   }
+    }
+
+    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
+        let has_pending_recv = self.pending_recv;
+        let mut received = None;
+        let mut receiving = None;
+
+        if let Some(pipe) = self.pipes.get_mut(&token) {
+            received = try!(pipe.ready_rx(event_loop, events));
+
+            if has_pending_recv && received.is_none() && pipe.can_resume_recv() {
+                match try!(pipe.recv()) {
+                    RecvStatus::Completed(msg) => received = Some(msg),
+                    RecvStatus::InProgress     => receiving = Some(token),
+                    _ => {}
+                }
+            }
+        }
+
+        self.process_recv_result(event_loop, received, receiving);
+
+        Ok(())
+    }
 }

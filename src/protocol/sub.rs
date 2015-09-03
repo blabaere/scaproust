@@ -7,22 +7,23 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::collections::HashMap;
 use std::io;
-use std::boxed::FnBox;
 
 use mio;
 
 use super::Protocol;
-use pipe::*;
+use pipe2::*;
 use endpoint::*;
 use global::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
+use EventLoopAction;
 use Message;
 
 pub struct Sub {
     pipes: HashMap<mio::Token, Pipe>,
     evt_sender: Rc<mpsc::Sender<SocketEvt>>,
-    cancel_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>
+    cancel_timeout: Option<EventLoopAction>,
+    pending_recv: bool
 }
 
 impl Sub {
@@ -30,20 +31,56 @@ impl Sub {
         Sub { 
             pipes: HashMap::new(),
             evt_sender: evt_sender,
-            cancel_timeout: None
+            cancel_timeout: None,
+            pending_recv: false
         }
     }
 
-    fn on_msg_recv_ok(&mut self, event_loop: &mut EventLoop, msg: Message) {
-        let _ = self.evt_sender.send(SocketEvt::MsgRecv(msg));
+    fn on_msg_recv_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
+        let _ = self.evt_sender.send(evt);
+        let timeout = self.cancel_timeout.take();
 
-        self.cancel_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+
+        self.pending_recv = false;
     }
 
-    fn on_msg_recv_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
-        let _ = self.evt_sender.send(SocketEvt::MsgNotRecv(err));
+    fn on_msg_recv_finished_ok(&mut self, event_loop: &mut EventLoop, msg: Message) {
+        self.on_msg_recv_finished(SocketEvt::MsgRecv(msg));
 
-        self.cancel_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+        for (_, pipe) in self.pipes.iter_mut() {
+            pipe.finish_recv(); 
+        }
+    }
+
+    fn on_msg_recv_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
+        self.on_msg_recv_finished(SocketEvt::MsgNotRecv(err));
+
+        for (_, pipe) in self.pipes.iter_mut() {
+            pipe.cancel_recv();
+        }
+    }
+
+    fn on_msg_recv_started(&mut self, token: mio::Token) {
+        self.pending_recv = false;
+        for (_, pipe) in self.pipes.iter_mut() {
+            if pipe.token() == token {
+                continue;
+            } else {
+                pipe.discard_recv();
+            }
+        }
+    }
+
+    // TODO filter message against subscriptions here
+    // try again if message does not match
+    fn process_recv_result(&mut self, event_loop: &mut EventLoop, received: Option<Message>, receiving: Option<mio::Token>) {
+        if let Some(msg) = received {
+            self.on_msg_recv_finished_ok(event_loop, msg);
+        }
+        else if let Some(token) = receiving {
+            self.on_msg_recv_started(token);
+        }
     }
 }
 
@@ -64,41 +101,7 @@ impl Protocol for Sub {
         self.pipes.remove(&token).map(|p| p.remove())
     }
 
-    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
-        let mut received_msg = None;
-        let mut receiving_msg = false;
-
-        if let Some(pipe) = self.pipes.get_mut(&token) {
-            let received = try!(pipe.ready_rx(event_loop, events));
-
-            if received.is_some() {
-                received_msg = received;
-            } else {
-                match try!(pipe.resume_pending_recv()) {
-                    Some(RecvStatus::Completed(msg))   => received_msg = Some(msg),
-                    Some(RecvStatus::InProgress)       => receiving_msg = true,
-                    Some(RecvStatus::Postponed) | None => {}
-                }
-            }
-        }
-
-        // TODO filter message against subscriptions here
-        // try again if message does not match
-
-        if received_msg.is_some() | receiving_msg {
-            for (_, pipe) in self.pipes.iter_mut() {
-                pipe.reset_pending_recv();
-            }
-        }
-
-        if received_msg.is_some() {
-            self.on_msg_recv_ok(event_loop, received_msg.unwrap());
-        }
-
-        Ok(())
-    }
-
-    fn send(&mut self, _: &mut EventLoop, _: Message, _: Box<FnBox(&mut EventLoop)-> bool>) {
+    fn send(&mut self, _: &mut EventLoop, _: Message, _: EventLoopAction) {
         let err = other_io_error("send not supported by protocol");
         let cmd = SocketEvt::MsgNotSent(err);
         let _ = self.evt_sender.send(cmd);
@@ -107,52 +110,49 @@ impl Protocol for Sub {
     fn on_send_timeout(&mut self, _: &mut EventLoop) {
     }
 
-    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
+    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
         self.cancel_timeout = Some(cancel_timeout);
 
         let mut received = None;
-        let mut receiving = false;
-        let mut pending = false;
-
+        let mut receiving = None;
         for (_, pipe) in self.pipes.iter_mut() {
             match pipe.recv() {
-                Ok(RecvStatus::Completed(msg)) => {
-                    // TODO filter message against subscriptions here ?
-                    // try again if message does not match
-                    received = Some(msg)
-                },
-                Ok(RecvStatus::InProgress)     => receiving = true,
-                Ok(RecvStatus::Postponed)      => pending = true,
-                Err(_)                         => continue
+                Ok(RecvStatus::Completed(msg)) => received = Some(msg),
+                Ok(RecvStatus::InProgress)     => receiving = Some(pipe.token()),
+                _ => continue
             }
-
-            if received.is_some() | receiving {
-                break;
-            }
+            break;
         }
 
-        if received.is_some() | receiving {
-            for (_, pipe) in self.pipes.iter_mut() {
-                pipe.reset_pending_recv();
-            }
-        } else if pending == false {
-            let err = io::Error::new(io::ErrorKind::NotConnected, "no connected endpoint");
-
-            self.on_msg_recv_err(event_loop, err);
-        }
-
-        if received.is_some() {
-            self.on_msg_recv_ok(event_loop, received.unwrap());
-        }
+        self.pending_recv = true;
+        self.process_recv_result(event_loop, received, receiving);
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
 
-        self.on_msg_recv_err(event_loop, err);
+        self.on_msg_recv_finished_err(event_loop, err);
+   }
 
-        for (_, pipe) in self.pipes.iter_mut() {
-            pipe.on_recv_timeout();
+    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
+        let has_pending_recv = self.pending_recv;
+        let mut received = None;
+        let mut receiving = None;
+
+        if let Some(pipe) = self.pipes.get_mut(&token) {
+            received = try!(pipe.ready_rx(event_loop, events));
+
+            if has_pending_recv && received.is_none() && pipe.can_resume_recv() {
+                match try!(pipe.recv()) {
+                    RecvStatus::Completed(msg) => received = Some(msg),
+                    RecvStatus::InProgress     => receiving = Some(token),
+                    _ => {}
+                }
+            }
         }
+
+        self.process_recv_result(event_loop, received, receiving);
+
+        Ok(())
     }
 }

@@ -7,7 +7,6 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::collections::HashMap;
 use std::io;
-use std::boxed::FnBox;
 
 use mio;
 
@@ -17,13 +16,14 @@ use endpoint::*;
 use global::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
+use EventLoopAction;
 use Message;
 
 pub struct Push {
     pipes: HashMap<mio::Token, Pipe>,
     evt_sender: Rc<mpsc::Sender<SocketEvt>>,
-    cancel_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
-    pending_msg: Option<Rc<Message>>
+    cancel_timeout: Option<EventLoopAction>,
+    pending_send: Option<Rc<Message>>
 }
 
 impl Push {
@@ -32,7 +32,7 @@ impl Push {
             pipes: HashMap::new(),
             evt_sender: evt_sender,
             cancel_timeout: None,
-            pending_msg: None
+            pending_send: None
         }
     }
 
@@ -40,7 +40,7 @@ impl Push {
         let _ = self.evt_sender.send(evt);
 
         self.cancel_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
-        self.pending_msg = None;
+        self.pending_send = None;
     }
 
     fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop) {
@@ -58,7 +58,7 @@ impl Push {
     }
 
     fn on_msg_send_started(&mut self, token: mio::Token) {
-        self.pending_msg = None;
+        self.pending_send = None;
         for (_, pipe) in self.pipes.iter_mut() {
             if pipe.token() == token {
                 continue;
@@ -95,7 +95,7 @@ impl Protocol for Push {
         self.pipes.remove(&token).map(|p| p.remove())
     }
 
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
         self.cancel_timeout = Some(cancel_timeout);
 
         let mut sent = false;
@@ -111,7 +111,7 @@ impl Protocol for Push {
             break;
         }
 
-        self.pending_msg = Some(msg);
+        self.pending_send = Some(msg);
         self.process_send_result(event_loop, sent, sending);
     }
 
@@ -122,7 +122,7 @@ impl Protocol for Push {
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
-        let has_pending_send = self.pending_msg.is_some();
+        let has_pending_send = self.pending_send.is_some();
         let mut sent = false;
         let mut sending = None;
 
@@ -130,7 +130,7 @@ impl Protocol for Push {
             sent = try!(pipe.ready_tx(event_loop, events));
 
             if has_pending_send && !sent && pipe.can_resume_send() {
-                let msg = self.pending_msg.as_ref().unwrap();
+                let msg = self.pending_send.as_ref().unwrap();
 
                 match try!(pipe.send(msg.clone())) {
                     SendStatus::Completed  => sent = true,
@@ -145,7 +145,7 @@ impl Protocol for Push {
         Ok(())
     }
 
-    fn recv(&mut self, _: &mut EventLoop, _: Box<FnBox(&mut EventLoop)-> bool>) {
+    fn recv(&mut self, _: &mut EventLoop, _: EventLoopAction) {
         let err = other_io_error("recv not supported by protocol");
         let cmd = SocketEvt::MsgNotRecv(err);
         let _ = self.evt_sender.send(cmd);
