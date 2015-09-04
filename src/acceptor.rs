@@ -30,7 +30,7 @@ impl Acceptor {
         let io = self.listener.as_evented();
         let interest = mio::EventSet::error() | mio::EventSet::readable();
 
-        event_loop.register_opt(io, self.token, interest, mio::PollOpt::edge())
+        event_loop.register(io, self.token, interest, mio::PollOpt::edge())
     }
 
     pub fn close(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {

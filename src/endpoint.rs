@@ -160,7 +160,7 @@ impl HandshakeEndpointState {
     }
 
     fn open(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        event_loop.register_opt(
+        event_loop.register(
             self.connection.as_evented(), 
             self.token, 
             mio::EventSet::all(), 
