@@ -6,5 +6,5 @@ os:
   - linux
 
 script:
-  - cargo update
-  - cargo test
+  - cargo build
+  - cargo test --verbose
