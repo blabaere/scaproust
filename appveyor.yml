@@ -8,5 +8,6 @@ install:
 build: false
 
 test_script:
+  - cargo update
   - cargo build
   - cargo test --verbose
