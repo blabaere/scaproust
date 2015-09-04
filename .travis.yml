@@ -6,4 +6,5 @@ os:
   - linux
 
 script:
+  - cargo update
   - cargo test
