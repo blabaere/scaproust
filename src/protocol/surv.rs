@@ -21,13 +21,14 @@ use endpoint::*;
 use global::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
+use EventLoopAction;
 use Message;
 
 pub struct Surv {
     pipes: HashMap<mio::Token, Pipe>,
     evt_sender: Rc<Sender<SocketEvt>>,
-    cancel_send_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
-    cancel_recv_timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>,
+    cancel_send_timeout: Option<EventLoopAction>,
+    cancel_recv_timeout: Option<EventLoopAction>,
     pending_survey_id: Option<u32>,
     survey_id_seq: u32
 }
@@ -83,7 +84,7 @@ impl Surv {
     fn send_event_and_cancel_timeout(&self, 
         event_loop: &mut EventLoop, 
         evt: SocketEvt, 
-        timeout: Option<Box<FnBox(&mut EventLoop)-> bool>>) {
+        timeout: Option<EventLoopAction>) {
         
         let _ = self.evt_sender.send(evt);
 
@@ -245,7 +246,7 @@ impl Protocol for Surv {
         result
     }
 
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
         let survey_id = self.next_survey_id();
 
         self.cancel_send_timeout = Some(cancel_timeout);
@@ -305,7 +306,7 @@ impl Protocol for Surv {
 
     // TODO do not cancel any pending recv, since we must receive a response from all peers ...
     // This stuff should look like pub sending
-    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>) {
+    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
         self.cancel_recv_timeout = Some(cancel_timeout);
 
         let mut received = None;

@@ -25,6 +25,16 @@ fn can_resume_operation(status: Option<OperationStatus>) -> bool {
     status.map_or_else(|| true, |os| os == OperationStatus::Postponed)
 }
 
+fn is_operation_finished(status: Option<OperationStatus>) -> bool {
+    match status {
+        Some(OperationStatus::Completed) => true,
+        Some(OperationStatus::Failed)    => true,
+        Some(OperationStatus::Discarded) => true,
+        None => false,
+        _    => false
+    }
+}
+
 // A pipe is responsible for keeping track of the send & recv operation progress of an endpoint.
 // It is used to link a protocol to an endpoint.
 pub struct Pipe {
@@ -75,6 +85,10 @@ impl Pipe {
         can_resume_operation(self.send_status)
     }
 
+    pub fn is_send_finished(&self) -> bool {
+        is_operation_finished(self.send_status)
+    }
+
     // Send operation is finished, nothing to clean up
     pub fn finish_send(&mut self) {
         self.send_status = None;
@@ -116,6 +130,10 @@ impl Pipe {
 
     pub fn can_resume_recv(&self) -> bool {
         can_resume_operation(self.recv_status)
+    }
+
+    pub fn is_recv_finished(&self) -> bool {
+        is_operation_finished(self.recv_status)
     }
 
     // Send operation is finished, nothing to clean up

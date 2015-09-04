@@ -38,8 +38,10 @@ impl Push {
 
     fn on_msg_send_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
         let _ = self.evt_sender.send(evt);
+        let timeout = self.cancel_timeout.take();
 
-        self.cancel_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+        
         self.pending_send = None;
     }
 
