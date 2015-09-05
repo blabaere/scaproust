@@ -16,8 +16,8 @@ use Message;
 pub enum OperationStatus {
     Completed,  // done
     InProgress, // ongoing
-    Postponed,  // try again
-    Failed,     // failed
+    Postponed,  // tried, but would have blocked
+    Failed,     // tried and failed
     Discarded   // was asked to give up
 }
 
@@ -89,18 +89,15 @@ impl Pipe {
         is_operation_finished(self.send_status)
     }
 
-    // Send operation is finished, nothing to clean up
     pub fn finish_send(&mut self) {
         self.send_status = None;
     }
 
-    // Send operation is aborted, clean up any pending work
     pub fn cancel_send(&mut self) {
         self.send_status = None;
         self.endpoint.cancel_sending();
     }
 
-    // Send operation is ongoing, but will not involve this pipe anymore
     pub fn discard_send(&mut self) {
         self.send_status = Some(OperationStatus::Discarded);
     }
@@ -136,18 +133,15 @@ impl Pipe {
         is_operation_finished(self.recv_status)
     }
 
-    // Send operation is finished, nothing to clean up
     pub fn finish_recv(&mut self) {
         self.recv_status = None;
     }
 
-    // Send operation is aborted, clean up any pending work
     pub fn cancel_recv(&mut self) {
         self.recv_status = None;
         self.endpoint.cancel_receiving();
     }
 
-    // Send operation is ongoing, but will not involve this pipe anymore
     pub fn discard_recv(&mut self) {
         self.recv_status = Some(OperationStatus::Discarded);
     }

@@ -30,7 +30,7 @@ pub struct Pipe {
 }
 
 impl Pipe {
-    pub fn new(token: mio::Token, endpoint: Endpoint) -> Pipe {
+    fn new(token: mio::Token, endpoint: Endpoint) -> Pipe {
         Pipe { 
             token: token,
             endpoint: endpoint,
