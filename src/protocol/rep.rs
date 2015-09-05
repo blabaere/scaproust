@@ -14,7 +14,7 @@ use mio;
 use byteorder::{ BigEndian, WriteBytesExt, ReadBytesExt };
 
 use super::Protocol;
-use pipe2::*;
+use pipe::*;
 use endpoint::*;
 use global::*;
 use event_loop_msg::SocketEvt;

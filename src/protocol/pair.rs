@@ -10,7 +10,7 @@ use std::io;
 use mio;
 
 use super::Protocol;
-use pipe2::*;
+use pipe::*;
 use endpoint::*;
 use global::*;
 use event_loop_msg::SocketEvt;

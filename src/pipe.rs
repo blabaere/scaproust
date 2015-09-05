@@ -12,11 +12,27 @@ use endpoint::*;
 use EventLoop;
 use Message;
 
-pub enum SendOperationStatus {
-    Completed,
-    InProgress,
-    Postponed(Rc<Message>),
-    Failed
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum OperationStatus {
+    Completed,  // done
+    InProgress, // ongoing
+    Postponed,  // tried, but would have blocked
+    Failed,     // tried and failed
+    Discarded   // was asked to give up
+}
+
+fn can_resume_operation(status: Option<OperationStatus>) -> bool {
+    status.map_or_else(|| true, |os| os == OperationStatus::Postponed)
+}
+
+fn is_operation_finished(status: Option<OperationStatus>) -> bool {
+    match status {
+        Some(OperationStatus::Completed) => true,
+        Some(OperationStatus::Failed)    => true,
+        Some(OperationStatus::Discarded) => true,
+        None => false,
+        _    => false
+    }
 }
 
 // A pipe is responsible for keeping track of the send & recv operation progress of an endpoint.
@@ -24,19 +40,17 @@ pub enum SendOperationStatus {
 pub struct Pipe {
     token: mio::Token,
     endpoint: Endpoint,
-    send_status: Option<SendOperationStatus>,
-    pending_recv: bool
-    //recv_status: Option<RecvOperationStatus>
+    send_status: Option<OperationStatus>,
+    recv_status: Option<OperationStatus>
 }
 
 impl Pipe {
-    fn new(token: mio::Token, endpoint: Endpoint) -> Pipe {
+    pub fn new(token: mio::Token, endpoint: Endpoint) -> Pipe {
         Pipe { 
             token: token,
             endpoint: endpoint,
             send_status: None,
-            pending_recv: false
-            //recv_status: None
+            recv_status: None
         }
     }
 
@@ -44,14 +58,92 @@ impl Pipe {
         self.token
     }
 
-    pub fn send_status(&self) -> Option<bool> {
-        match self.send_status {
-            None => None,
-            Some(SendOperationStatus::Completed)    => Some(true),
-            Some(SendOperationStatus::Failed)       => Some(true),
-            Some(SendOperationStatus::InProgress)   => Some(false),
-            Some(SendOperationStatus::Postponed(_)) => Some(false)
-        }
+    pub fn send(&mut self, msg: Rc<Message>) -> io::Result<SendStatus> {
+        let result = match self.endpoint.send(msg) {
+            Ok(SendStatus::Completed) => {
+                self.send_status = Some(OperationStatus::Completed);
+                Ok(SendStatus::Completed)
+            },
+            Ok(SendStatus::InProgress) => {
+                self.send_status = Some(OperationStatus::InProgress);
+                Ok(SendStatus::InProgress)
+            },
+            Ok(SendStatus::Postponed(msg)) => {
+                self.send_status = Some(OperationStatus::Postponed);
+                Ok(SendStatus::Postponed(msg))
+            }
+            Err(e) => {
+                self.send_status = Some(OperationStatus::Failed);
+                Err(e)
+            }
+        };
+
+        result
+    }
+
+    pub fn can_resume_send(&self) -> bool {
+        can_resume_operation(self.send_status)
+    }
+
+    pub fn is_send_finished(&self) -> bool {
+        is_operation_finished(self.send_status)
+    }
+
+    pub fn finish_send(&mut self) {
+        self.send_status = None;
+    }
+
+    pub fn cancel_send(&mut self) {
+        self.send_status = None;
+        self.endpoint.cancel_sending();
+    }
+
+    pub fn discard_send(&mut self) {
+        self.send_status = Some(OperationStatus::Discarded);
+    }
+
+    pub fn recv(&mut self) -> io::Result<RecvStatus> {
+        let result = match self.endpoint.recv() {
+            Ok(RecvStatus::Completed(msg)) => {
+                self.send_status = Some(OperationStatus::Completed);
+                Ok(RecvStatus::Completed(msg))
+            },
+            Ok(RecvStatus::InProgress) => {
+                self.send_status = Some(OperationStatus::InProgress);
+                Ok(RecvStatus::InProgress)
+            },
+            Ok(RecvStatus::Postponed) => {
+                self.send_status = Some(OperationStatus::Postponed);
+                Ok(RecvStatus::Postponed)
+            }
+            Err(e) => {
+                self.send_status = Some(OperationStatus::Failed);
+                Err(e)
+            }
+        };
+
+        result
+    }
+
+    pub fn can_resume_recv(&self) -> bool {
+        can_resume_operation(self.recv_status)
+    }
+
+    pub fn is_recv_finished(&self) -> bool {
+        is_operation_finished(self.recv_status)
+    }
+
+    pub fn finish_recv(&mut self) {
+        self.recv_status = None;
+    }
+
+    pub fn cancel_recv(&mut self) {
+        self.recv_status = None;
+        self.endpoint.cancel_receiving();
+    }
+
+    pub fn discard_recv(&mut self) {
+        self.recv_status = Some(OperationStatus::Discarded);
     }
 
     pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<(bool, Option<Message>)> {
@@ -68,84 +160,6 @@ impl Pipe {
         let (_, received) = try!(self.endpoint.ready(event_loop, events));
 
         Ok(received)
-    }
-
-    pub fn send(&mut self, msg: Rc<Message>) -> io::Result<Option<bool>> {
-        let result = match self.endpoint.send(msg) {
-            Ok(SendStatus::Completed) => {
-                self.send_status = Some(SendOperationStatus::Completed);
-                Ok(Some(true))
-            },
-            Ok(SendStatus::InProgress) => {
-                self.send_status = Some(SendOperationStatus::InProgress);
-                Ok(Some(false))
-            },
-            Ok(SendStatus::Postponed(message)) => {
-                self.send_status = Some(SendOperationStatus::Postponed(message));
-                Ok(None)
-            }
-            Err(e) => {
-                self.send_status = Some(SendOperationStatus::Failed);
-                Err(e)
-            }
-        };
-
-        result
-    }
-
-    pub fn on_send_timeout(&mut self) {
-        self.send_status = None;
-        self.endpoint.cancel_sending();
-    }
-
-    pub fn resume_pending_send(&mut self) -> io::Result<Option<bool>> {
-        match self.send_status.take() {
-            Some(SendOperationStatus::Postponed(msg)) => self.send(msg),
-            _ => Ok(None)
-        }
-    }
-
-    pub fn reset_pending_send(&mut self) {
-        self.send_status = None;
-    }
-
-    pub fn on_msg_sending_finished(&mut self) {
-        self.send_status = None;
-        self.endpoint.cancel_sending();
-        // this is probably useless, the only way for the pipe to require some cleaning
-        // would be a message sending in progress, and therefore, not finished
-    }
-
-    pub fn recv(&mut self) -> io::Result<RecvStatus> {
-        let progress = try!(self.endpoint.recv());
-
-        self.pending_recv = match progress {
-            RecvStatus::Completed(_) => false,
-            RecvStatus::InProgress   => false,
-            RecvStatus::Postponed    => true
-        };
-
-        Ok(progress)
-    }
-
-    pub fn on_recv_timeout(&mut self) {
-        self.pending_recv = false;
-        self.endpoint.cancel_receiving();
-    }
-
-    pub fn resume_pending_recv(&mut self) -> io::Result<Option<RecvStatus>> {
-        let result = if self.pending_recv {
-            let status = try!(self.endpoint.recv());
-            Some(status)
-        } else {
-            None
-        };
-
-        Ok(result)
-    }
-
-    pub fn reset_pending_recv(&mut self) {
-        self.pending_recv = false;
     }
 
     pub fn remove(self) -> Endpoint {
