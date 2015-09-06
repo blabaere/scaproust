@@ -336,53 +336,5 @@ impl Protocol for Resp {
         self.process_recv_result(event_loop, received, receiving);
 
         Ok(())
-        /*let mut pipe = self.pipe.take().unwrap();
-        let mut msg_sending = false;
-        let mut msg_sent = false;
-        let mut received_msg = None;
-        let mut receiving_msg = false;
-
-        let (sent, received) = try!(pipe.ready(event_loop, events));
-
-        if sent {
-            msg_sent = true;
-        } else {
-            match try!(pipe.resume_pending_send()) {
-                Some(true)  => msg_sent = true,
-                Some(false) => msg_sending = true,
-                None        => {}
-            }
-        }
-
-        if received.is_some() {
-            received_msg = received;
-        } else {
-            match try!(pipe.resume_pending_recv()) {
-                Some(RecvStatus::Completed(msg))   => received_msg = Some(msg),
-                Some(RecvStatus::InProgress)       => receiving_msg = true,
-                Some(RecvStatus::Postponed) | None => {}
-            }
-        }
-
-        if msg_sent {
-            self.on_msg_send_ok(event_loop);
-        }
-
-        if msg_sending | msg_sent {
-            pipe.reset_pending_send();
-        }
-
-        if received_msg.is_some() | receiving_msg {
-            pipe.reset_pending_recv();
-        }
-
-        if received_msg.is_some() {
-            let raw_msg = received_msg.unwrap();
-
-            self.on_raw_msg_recv(event_loop, token, raw_msg);
-        }
-
-        self.pipe = Some(pipe);
-*/
     }
 }

@@ -18,61 +18,24 @@ use EventLoop;
 use EventLoopAction;
 use Message;
 
+use super::sender::SendToSingle;
+
 pub struct Pair {
     pipe: Option<Pipe>,
     evt_sender: Rc<Sender<SocketEvt>>,
-    cancel_send_timeout: Option<EventLoopAction>,
     cancel_recv_timeout: Option<EventLoopAction>,
-    pending_send: Option<Rc<Message>>,
-    pending_recv: bool
+    pending_recv: bool,
+    msg_sender: SendToSingle
 }
 
 impl Pair {
     pub fn new(evt_sender: Rc<Sender<SocketEvt>>) -> Pair {
         Pair { 
             pipe: None,
-            evt_sender: evt_sender,
-            cancel_send_timeout: None,
+            evt_sender: evt_sender.clone(),
             cancel_recv_timeout: None,
-            pending_send: None,
-            pending_recv: false
-        }
-    }
-
-    fn on_msg_send_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
-        let _ = self.evt_sender.send(evt);
-        let timeout = self.cancel_send_timeout.take();
-
-        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
-
-        self.pending_send = None;
-    }
-
-    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop) {
-        self.on_msg_send_finished(event_loop, SocketEvt::MsgSent);
-
-        if let Some(pipe) = self.pipe.as_mut() {
-            pipe.finish_send(); 
-        }
-    }
-
-    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
-        self.on_msg_send_finished(event_loop, SocketEvt::MsgNotSent(err));
-
-        if let Some(pipe) = self.pipe.as_mut() {
-            pipe.cancel_send(); 
-        }
-    }
-
-    fn on_msg_send_started(&mut self) {
-        self.pending_send = None;
-    }
-
-    fn process_send_result(&mut self, event_loop: &mut EventLoop, sent: bool, sending: bool) {
-        if sent {
-            self.on_msg_send_finished_ok(event_loop);
-        } else if sending {
-            self.on_msg_send_started();
+            pending_recv: false,
+            msg_sender: SendToSingle::new(evt_sender)
         }
     }
 
@@ -138,33 +101,11 @@ impl Protocol for Pair {
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
-        self.cancel_send_timeout = Some(cancel_timeout);
-
-        if self.pipe.is_none() {
-            self.pending_send = Some(Rc::new(msg));
-            return;
-        }
-
-        let mut pipe = self.pipe.take().unwrap();
-        let mut sent = false;
-        let mut sending = false;
-        let msg = Rc::new(msg);
-
-        match pipe.send(msg.clone()) {
-            Ok(SendStatus::Completed)  => sent = true,
-            Ok(SendStatus::InProgress) => sending = true,
-            _ => {}
-        }
-
-        self.pipe = Some(pipe);
-        self.pending_send = Some(msg);
-        self.process_send_result(event_loop, sent, sending);
+        self.msg_sender.send(event_loop, msg, cancel_timeout, self.pipe.as_mut())
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
-
-        self.on_msg_send_finished_err(event_loop, err);
+        self.msg_sender.on_send_timeout(event_loop, self.pipe.as_mut())
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
@@ -198,18 +139,16 @@ impl Protocol for Pair {
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
         let mut sent = false;
-        let mut sending = false;
         let mut received = None;
         let mut receiving = None;
 
         if let Some(pipe) = self.pipe.as_mut() {
-            let has_pending_send = self.pending_send.is_some();
             let has_pending_recv = self.pending_recv;
             let (s, r) = try!(pipe.ready(event_loop, events));
             sent = s;
             received = r;
 
-            if has_pending_send && !sent && pipe.can_resume_send() {
+            /*if has_pending_send && !sent && pipe.can_resume_send() {
                 let msg = self.pending_send.as_ref().unwrap();
 
                 match try!(pipe.send(msg.clone())) {
@@ -217,7 +156,7 @@ impl Protocol for Pair {
                     SendStatus::InProgress => sending = true,
                     _ => {}
                 }
-            }
+            }*/
 
             if has_pending_recv && received.is_none() && pipe.can_resume_recv() {
                 match try!(pipe.recv()) {
@@ -228,7 +167,10 @@ impl Protocol for Pair {
             }
         }
 
-        self.process_send_result(event_loop, sent, sending);
+        //self.process_send_result(event_loop, sent, sending);
+        if let Some(pipe) = self.pipe.as_mut() {
+            self.msg_sender.on_pipe_ready(event_loop, token, sent, pipe);
+        }
         self.process_recv_result(event_loop, received, receiving);
 
         Ok(())

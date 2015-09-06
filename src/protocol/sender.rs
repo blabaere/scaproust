@@ -239,3 +239,113 @@ impl SendToMany {
         self.pending_send = None;
     }
 }
+
+pub struct SendToSingle {
+    evt_sender: Rc<mpsc::Sender<SocketEvt>>,
+    cancel_timeout: Option<EventLoopAction>,
+    pending_send: Option<Rc<Message>>
+}
+
+impl SendToSingle {
+    pub fn new(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> SendToSingle {
+        SendToSingle {
+            evt_sender: evt_tx,
+            cancel_timeout: None,
+            pending_send: None
+        }
+    }
+
+    pub fn send(&mut self,
+        event_loop: &mut EventLoop,
+        msg: Message,
+        cancel_timeout: EventLoopAction,
+        pipe_cell: Option<&mut Pipe>) {
+
+        self.cancel_timeout = Some(cancel_timeout);
+
+        if pipe_cell.is_none() {
+            return self.pending_send = Some(Rc::new(msg));
+        }
+
+        let mut pipe = pipe_cell.unwrap();
+        let mut sent = false;
+        let mut sending = false;
+        let msg = Rc::new(msg);
+
+        match pipe.send(msg.clone()) {
+            Ok(SendStatus::Completed)  => sent = true,
+            Ok(SendStatus::InProgress) => sending = true,
+            _ => {}
+        }
+
+        self.pending_send = Some(msg);
+        self.process_send_result(event_loop, sent, sending, Some(pipe));
+    }
+
+    pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop, pipe_cell: Option<&mut Pipe>) {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
+
+        self.on_msg_send_finished_err(event_loop, err, pipe_cell);
+    }
+
+    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipe_cell: Option<&mut Pipe>) {
+        self.on_msg_send_finished_err(event_loop, err, pipe_cell);
+    }
+
+    pub fn on_pipe_ready(&mut self, event_loop: &mut EventLoop, _: mio::Token, sent: bool, pipe: &mut Pipe) -> io::Result<()> {
+        let has_pending_send = self.pending_send.is_some();
+        let mut sent = sent;
+        let mut sending = false;
+
+            if has_pending_send && !sent && pipe.can_resume_send() {
+                let msg = self.pending_send.as_ref().unwrap();
+
+                match try!(pipe.send(msg.clone())) {
+                    SendStatus::Completed  => sent = true,
+                    SendStatus::InProgress => sending = true,
+                    _ => {}
+                }
+            }
+
+        self.process_send_result(event_loop, sent, sending, Some(pipe));
+
+        Ok(())
+    }
+
+    fn process_send_result(&mut self, event_loop: &mut EventLoop, sent: bool, sending: bool, pipe_cell: Option<&mut Pipe>) {
+        if sent {
+            self.on_msg_send_finished_ok(event_loop, pipe_cell);
+        } else if sending {
+            self.on_msg_send_started();
+        }
+    }
+
+    fn on_msg_send_started(&mut self) {
+        self.pending_send = None;
+    }
+
+    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, pipe_cell: Option<&mut Pipe>) {
+        self.on_msg_send_finished(event_loop, SocketEvt::MsgSent);
+
+        if let Some(pipe) = pipe_cell {
+            pipe.finish_send(); 
+        }
+    }
+
+    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipe_cell: Option<&mut Pipe>) {
+        self.on_msg_send_finished(event_loop, SocketEvt::MsgNotSent(err));
+
+        if let Some(pipe) = pipe_cell {
+            pipe.cancel_send(); 
+        }
+    }
+
+    fn on_msg_send_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
+        let _ = self.evt_sender.send(evt);
+        let timeout = self.cancel_timeout.take();
+
+        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+        
+        self.pending_send = None;
+    }
+}
