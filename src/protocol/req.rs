@@ -24,76 +24,46 @@ use EventLoop;
 use EventLoopAction;
 use Message;
 
+use super::sender::SendToAny;
+
 pub struct Req {
     pipes: HashMap<mio::Token, Pipe>,
     evt_sender: Rc<mpsc::Sender<SocketEvt>>,
-    cancel_send_timeout: Option<EventLoopAction>,
     cancel_recv_timeout: Option<EventLoopAction>,
-    pending_send: Option<Rc<Message>>,
     pending_recv: bool,
 
     pending_req_id: Option<u32>,
     req_id_seq: u32,
-    resend_interval: Option<u64>
+    resend_interval: Option<u64>,
+    msg_sender: SendToAny
+
 }
 
 impl Req {
     pub fn new(evt_sender: Rc<mpsc::Sender<SocketEvt>>) -> Req {
         Req { 
             pipes: HashMap::new(),
-            evt_sender: evt_sender,
-            cancel_send_timeout: None,
+            evt_sender: evt_sender.clone(),
             cancel_recv_timeout: None,
-            pending_send: None,
             pending_recv: false,
             pending_req_id: None,
             req_id_seq: time::get_time().nsec as u32,
-            resend_interval: Some(60_000)
+            resend_interval: Some(60_000),
+            msg_sender: SendToAny::new(evt_sender)
         }
     }
 
-    fn on_msg_send_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
-        let _ = self.evt_sender.send(evt);
-        let timeout = self.cancel_send_timeout.take();
+    // what to do with 
+    // self.pending_req_id = None;
+    // ???
 
-        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
-
-        self.pending_send = None;
-    }
-
-    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop) {
-        self.on_msg_send_finished(event_loop, SocketEvt::MsgSent);
-        for (_, pipe) in self.pipes.iter_mut() {
-            pipe.finish_send(); 
-        }
-    }
-
-    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
+    /*fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
         self.pending_req_id = None;
         self.on_msg_send_finished(event_loop, SocketEvt::MsgNotSent(err));
         for (_, pipe) in self.pipes.iter_mut() {
             pipe.cancel_send();
         }
-    }
-
-    fn on_msg_send_started(&mut self, token: mio::Token) {
-        self.pending_send = None;
-        for (_, pipe) in self.pipes.iter_mut() {
-            if pipe.token() == token {
-                continue;
-            } else {
-                pipe.discard_send();
-            }
-        }
-    }
-
-    fn process_send_result(&mut self, event_loop: &mut EventLoop, sent: bool, sending: Option<mio::Token>) {
-        if sent {
-            self.on_msg_send_finished_ok(event_loop);
-        } else if let Some(token) = sending {
-            self.on_msg_send_started(token);
-        }
-    }
+    }*/
 
     fn on_msg_recv_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
         let _ = self.evt_sender.send(evt);
@@ -218,35 +188,16 @@ impl Protocol for Req {
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
         let req_id = self.next_req_id();
 
-        self.cancel_send_timeout = Some(cancel_timeout);
         self.pending_req_id = Some(req_id);
 
-        let raw_msg = match self.msg_to_raw_msg(msg, req_id) {
-            Err(e)      => return self.on_msg_send_finished_err(event_loop, e),
-            Ok(raw_msg) => raw_msg
-        };
-
-        let mut sent = false;
-        let mut sending = None;
-        let msg = Rc::new(raw_msg);
-
-        for (_, pipe) in self.pipes.iter_mut() {
-            match pipe.send(msg.clone()) {
-                Ok(SendStatus::Completed)  => sent = true,
-                Ok(SendStatus::InProgress) => sending = Some(pipe.token()),
-                _ => continue
-            }
-            break;
+        match self.msg_to_raw_msg(msg, req_id) {
+            Err(err)    => self.msg_sender.on_send_err(event_loop, err, &mut self.pipes),
+            Ok(raw_msg) => self.msg_sender.send(event_loop, raw_msg, cancel_timeout, &mut self.pipes)
         }
-
-        self.pending_send = Some(msg);
-        self.process_send_result(event_loop, sent, sending);
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
-
-        self.on_msg_send_finished_err(event_loop, err);
+        self.msg_sender.on_send_timeout(event_loop, &mut self.pipes);
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
@@ -279,27 +230,15 @@ impl Protocol for Req {
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
         let mut sent = false;
-        let mut sending = None;
         let mut received = None;
         let mut receiving = None;
 
         if let Some(pipe) = self.pipes.get_mut(&token) {
-            let has_pending_send = self.pending_send.is_some();
             let has_pending_recv = self.pending_recv;
 
             let (s, r) = try!(pipe.ready(event_loop, events));
             sent = s;
             received = r;
-
-            if has_pending_send && !sent && pipe.can_resume_send() {
-                let msg = self.pending_send.as_ref().unwrap();
-
-                match try!(pipe.send(msg.clone())) {
-                    SendStatus::Completed  => sent = true,
-                    SendStatus::InProgress => sending = Some(pipe.token()),
-                    _ => {}
-                }
-            }
 
             if has_pending_recv && received.is_none() && pipe.can_resume_recv() {
                 match try!(pipe.recv()) {
@@ -310,7 +249,7 @@ impl Protocol for Req {
             }
         }
 
-        self.process_send_result(event_loop, sent, sending);
+        try!(self.msg_sender.on_pipe_ready(event_loop, token, sent, &mut self.pipes));
         self.process_recv_result(event_loop, received, receiving);
 
         Ok(())

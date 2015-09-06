@@ -6,14 +6,14 @@
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::io;
-use std::boxed::FnBox;
 
 use mio;
 
-use global::SocketType as SocketType;
+use global::SocketType;
 use event_loop_msg::SocketEvt;
 use endpoint::Endpoint;
 use EventLoop;
+use EventLoopAction;
 use Message;
 
 pub mod push;
@@ -26,6 +26,8 @@ pub mod sub;
 pub mod bus;
 pub mod surv;
 pub mod resp;
+
+pub mod sender;
 
 pub fn create_protocol(socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Box<Protocol> {
     match socket_type {
@@ -51,9 +53,9 @@ pub trait Protocol {
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()>;
 
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>);
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction);
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop);
 
-    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: Box<FnBox(&mut EventLoop)-> bool>);
+    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction);
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop);
 }

@@ -129,10 +129,6 @@ impl Pipe {
         can_resume_operation(self.recv_status)
     }
 
-    pub fn is_recv_finished(&self) -> bool {
-        is_operation_finished(self.recv_status)
-    }
-
     pub fn finish_recv(&mut self) {
         self.recv_status = None;
     }

@@ -42,7 +42,7 @@ fn test_pipeline_bound_to_connected() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
-//#[test]
+//#[test] does not work yet ...
 fn test_send_while_not_connected() {
     let session = Session::new().unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
@@ -70,7 +70,7 @@ fn test_send_timeout() {
     assert_eq!(io::ErrorKind::TimedOut, err.kind());
 }
 
-//#[test]
+//#[test] does not work yet ...
 fn test_recv_while_not_connected() {
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();

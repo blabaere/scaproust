@@ -119,7 +119,6 @@ impl Bus {
             self.on_msg_recv_started(token);
         }
     }
-
 }
 
 impl Protocol for Bus {

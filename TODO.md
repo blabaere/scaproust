@@ -7,57 +7,12 @@ Update rust-closure-playground repo with FnBox findings
 - setup documentation generation and site and github pages
 - setup CI with appveyor once mio is compatible with windows
 
-### Small refactor to do before fixing problems:
-Create one ProtoPipe type to replace all exisiting protocol specific types.
-It only needs to:
-- Implement send
-- Implement recv
-- Store & expose its token
-- Store & expose the current send operation status
-- Store & expose the current recv operation status
-
-ProtoPipeSendStatus:
-- Completed    // Message was successfully sent
-- InProgress   // Message was partially sent, acquired by Endpoint
-- Waiting(Msg) // Message was not send, postponed by Endpoint
-- Failed       // Failure while trying to send
-- None         // Nothing te be sent
-
-ProtoPipeRecvStatus:
-- Completed    // Message was successfully received
-- InProgress   // Message was partially received
-- Waiting      // Message was not received, postponed by Endpoint
-- Failed       // Failure while trying to received
-- None         // Nothing te be received
-
-Only then, rename Pipe to Endpoint and ProtoPipe to Pipe.
-And find better name for the two SendStatus types.
-
-
 ### Current problem:  
 If no pipe is available when sending or receiving, an error is returned.
 The expected behavior is to wait the timeout for a pipe to be added (via reconnect or accept).
-To be able to do that, it would require to move the pending message from proto-pipe to protocol.
-Each proto-pipe would then keep the progress status.
-In that case, status should be: sent, sending, postponed, failed, or none if no operation is in progress.
-When a proto-pipe becomes ready, any pending operation should be handed to that proto-pipe.
-When the operation is finished, each proto-pipe is notified of the operation completion.
-
-For protocol that are sent to single, when a proto pipe status becomes sending or receiving,
-the other proto-pipes should have their current operation cancelled.
-
-Since pipe already holds the message to be sent of the on going operation, 
-it should be possible to avoid storing it in the proto-pipe.
-This requires to not clear the operation when it is postponed and to notify the protocol when a progress is started during readiness, in case it would be a send-to-single one.
 
 ### Next problem:
 There is too much code duplication in the protocol part.
-Refactor the proto pipes with some traits to share more code.
-Traits could be:
-- SenderPipe
-- ReceiverPipe
-- TwoWayPipe
-
 Refactoring the protocols may be harder but there are some crosscutting aspects:
 - Send to single (pair, push, req, rep, resp)
 - Send to many (bus, pub, surv)
@@ -65,13 +20,12 @@ Refactoring the protocols may be harder but there are some crosscutting aspects:
 
 Some header related code could also be shared:
 - Message with id (req/rep, surv/resp)
-- Send back to originator only (req/rep, surv/resp)
+- Send back to originator only (rep, resp)
 
 ### Refactors:  
 - Rename session into something less oriented ? (context, environment ...)
 - Remove association between token and socketid when a pipe is dead
 - Register to readable or writable only when required, that is when operation status is in progress ? 
-- find a better name for socket_impl and session_impl
 - maybe the acceptor could create pipes instead of connections ?
 - Implement Read & Write trait on sockets
 - Use a pool for payloads
