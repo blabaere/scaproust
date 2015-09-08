@@ -24,7 +24,7 @@ use EventLoop;
 use EventLoopAction;
 use Message;
 
-use super::sender::SendToAny;
+use super::sender::*;
 
 pub struct Req {
     pipes: HashMap<mio::Token, Pipe>,
@@ -35,21 +35,21 @@ pub struct Req {
     pending_req_id: Option<u32>,
     req_id_seq: u32,
     resend_interval: Option<u64>,
-    msg_sender: SendToAny
+    msg_sender: PolyadicMsgSender<UnicastSendingStrategy>
 
 }
 
 impl Req {
-    pub fn new(evt_sender: Rc<mpsc::Sender<SocketEvt>>) -> Req {
+    pub fn new(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Req {
         Req { 
             pipes: HashMap::new(),
-            evt_sender: evt_sender.clone(),
+            evt_sender: evt_tx.clone(),
             cancel_recv_timeout: None,
             pending_recv: false,
             pending_req_id: None,
             req_id_seq: time::get_time().nsec as u32,
             resend_interval: Some(60_000),
-            msg_sender: SendToAny::new(evt_sender)
+            msg_sender: new_unicast_msg_sender(evt_tx)
         }
     }
 
@@ -188,15 +188,20 @@ impl Protocol for Req {
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
         let req_id = self.next_req_id();
 
-        self.pending_req_id = Some(req_id);
-
         match self.msg_to_raw_msg(msg, req_id) {
-            Err(err)    => self.msg_sender.on_send_err(event_loop, err, &mut self.pipes),
-            Ok(raw_msg) => self.msg_sender.send(event_loop, raw_msg, cancel_timeout, &mut self.pipes)
+            Err(err)    => {
+                self.pending_req_id = None;
+                self.msg_sender.on_send_err(event_loop, err, &mut self.pipes);
+            },
+            Ok(raw_msg) => {
+                self.pending_req_id = Some(req_id);
+                self.msg_sender.send(event_loop, raw_msg, cancel_timeout, &mut self.pipes);
+            }
         }
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
+        self.pending_req_id = None;
         self.msg_sender.on_send_timeout(event_loop, &mut self.pipes);
     }
 
@@ -249,7 +254,11 @@ impl Protocol for Req {
             }
         }
 
-        try!(self.msg_sender.on_pipe_ready(event_loop, token, sent, &mut self.pipes));
+        if sent {
+            self.msg_sender.sent_by(event_loop, token, &mut self.pipes);
+        } else {
+            try!(self.msg_sender.resume_send(event_loop, token, &mut self.pipes));
+        }
         self.process_recv_result(event_loop, received, receiving);
 
         Ok(())

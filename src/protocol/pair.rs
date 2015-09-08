@@ -148,16 +148,6 @@ impl Protocol for Pair {
             sent = s;
             received = r;
 
-            /*if has_pending_send && !sent && pipe.can_resume_send() {
-                let msg = self.pending_send.as_ref().unwrap();
-
-                match try!(pipe.send(msg.clone())) {
-                    SendStatus::Completed  => sent = true,
-                    SendStatus::InProgress => sending = true,
-                    _ => {}
-                }
-            }*/
-
             if has_pending_recv && received.is_none() && pipe.can_resume_recv() {
                 match try!(pipe.recv()) {
                     RecvStatus::Completed(msg) => received = Some(msg),
@@ -167,9 +157,8 @@ impl Protocol for Pair {
             }
         }
 
-        //self.process_send_result(event_loop, sent, sending);
         if let Some(pipe) = self.pipe.as_mut() {
-            self.msg_sender.on_pipe_ready(event_loop, token, sent, pipe);
+            try!(self.msg_sender.on_pipe_ready(event_loop, token, sent, pipe));
         }
         self.process_recv_result(event_loop, received, receiving);
 

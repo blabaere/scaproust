@@ -19,12 +19,12 @@ use EventLoop;
 use EventLoopAction;
 use Message;
 
-use super::sender::SendToAny;
+use super::sender::*;
 
 pub struct Push {
     pipes: HashMap<mio::Token, Pipe>,
     evt_sender: Rc<mpsc::Sender<SocketEvt>>,
-    msg_sender: SendToAny
+    msg_sender: PolyadicMsgSender<UnicastSendingStrategy>
 }
 
 impl Push {
@@ -32,7 +32,7 @@ impl Push {
         Push { 
             pipes: HashMap::new(),
             evt_sender: evt_sender.clone(),
-            msg_sender: SendToAny::new(evt_sender)
+            msg_sender: new_unicast_msg_sender(evt_sender)
         }
     }
 }
@@ -69,7 +69,11 @@ impl Protocol for Push {
             sent = try!(pipe.ready_tx(event_loop, events));
         }
 
-        self.msg_sender.on_pipe_ready(event_loop, token, sent, &mut self.pipes)
+        if sent {
+            Ok(self.msg_sender.sent_by(event_loop, token, &mut self.pipes))
+        } else {
+            self.msg_sender.resume_send(event_loop, token, &mut self.pipes)
+        }
     }
 
     fn recv(&mut self, _: &mut EventLoop, _: EventLoopAction) {

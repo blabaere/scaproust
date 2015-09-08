@@ -24,7 +24,7 @@ use EventLoop;
 use EventLoopAction;
 use Message;
 
-use super::sender::SendToMany;
+use super::sender::*;
 
 pub struct Surv {
     pipes: HashMap<mio::Token, Pipe>,
@@ -33,7 +33,7 @@ pub struct Surv {
     pending_recv: bool,
     pending_survey_id: Option<u32>,
     survey_id_seq: u32,
-    msg_sender: SendToMany
+    msg_sender: PolyadicMsgSender<MulticastSendingStrategy>
 }
 
 impl Surv {
@@ -45,7 +45,7 @@ impl Surv {
             pending_recv: false,
             pending_survey_id: None,
             survey_id_seq: time::get_time().nsec as u32,
-            msg_sender: SendToMany::new(evt_tx)
+            msg_sender: new_multicast_msg_sender(evt_tx)
         }
     }
 
@@ -223,7 +223,12 @@ impl Protocol for Surv {
             }
         }
 
-        try!(self.msg_sender.on_pipe_ready(event_loop, token, sent, &mut self.pipes));
+        if sent {
+            self.msg_sender.sent_by(event_loop, token, &mut self.pipes);
+        } else {
+            try!(self.msg_sender.resume_send(event_loop, token, &mut self.pipes));
+        }
+        
         self.process_recv_result(event_loop, received, receiving);
 
         Ok(())

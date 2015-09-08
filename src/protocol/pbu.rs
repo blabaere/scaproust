@@ -19,12 +19,12 @@ use EventLoop;
 use EventLoopAction;
 use Message;
 
-use super::sender::SendToMany;
+use super::sender::*;
 
 pub struct Pub {
     pipes: HashMap<mio::Token, Pipe>,
     evt_sender: Rc<Sender<SocketEvt>>,
-    msg_sender: SendToMany
+    msg_sender: PolyadicMsgSender<MulticastSendingStrategy>
 }
 
 impl Pub {
@@ -32,7 +32,7 @@ impl Pub {
         Pub { 
             pipes: HashMap::new(),
             evt_sender: evt_tx.clone(),
-            msg_sender: SendToMany::new(evt_tx)
+            msg_sender: new_multicast_msg_sender(evt_tx)
         }
     }
 }
@@ -78,6 +78,10 @@ impl Protocol for Pub {
             sent = try!(pipe.ready_tx(event_loop, events));
         }
 
-        self.msg_sender.on_pipe_ready(event_loop, token, sent, &mut self.pipes)
+        if sent {
+            Ok(self.msg_sender.sent_by(event_loop, token, &mut self.pipes))
+        } else {
+            self.msg_sender.resume_send(event_loop, token, &mut self.pipes)
+        }
     }
 }

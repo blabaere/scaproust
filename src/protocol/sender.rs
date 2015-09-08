@@ -19,15 +19,42 @@ use EventLoop;
 use EventLoopAction;
 use Message;
 
-pub struct SendToAny {
+type PipeHashMap = HashMap<mio::Token, Pipe>;
+
+pub fn new_unicast_msg_sender(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> PolyadicMsgSender<UnicastSendingStrategy> {
+    PolyadicMsgSender::new(evt_tx, UnicastSendingStrategy)
+}
+
+pub fn new_multicast_msg_sender(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> PolyadicMsgSender<MulticastSendingStrategy> {
+    PolyadicMsgSender::new(evt_tx, MulticastSendingStrategy)
+}
+
+pub trait MsgSendingStrategy {
+    // returns: finished, keep msg pending
+    // finished: msg was sent, raise success notification
+    // keep: msg should be kept for other pipes
+
+    // send the message according to the strategy specification
+    fn send(&self, msg: Rc<Message>, pipes: &mut HashMap<mio::Token, Pipe>) -> (bool, bool);
+
+    // the specified pipe has successfully sent the current message
+    fn sent_by(&self, token: mio::Token, pipes: &mut PipeHashMap) -> (bool, bool);
+
+    // resume sending on the specified pipe
+    fn resume_send(&self, msg: &Rc<Message>, token: mio::Token, pipes: &mut PipeHashMap) -> io::Result<(bool, bool)>;
+}
+
+pub struct PolyadicMsgSender<TStrategy : MsgSendingStrategy> {
+    sending_strategy: TStrategy,
     evt_sender: Rc<mpsc::Sender<SocketEvt>>,
     cancel_timeout: Option<EventLoopAction>,
     pending_send: Option<Rc<Message>>
 }
 
-impl SendToAny {
-    pub fn new(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> SendToAny {
-        SendToAny {
+impl<TStrategy : MsgSendingStrategy> PolyadicMsgSender<TStrategy> {
+    pub fn new(evt_tx: Rc<mpsc::Sender<SocketEvt>>, sending_strategy: TStrategy) -> PolyadicMsgSender<TStrategy> {
+        PolyadicMsgSender {
+            sending_strategy: sending_strategy,
             evt_sender: evt_tx,
             cancel_timeout: None,
             pending_send: None
@@ -38,13 +65,118 @@ impl SendToAny {
         event_loop: &mut EventLoop,
         msg: Message,
         cancel_timeout: EventLoopAction,
-        pipes: &mut HashMap<mio::Token, Pipe>) {
+        pipes: &mut PipeHashMap) {
 
         self.cancel_timeout = Some(cancel_timeout);
 
+        let msg = Rc::new(msg);
+        let (finished, keep) = self.sending_strategy.send(msg.clone(), pipes);
+
+        if finished {
+            self.on_msg_send_finished_ok(event_loop, pipes);
+        } else if keep {
+            self.pending_send = Some(msg);
+        }
+    }
+
+    pub fn sent_by(&mut self,
+        event_loop: &mut EventLoop, 
+        token: mio::Token,
+        pipes: &mut PipeHashMap) {
+
+        let (finished, keep) = self.sending_strategy.sent_by(token, pipes);
+
+        if finished {
+            self.on_msg_send_finished_ok(event_loop, pipes);
+        } else if !keep {
+            self.pending_send = None;
+        }
+    }
+
+    pub fn resume_send(&mut self,
+        event_loop: &mut EventLoop,
+        token: mio::Token,
+        pipes: &mut PipeHashMap) -> io::Result<()>{
+
+        if self.pending_send.is_none() {
+            return Ok(());
+        }
+
+        let msg = self.pending_send.take().unwrap();
+        let (finished, keep) = try!(self.sending_strategy.resume_send(&msg, token, pipes));
+
+        if finished {
+            self.on_msg_send_finished_ok(event_loop, pipes);
+        } else if keep {
+            self.pending_send = Some(msg);
+        }
+
+        Ok(())
+    }
+
+    pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop, pipes: &mut HashMap<mio::Token, Pipe>) {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
+
+        self.on_msg_send_finished_err(event_loop, err, pipes);
+    }
+
+    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut HashMap<mio::Token, Pipe>) {
+        self.on_msg_send_finished_err(event_loop, err, pipes);
+    }
+
+    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, pipes: &mut HashMap<mio::Token, Pipe>) {
+        self.on_msg_send_finished(event_loop, SocketEvt::MsgSent);
+        for (_, pipe) in pipes.iter_mut() {
+            pipe.finish_send(); 
+        }
+    }
+
+    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut HashMap<mio::Token, Pipe>) {
+        self.on_msg_send_finished(event_loop, SocketEvt::MsgNotSent(err));
+        for (_, pipe) in pipes.iter_mut() {
+            pipe.cancel_send();
+        }
+    }
+
+    fn on_msg_send_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
+        let _ = self.evt_sender.send(evt);
+        let timeout = self.cancel_timeout.take();
+
+        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+        
+        self.pending_send = None;
+    }
+
+}
+
+pub struct UnicastSendingStrategy;
+
+impl UnicastSendingStrategy {
+
+    fn on_msg_send_started(&self, token: mio::Token, pipes: &mut HashMap<mio::Token, Pipe>) {
+        let filter_other = |p: &&mut Pipe| p.token() != token;
+        let mut other_pipes = pipes.iter_mut().map(|(_, p)| p).filter(filter_other);
+
+        while let Some(pipe) = other_pipes.next() {
+            pipe.discard_send(); 
+        }
+    }
+
+    fn is_finished_or_keep(&self, sent: bool, sending: Option<mio::Token>, pipes: &mut PipeHashMap) -> (bool, bool) {
+        if let Some(token) = sending {
+            self.on_msg_send_started(token, pipes);
+
+            (false, false)
+        } else {
+            (sent, !sent)
+        }
+    }
+}
+
+impl MsgSendingStrategy for UnicastSendingStrategy {
+    fn send(&self, msg: Rc<Message>, pipes: &mut HashMap<mio::Token, Pipe>) -> (bool, bool) {
         let mut sent = false;
         let mut sending = None;
-        let msg = Rc::new(msg);
 
         for (_, pipe) in pipes.into_iter() {
             match pipe.send(msg.clone()) {
@@ -55,29 +187,19 @@ impl SendToAny {
             break;
         }
 
-        self.pending_send = Some(msg);
-        self.process_send_result(event_loop, sent, sending, pipes);
+        self.is_finished_or_keep(sent, sending, pipes)
     }
 
-    pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop, pipes: &mut HashMap<mio::Token, Pipe>) {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
-
-        self.on_msg_send_finished_err(event_loop, err, pipes);
+    fn sent_by(&self, _: mio::Token, _: &mut PipeHashMap) -> (bool, bool) {
+        (true, false)
     }
 
-    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut HashMap<mio::Token, Pipe>) {
-        self.on_msg_send_finished_err(event_loop, err, pipes);
-    }
-
-    pub fn on_pipe_ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, sent: bool, pipes: &mut HashMap<mio::Token, Pipe>) -> io::Result<()> {
-        let has_pending_send = self.pending_send.is_some();
-        let mut sent = sent;
+    fn resume_send(&self, msg: &Rc<Message>, token: mio::Token, pipes: &mut PipeHashMap) -> io::Result<(bool, bool)> {
+        let mut sent = false;
         let mut sending = None;
 
         if let Some(pipe) = pipes.get_mut(&token) {
-            if has_pending_send && !sent && pipe.can_resume_send() {
-                let msg = self.pending_send.as_ref().unwrap();
-
+            if pipe.can_resume_send() {
                 match try!(pipe.send(msg.clone())) {
                     SendStatus::Completed  => sent = true,
                     SendStatus::InProgress => sending = Some(token),
@@ -86,158 +208,58 @@ impl SendToAny {
             }
         }
 
-        self.process_send_result(event_loop, sent, sending, pipes);
-
-        Ok(())
+        Ok(self.is_finished_or_keep(sent, sending, pipes))
     }
+}
 
-    fn process_send_result(&mut self, event_loop: &mut EventLoop, sent: bool, sending: Option<mio::Token>, pipes: &mut HashMap<mio::Token, Pipe>) {
+pub struct MulticastSendingStrategy;
+
+impl MulticastSendingStrategy {
+    fn is_finished_or_keep(&self, sent: bool, pipes: &mut PipeHashMap) -> (bool, bool) {
         if sent {
-            self.on_msg_send_finished_ok(event_loop, pipes);
-        } else if let Some(token) = sending {
-            self.on_msg_send_started(token, pipes);
+            let total_count = pipes.len();
+            let done_count = pipes.values().filter(|p| p.is_send_finished()).count();
+            let finished = total_count == done_count;
+
+            (finished, !finished)
+        } else {
+            (false, true)
         }
-    }
-
-    fn on_msg_send_started(&mut self, token: mio::Token, pipes: &mut HashMap<mio::Token, Pipe>) {
-        self.pending_send = None;
-        for (_, pipe) in pipes.iter_mut() {
-            if pipe.token() == token {
-                continue;
-            } else {
-                pipe.discard_send();
-            }
-        }
-    }
-
-    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, pipes: &mut HashMap<mio::Token, Pipe>) {
-        self.on_msg_send_finished(event_loop, SocketEvt::MsgSent);
-        for (_, pipe) in pipes.iter_mut() {
-            pipe.finish_send(); 
-        }
-    }
-
-    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut HashMap<mio::Token, Pipe>) {
-        self.on_msg_send_finished(event_loop, SocketEvt::MsgNotSent(err));
-        for (_, pipe) in pipes.iter_mut() {
-            pipe.cancel_send();
-        }
-    }
-
-    fn on_msg_send_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
-        let _ = self.evt_sender.send(evt);
-        let timeout = self.cancel_timeout.take();
-
-        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
-        
-        self.pending_send = None;
     }
 }
 
-pub struct SendToMany {
-    evt_sender: Rc<mpsc::Sender<SocketEvt>>,
-    cancel_timeout: Option<EventLoopAction>,
-    pending_send: Option<Rc<Message>>
-}
-
-impl SendToMany {
-    pub fn new(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> SendToMany {
-        SendToMany {
-            evt_sender: evt_tx,
-            cancel_timeout: None,
-            pending_send: None
-        }
-    }
-
-    pub fn send(&mut self,
-        event_loop: &mut EventLoop,
-        msg: Message,
-        cancel_timeout: EventLoopAction,
-        pipes: &mut HashMap<mio::Token, Pipe>) {
-
-        self.cancel_timeout = Some(cancel_timeout);
-
+impl MsgSendingStrategy for MulticastSendingStrategy {
+    fn send(&self, msg: Rc<Message>, pipes: &mut PipeHashMap) -> (bool, bool) {
         let mut sent = false;
-        let mut sending = None;
-        let msg = Rc::new(msg);
 
-        for (_, pipe) in pipes.iter_mut() {
+        for (_, pipe) in pipes.into_iter() {
             match pipe.send(msg.clone()) {
                 Ok(SendStatus::Completed)  => sent = true,
-                Ok(SendStatus::InProgress) => sending = Some(pipe.token()),
                 _ => continue
             }
         }
 
-        self.pending_send = Some(msg);
-        self.process_send_result(event_loop, sent, sending, pipes);
+        self.is_finished_or_keep(sent, pipes)
     }
 
-    pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop, pipes: &mut HashMap<mio::Token, Pipe>) {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
+    fn sent_by(&self, _: mio::Token, pipes: &mut PipeHashMap) -> (bool, bool) {
+        self.is_finished_or_keep(true, pipes)
+     }
 
-        self.on_msg_send_finished_err(event_loop, err, pipes);
-    }
-
-    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut HashMap<mio::Token, Pipe>) {
-        self.on_msg_send_finished_err(event_loop, err, pipes);
-    }
-
-    pub fn on_pipe_ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, sent: bool, pipes: &mut HashMap<mio::Token, Pipe>) -> io::Result<()> {
-        let has_pending_send = self.pending_send.is_some();
-        let mut sent = sent;
-        let mut sending = None;
+    fn resume_send(&self, msg: &Rc<Message>, token: mio::Token, pipes: &mut PipeHashMap) -> io::Result<(bool, bool)> {
+        let mut sent = false;
 
         if let Some(pipe) = pipes.get_mut(&token) {
-            if has_pending_send && !sent && pipe.can_resume_send() {
-                let msg = self.pending_send.as_ref().unwrap();
-
+            if pipe.can_resume_send() {
                 match try!(pipe.send(msg.clone())) {
                     SendStatus::Completed  => sent = true,
-                    SendStatus::InProgress => sending = Some(token),
                     _ => {}
                 }
             }
         }
 
-        self.process_send_result(event_loop, sent, sending, pipes);
-
-        Ok(())
-    }
-
-    fn process_send_result(&mut self, event_loop: &mut EventLoop, sent: bool, _: Option<mio::Token>, pipes: &mut HashMap<mio::Token, Pipe>) {
-        if sent {
-            let total_count = pipes.len();
-            let done_count = pipes.values().filter(|p| p.is_send_finished()).count();
-
-            if total_count == done_count {
-                self.on_msg_send_finished_ok(event_loop, pipes);
-            }
-        }
-    }
-
-    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, pipes: &mut HashMap<mio::Token, Pipe>) {
-        self.on_msg_send_finished(event_loop, SocketEvt::MsgSent);
-        for (_, pipe) in pipes.iter_mut() {
-            pipe.finish_send(); 
-        }
-    }
-
-    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut HashMap<mio::Token, Pipe>) {
-        self.on_msg_send_finished(event_loop, SocketEvt::MsgNotSent(err));
-        for (_, pipe) in pipes.iter_mut() {
-            pipe.cancel_send();
-        }
-    }
-
-    fn on_msg_send_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
-        let _ = self.evt_sender.send(evt);
-        let timeout = self.cancel_timeout.take();
-
-        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
-        
-        self.pending_send = None;
-    }
+        Ok(self.is_finished_or_keep(sent, pipes))
+     }
 }
 
 pub struct SendToSingle {
@@ -297,15 +319,15 @@ impl SendToSingle {
         let mut sent = sent;
         let mut sending = false;
 
-            if has_pending_send && !sent && pipe.can_resume_send() {
-                let msg = self.pending_send.as_ref().unwrap();
+        if has_pending_send && !sent && pipe.can_resume_send() {
+            let msg = self.pending_send.as_ref().unwrap();
 
-                match try!(pipe.send(msg.clone())) {
-                    SendStatus::Completed  => sent = true,
-                    SendStatus::InProgress => sending = true,
-                    _ => {}
-                }
+            match try!(pipe.send(msg.clone())) {
+                SendStatus::Completed  => sent = true,
+                SendStatus::InProgress => sending = true,
+                _ => {}
             }
+        }
 
         self.process_send_result(event_loop, sent, sending, Some(pipe));
 

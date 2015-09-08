@@ -20,14 +20,14 @@ use EventLoop;
 use EventLoopAction;
 use Message;
 
-use super::sender::SendToMany;
+use super::sender::*;
 
 pub struct Bus {
     pipes: HashMap<mio::Token, Pipe>,
     evt_sender: Rc<Sender<SocketEvt>>,
     cancel_recv_timeout: Option<EventLoopAction>,
     pending_recv: bool,
-    msg_sender: SendToMany
+    msg_sender: PolyadicMsgSender<MulticastSendingStrategy>
 }
 
 impl Bus {
@@ -37,7 +37,7 @@ impl Bus {
             evt_sender: evt_tx.clone(),
             cancel_recv_timeout: None,
             pending_recv: false,
-            msg_sender: SendToMany::new(evt_tx)
+            msg_sender: new_multicast_msg_sender(evt_tx)
         }
     }
 
@@ -138,30 +138,15 @@ impl Protocol for Bus {
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
         let mut sent = false;
-        let mut received = None;
-        let mut receiving = None;
 
         if let Some(pipe) = self.pipes.get_mut(&token) {
-            let has_pending_recv = self.pending_recv;
-
-            let (s, r) = try!(pipe.ready(event_loop, events));
-            sent = s;
-            received = r;
-
-            if has_pending_recv && received.is_none() && pipe.can_resume_recv() {
-                match try!(pipe.recv()) {
-                    RecvStatus::Completed(msg) => received = Some(msg),
-                    RecvStatus::InProgress     => receiving = Some(pipe.token()),
-                    _ => {}
-                }
-            }
+            sent = try!(pipe.ready_tx(event_loop, events));
         }
 
-        //self.process_send_result(event_loop, sent, sending);
-        self.msg_sender.on_pipe_ready(event_loop, token, sent, &mut self.pipes);
-        self.process_recv_result(event_loop, received, receiving);
-
-        Ok(())
-
+        if sent {
+            Ok(self.msg_sender.sent_by(event_loop, token, &mut self.pipes))
+        } else {
+            self.msg_sender.resume_send(event_loop, token, &mut self.pipes)
+        }
     }
 }
