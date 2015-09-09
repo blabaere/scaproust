@@ -42,16 +42,26 @@ fn test_pipeline_bound_to_connected() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
-//#[test] does not work yet ...
+#[test]
 fn test_send_while_not_connected() {
     let session = Session::new().unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
+    let mut pull = session.create_socket(SocketType::Pull).unwrap();
+    let timeout = time::Duration::from_millis(250);
 
-    push.connect("tcp://127.0.0.1:5456").unwrap();
+    let recver = ::std::thread::spawn(move || {
+        ::std::thread::sleep_ms(50);
+        pull.connect("tcp://127.0.0.1:5456").unwrap();
+        let received = pull.recv().unwrap();
+        assert_eq!(vec![65, 66, 67], received)
+    });
 
-    let err = push.send(vec![65, 66, 67]).unwrap_err();
+    push.set_send_timeout(timeout).unwrap();
+    push.bind("tcp://127.0.0.1:5456").unwrap();
 
-    assert_eq!(io::ErrorKind::NotConnected, err.kind());
+    push.send(vec![65, 66, 67]).unwrap();
+
+    recver.join().unwrap();
 }
 
 #[test]
@@ -74,12 +84,22 @@ fn test_send_timeout() {
 fn test_recv_while_not_connected() {
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
+    let mut push = session.create_socket(SocketType::Push).unwrap();
+    let timeout = time::Duration::from_millis(250);
 
+    pull.set_recv_timeout(timeout).unwrap();
     pull.bind("tcp://127.0.0.1:5458").unwrap();
 
-    let err = pull.recv().unwrap_err();
+    let sender = ::std::thread::spawn(move || {
+        ::std::thread::sleep_ms(50);
+        push.connect("tcp://127.0.0.1:5456").unwrap();
+        push.send(vec![65, 66, 67]).unwrap();
+    });
 
-    assert_eq!(io::ErrorKind::NotConnected, err.kind());
+    let received = pull.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received);
+
+    sender.join().unwrap();
 }
 
 #[test]
