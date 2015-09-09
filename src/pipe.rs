@@ -143,17 +143,27 @@ impl Pipe {
     }
 
     pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<(bool, Option<Message>)> {
-        self.endpoint.ready(event_loop, events)
+        let (sent, received) = try!(self.endpoint.ready(event_loop, events));
+
+        if sent {
+            self.send_status = Some(OperationStatus::Completed);
+        }
+
+        if received.is_some() {
+            self.recv_status = Some(OperationStatus::Completed);
+        }
+
+        Ok((sent, received))
     }
 
     pub fn ready_tx(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<bool> {
-        let (sent, _) = try!(self.endpoint.ready(event_loop, events));
+        let (sent, _) = try!(self.ready(event_loop, events));
 
         Ok(sent)
     }
 
     pub fn ready_rx(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) -> io::Result<Option<Message>> {
-        let (_, received) = try!(self.endpoint.ready(event_loop, events));
+        let (_, received) = try!(self.ready(event_loop, events));
 
         Ok(received)
     }
