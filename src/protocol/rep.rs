@@ -121,6 +121,7 @@ impl Rep {
             if header[position] & 0x80 != 0 {
                 let msg = Message::with_header_and_body(header, tail);
 
+                self.save_received_header_to_backtrace(&msg);
                 return Ok(Some(msg));
             }
             body = tail;
@@ -175,7 +176,6 @@ impl Rep {
     }
 
     fn on_msg_recv_finished_ok(&mut self, event_loop: &mut EventLoop, msg: Message) {
-        self.save_received_header_to_backtrace(&msg);
         self.on_msg_recv_finished(event_loop, SocketEvt::MsgRecv(msg));
 
         for (_, pipe) in self.pipes.iter_mut() {
