@@ -138,10 +138,26 @@ impl Protocol for Bus {
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
         let mut sent = false;
+        let mut received = None;
+        let mut receiving = None;
 
         if let Some(pipe) = self.pipes.get_mut(&token) {
-            sent = try!(pipe.ready_tx(event_loop, events));
+            let has_pending_recv = self.pending_recv;
+
+            let (s, r) = try!(pipe.ready(event_loop, events));
+            sent = s;
+            received = r;
+
+            if has_pending_recv && received.is_none() && pipe.can_resume_recv() {
+                match try!(pipe.recv()) {
+                    RecvStatus::Completed(msg) => received = Some(msg),
+                    RecvStatus::InProgress     => receiving = Some(pipe.token()),
+                    _ => {}
+                }
+            }
         }
+
+        self.process_recv_result(event_loop, received, receiving);
 
         if sent {
             Ok(self.msg_sender.sent_by(event_loop, token, &mut self.pipes))

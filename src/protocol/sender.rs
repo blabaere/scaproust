@@ -96,7 +96,7 @@ impl<TStrategy : MsgSendingStrategy> PolyadicMsgSender<TStrategy> {
     pub fn resume_send(&mut self,
         event_loop: &mut EventLoop,
         token: mio::Token,
-        pipes: &mut PipeHashMap) -> io::Result<()>{
+        pipes: &mut PipeHashMap) -> io::Result<()> {
 
         if self.pending_send.is_none() {
             return Ok(());
