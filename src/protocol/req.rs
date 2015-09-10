@@ -118,7 +118,7 @@ impl Req {
         next_id
     }
 
-    fn raw_msg_to_msg(&mut self, raw_msg: Message) -> io::Result<(Message, u32)> {
+    fn raw_msg_to_msg(&self, raw_msg: Message) -> io::Result<(Message, u32)> {
         let (mut header, mut payload) = raw_msg.explode();
         let body = payload.split_off(4);
         let mut req_id_reader = io::Cursor::new(payload);

@@ -28,6 +28,7 @@ pub mod surv;
 pub mod resp;
 
 pub mod sender;
+pub mod receiver;
 
 pub fn create_protocol(socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Box<Protocol> {
     match socket_type {

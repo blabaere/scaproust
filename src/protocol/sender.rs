@@ -120,18 +120,18 @@ impl<TStrategy : MsgSendingStrategy> PolyadicMsgSender<TStrategy> {
         self.on_msg_send_finished_err(event_loop, err, pipes);
     }
 
-    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut HashMap<mio::Token, Pipe>) {
+    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut PipeHashMap) {
         self.on_msg_send_finished_err(event_loop, err, pipes);
     }
 
-    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, pipes: &mut HashMap<mio::Token, Pipe>) {
+    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, pipes: &mut PipeHashMap) {
         self.on_msg_send_finished(event_loop, SocketEvt::MsgSent);
         for (_, pipe) in pipes.iter_mut() {
             pipe.finish_send(); 
         }
     }
 
-    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut HashMap<mio::Token, Pipe>) {
+    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut PipeHashMap) {
         self.on_msg_send_finished(event_loop, SocketEvt::MsgNotSent(err));
         for (_, pipe) in pipes.iter_mut() {
             pipe.cancel_send();
@@ -153,7 +153,7 @@ pub struct UnicastSendingStrategy;
 
 impl UnicastSendingStrategy {
 
-    fn on_msg_send_started(&self, token: mio::Token, pipes: &mut HashMap<mio::Token, Pipe>) {
+    fn on_msg_send_started(&self, token: mio::Token, pipes: &mut PipeHashMap) {
         let filter_other = |p: &&mut Pipe| p.token() != token;
         let mut other_pipes = pipes.iter_mut().map(|(_, p)| p).filter(filter_other);
 
@@ -174,7 +174,7 @@ impl UnicastSendingStrategy {
 }
 
 impl MsgSendingStrategy for UnicastSendingStrategy {
-    fn send(&self, msg: Rc<Message>, pipes: &mut HashMap<mio::Token, Pipe>) -> (bool, bool) {
+    fn send(&self, msg: Rc<Message>, pipes: &mut PipeHashMap) -> (bool, bool) {
         let mut sent = false;
         let mut sending = None;
 
