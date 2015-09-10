@@ -24,7 +24,7 @@ use super::receiver::*;
 pub struct Pull {
     pipes: HashMap<mio::Token, Pipe>,
     evt_sender: Rc<mpsc::Sender<SocketEvt>>,
-    receiver: PolyadicMsgReceiver,
+    msg_receiver: PolyadicMsgReceiver,
     codec: NoopMsgDecoder
 }
 
@@ -33,7 +33,7 @@ impl Pull {
         Pull { 
             pipes: HashMap::new(),
             evt_sender: evt_tx.clone(),
-            receiver: PolyadicMsgReceiver::new(evt_tx),
+            msg_receiver: PolyadicMsgReceiver::new(evt_tx),
             codec: NoopMsgDecoder
         }
     }
@@ -66,11 +66,11 @@ impl Protocol for Pull {
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
-        self.receiver.recv(event_loop, &mut self.codec, cancel_timeout, &mut self.pipes);
+        self.msg_receiver.recv(event_loop, &mut self.codec, cancel_timeout, &mut self.pipes);
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.receiver.on_recv_timeout(event_loop, &mut self.pipes)
+        self.msg_receiver.on_recv_timeout(event_loop, &mut self.pipes)
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
@@ -81,8 +81,8 @@ impl Protocol for Pull {
         }
 
         match received {
-            Some(msg) => Ok(self.receiver.received_by(event_loop, &mut self.codec, msg, token, &mut self.pipes)),
-            None => self.receiver.resume_recv(event_loop, &mut self.codec, token, &mut self.pipes)
+            Some(msg) => Ok(self.msg_receiver.received_by(event_loop, &mut self.codec, msg, token, &mut self.pipes)),
+            None => self.msg_receiver.resume_recv(event_loop, &mut self.codec, token, &mut self.pipes)
         }
     }
 }
