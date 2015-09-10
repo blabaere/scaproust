@@ -78,10 +78,9 @@ impl Protocol for Pub {
             sent = try!(pipe.ready_tx(event_loop, events));
         }
 
-        if sent {
-            Ok(self.msg_sender.sent_by(event_loop, token, &mut self.pipes))
-        } else {
-            self.msg_sender.resume_send(event_loop, token, &mut self.pipes)
+        match sent {
+            true  => Ok(self.msg_sender.sent_by(event_loop, token, &mut self.pipes)),
+            false => self.msg_sender.resume_send(event_loop, token, &mut self.pipes)
         }
     }
 }

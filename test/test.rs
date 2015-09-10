@@ -80,7 +80,7 @@ fn test_send_timeout() {
     assert_eq!(io::ErrorKind::TimedOut, err.kind());
 }
 
-//#[test] does not work yet ...
+#[test]
 fn test_recv_while_not_connected() {
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
@@ -92,7 +92,7 @@ fn test_recv_while_not_connected() {
 
     let sender = ::std::thread::spawn(move || {
         ::std::thread::sleep_ms(50);
-        push.connect("tcp://127.0.0.1:5456").unwrap();
+        push.connect("tcp://127.0.0.1:5458").unwrap();
         push.send(vec![65, 66, 67]).unwrap();
     });
 
