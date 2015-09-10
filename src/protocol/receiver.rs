@@ -22,14 +22,14 @@ use Message;
 type PipeHashMap = HashMap<mio::Token, Pipe>;
 
 pub trait MsgDecoder {
-    fn decode(&mut self, msg: Message) -> Option<Message>;
+    fn decode(&mut self, msg: Message, pipe_token: mio::Token) -> io::Result<Option<Message>>;
 }
 
 pub struct NoopMsgDecoder;
 
 impl MsgDecoder for NoopMsgDecoder {
-    fn decode(&mut self, msg: Message) -> Option<Message> {
-        Some(msg)
+    fn decode(&mut self, msg: Message, _: mio::Token) -> io::Result<Option<Message>> {
+        Ok(Some(msg))
     }
 }
 
@@ -60,7 +60,7 @@ impl PolyadicMsgReceiver {
         let mut receiving = None;
         for (_, pipe) in pipes.iter_mut() {
             match pipe.recv() {
-                Ok(RecvStatus::Completed(msg)) => received = Some(msg),
+                Ok(RecvStatus::Completed(msg)) => received = Some((msg, pipe.token())),
                 Ok(RecvStatus::InProgress)     => receiving = Some(pipe.token()),
                 _ => continue
             }
@@ -78,7 +78,7 @@ impl PolyadicMsgReceiver {
         token: mio::Token,
         pipes: &mut PipeHashMap) {
 
-        self.process_recv_result(event_loop, decoder, Some(raw_msg), None, pipes);
+        self.process_recv_result(event_loop, decoder, Some((raw_msg, token)), None, pipes);
     }
 
     pub fn resume_recv(&mut self,
@@ -97,7 +97,7 @@ impl PolyadicMsgReceiver {
         if let Some(pipe) = pipes.get_mut(&token) {
             if pipe.can_resume_recv() {
                 match try!(pipe.recv()) {
-                    RecvStatus::Completed(msg) => received = Some(msg),
+                    RecvStatus::Completed(msg) => received = Some((msg, pipe.token())),
                     RecvStatus::InProgress     => receiving = Some(token),
                     _ => {}
                 }
@@ -118,16 +118,22 @@ impl PolyadicMsgReceiver {
     fn process_recv_result(&mut self,
         event_loop: &mut EventLoop,
         decoder: &mut MsgDecoder,
-        received: Option<Message>,
+        received: Option<(Message, mio::Token)>,
         receiving: Option<mio::Token>,
         pipes: &mut PipeHashMap) {
 
-        if let Some(raw_msg) = received {
-            match decoder.decode(raw_msg) {
-                Some(msg) => {
-                    self.on_msg_recv_finished_ok(event_loop, msg, pipes);
-                },
-                None => {}
+        if let Some((raw_msg, tok)) = received {
+            match decoder.decode(raw_msg, tok) {
+                Err(e)        => self.on_msg_recv_finished_err(event_loop, e, pipes),
+                Ok(Some(msg)) => self.on_msg_recv_finished_ok(event_loop, msg, pipes),
+                Ok(None)      => {
+                /* 
+                The raw msg has been decoded, but it does not match the current interest.
+                Here the recv operation should probably be started again on the pipe, 
+                otherwise we won't receive anymore during this operation.
+                The correct way is probably to set the pipe's recv operation status flag to PostPoned or None
+                */
+                }
             }
         }
         else if let Some(token) = receiving {
