@@ -18,62 +18,23 @@ use EventLoop;
 use EventLoopAction;
 use Message;
 
-use super::sender::SendToSingle;
+use super::sender::*;
+use super::receiver::*;
 
 pub struct Pair {
     pipe: Option<Pipe>,
-    evt_sender: Rc<Sender<SocketEvt>>,
-    cancel_recv_timeout: Option<EventLoopAction>,
-    pending_recv: bool,
-    msg_sender: SendToSingle
+    msg_sender: UnaryMsgSender,
+    msg_receiver: UnaryMsgReceiver,
+    codec: NoopMsgDecoder
 }
 
 impl Pair {
-    pub fn new(evt_sender: Rc<Sender<SocketEvt>>) -> Pair {
+    pub fn new(evt_tx: Rc<Sender<SocketEvt>>) -> Pair {
         Pair { 
             pipe: None,
-            evt_sender: evt_sender.clone(),
-            cancel_recv_timeout: None,
-            pending_recv: false,
-            msg_sender: SendToSingle::new(evt_sender)
-        }
-    }
-
-    fn on_msg_recv_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
-        let _ = self.evt_sender.send(evt);
-        let timeout = self.cancel_recv_timeout.take();
-
-        timeout.map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
-
-        self.pending_recv = false;
-    }
-
-    fn on_msg_recv_finished_ok(&mut self, event_loop: &mut EventLoop, msg: Message) {
-        self.on_msg_recv_finished(event_loop, SocketEvt::MsgRecv(msg));
-
-        if let Some(pipe) = self.pipe.as_mut() {
-            pipe.finish_recv(); 
-        }
-    }
-
-    fn on_msg_recv_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error) {
-        self.on_msg_recv_finished(event_loop, SocketEvt::MsgNotRecv(err));
-
-        if let Some(pipe) = self.pipe.as_mut() {
-            pipe.cancel_recv(); 
-        }
-    }
-
-    fn on_msg_recv_started(&mut self, _: mio::Token) {
-        self.pending_recv = false;
-    }
-
-    fn process_recv_result(&mut self, event_loop: &mut EventLoop, received: Option<Message>, receiving: Option<mio::Token>) {
-        if let Some(msg) = received {
-            self.on_msg_recv_finished_ok(event_loop, msg);
-        }
-        else if let Some(token) = receiving {
-            self.on_msg_recv_started(token);
+            msg_sender: UnaryMsgSender::new(evt_tx.clone()),
+            msg_receiver: UnaryMsgReceiver::new(evt_tx.clone()),
+            codec: NoopMsgDecoder
         }
     }
 }
@@ -109,59 +70,33 @@ impl Protocol for Pair {
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
-        self.cancel_recv_timeout = Some(cancel_timeout);
-
-        if self.pipe.is_none() {
-            self.pending_recv = true;
-            return;
-        }
-
-        let mut pipe = self.pipe.take().unwrap();
-        let mut received = None;
-        let mut receiving = None;
-
-        match pipe.recv() {
-            Ok(RecvStatus::Completed(msg)) => received = Some(msg),
-            Ok(RecvStatus::InProgress)     => receiving = Some(pipe.token()),
-            _ => {}
-        }
-
-        self.pipe = Some(pipe);
-        self.pending_recv = true;
-        self.process_recv_result(event_loop, received, receiving);
+        self.msg_receiver.recv(event_loop, &mut self.codec, cancel_timeout, self.pipe.as_mut())
     }
     
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
-
-        self.on_msg_recv_finished_err(event_loop, err);
+        self.msg_receiver.on_recv_timeout(event_loop, self.pipe.as_mut())
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
         let mut sent = false;
         let mut received = None;
-        let mut receiving = None;
 
         if let Some(pipe) = self.pipe.as_mut() {
-            let has_pending_recv = self.pending_recv;
             let (s, r) = try!(pipe.ready(event_loop, events));
             sent = s;
             received = r;
-
-            if has_pending_recv && received.is_none() && pipe.can_resume_recv() {
-                match try!(pipe.recv()) {
-                    RecvStatus::Completed(msg) => received = Some(msg),
-                    RecvStatus::InProgress     => receiving = Some(token),
-                    _ => {}
-                }
-            }
         }
 
-        if let Some(pipe) = self.pipe.as_mut() {
-            try!(self.msg_sender.on_pipe_ready(event_loop, token, sent, pipe));
-        }
-        self.process_recv_result(event_loop, received, receiving);
+        let send_result = match sent {
+            true  => Ok(self.msg_sender.sent_by(event_loop, token, self.pipe.as_mut())),
+            false => self.msg_sender.resume_send(event_loop, token, self.pipe.as_mut())
+        };
 
-        Ok(())
+        let recv_result = match received {
+            Some(msg) => Ok(self.msg_receiver.received_by(event_loop, &mut self.codec, msg, token, self.pipe.as_mut())),
+            None => self.msg_receiver.resume_recv(event_loop, &mut self.codec, token, self.pipe.as_mut())
+        };
+
+        send_result.and(recv_result)
     }
 }

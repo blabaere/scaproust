@@ -419,15 +419,15 @@ impl ReturnSender {
 
 }
 
-pub struct SendToSingle {
+pub struct UnaryMsgSender {
     evt_sender: Rc<mpsc::Sender<SocketEvt>>,
     cancel_timeout: Option<EventLoopAction>,
     pending_send: Option<Rc<Message>>
 }
 
-impl SendToSingle {
-    pub fn new(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> SendToSingle {
-        SendToSingle {
+impl UnaryMsgSender {
+    pub fn new(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> UnaryMsgSender {
+        UnaryMsgSender {
             evt_sender: evt_tx,
             cancel_timeout: None,
             pending_send: None
@@ -467,28 +467,44 @@ impl SendToSingle {
         self.on_msg_send_finished_err(event_loop, err, pipe_cell);
     }
 
-    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipe_cell: Option<&mut Pipe>) {
-        self.on_msg_send_finished_err(event_loop, err, pipe_cell);
+    pub fn sent_by(&mut self,
+        event_loop: &mut EventLoop, 
+        _: mio::Token,
+        pipe_cell: Option<&mut Pipe>) {
+
+        self.on_msg_send_finished_ok(event_loop, pipe_cell);
     }
 
-    pub fn on_pipe_ready(&mut self, event_loop: &mut EventLoop, _: mio::Token, sent: bool, pipe: &mut Pipe) -> io::Result<()> {
-        let has_pending_send = self.pending_send.is_some();
-        let mut sent = sent;
+    pub fn resume_send(&mut self,
+        event_loop: &mut EventLoop,
+        _: mio::Token,
+        pipe_cell: Option<&mut Pipe>) -> io::Result<()> {
+
+        if self.pending_send.is_none() {
+            return Ok(());
+        }
+
+        let mut pipe = pipe_cell.unwrap();
+        let mut sent = false;
         let mut sending = false;
+        let msg = self.pending_send.take().unwrap();
 
-        if has_pending_send && !sent && pipe.can_resume_send() {
-            let msg = self.pending_send.as_ref().unwrap();
-
-            match try!(pipe.send(msg.clone())) {
-                SendStatus::Completed  => sent = true,
-                SendStatus::InProgress => sending = true,
+        if pipe.can_resume_send() {
+            match pipe.send(msg.clone()) {
+                Ok(SendStatus::Completed)  => sent = true,
+                Ok(SendStatus::InProgress) => sending = true,
                 _ => {}
             }
         }
 
+        self.pending_send = Some(msg);
         self.process_send_result(event_loop, sent, sending, Some(pipe));
 
         Ok(())
+    }
+
+    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipe_cell: Option<&mut Pipe>) {
+        self.on_msg_send_finished_err(event_loop, err, pipe_cell);
     }
 
     fn process_send_result(&mut self, event_loop: &mut EventLoop, sent: bool, sending: bool, pipe_cell: Option<&mut Pipe>) {
