@@ -62,6 +62,15 @@ impl Protocol for Push {
         self.msg_sender.on_send_timeout(event_loop, &mut self.pipes);
     }
 
+    fn recv(&mut self, _: &mut EventLoop, _: EventLoopAction) {
+        let err = other_io_error("recv not supported by protocol");
+        let cmd = SocketEvt::MsgNotRecv(err);
+        let _ = self.evt_sender.send(cmd);
+    }
+    
+    fn on_recv_timeout(&mut self, _: &mut EventLoop) {
+    }
+
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
         let mut sent = false;
 
@@ -73,14 +82,5 @@ impl Protocol for Push {
             true  => Ok(self.msg_sender.sent_by(event_loop, token, &mut self.pipes)),
             false => self.msg_sender.resume_send(event_loop, token, &mut self.pipes)
         }
-    }
-
-    fn recv(&mut self, _: &mut EventLoop, _: EventLoopAction) {
-        let err = other_io_error("recv not supported by protocol");
-        let cmd = SocketEvt::MsgNotRecv(err);
-        let _ = self.evt_sender.send(cmd);
-    }
-    
-    fn on_recv_timeout(&mut self, _: &mut EventLoop) {
     }
 }

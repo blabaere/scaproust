@@ -62,12 +62,12 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS
   - [ ] Statistics
 
 - [ ] Advanced features
-  - [ ] Send (scatter array + control header)
-  - [ ] Recv (scatter array + control header)
   - [ ] Fair queuing
   - [ ] Load balancing
   - [ ] Send priority
   - [ ] Recv priority
+  - [ ] Send (scatter array + control header)
+  - [ ] Recv (scatter array + control header)
 
 - [ ] Socket options
   - [ ] Linger

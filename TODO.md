@@ -7,21 +7,6 @@ Update rust-closure-playground repo with FnBox findings
 - setup documentation generation and site and github pages
 - setup CI with appveyor once mio is compatible with windows
 
-### Current problem:  
-If no pipe is available when sending or receiving, an error is returned.
-The expected behavior is to wait the timeout for a pipe to be added (via reconnect or accept).
-
-### Next problem:
-There is too much code duplication in the protocol part.
-Refactoring the protocols may be harder but there are some crosscutting aspects:
-- Send to single (pair, push, req, rep, resp)
-- Send to many (bus, pub, surv)
-- No sending (pull, sub)
-
-Some header related code could also be shared:
-- Message with id (req/rep, surv/resp)
-- Send back to originator only (rep, resp)
-
 ### Refactors:  
 - Rename session into something less oriented ? (context, environment ...)
 - Remove association between token and socketid when a pipe is dead

@@ -40,10 +40,6 @@ impl Rep {
             codec: Codec::new()
         }
     }
-
-    /*fn on_msg_send_finished(&mut self, event_loop: &mut EventLoop, evt: SocketEvt) {
-        self.backtrace.clear();
-    }*/
 }
 
 impl Protocol for Rep {
