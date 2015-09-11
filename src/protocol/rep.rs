@@ -124,7 +124,7 @@ impl Codec {
         }
     }
 
-    fn encode(&mut self, msg: Message)  -> io::Result<(Message, mio::Token)> {
+    fn encode(&mut self, msg: Message) -> io::Result<(Message, mio::Token)> {
         let (header, body) = msg.explode();
         let pipe_token = try!(self.restore_pipe_id_from_backtrace());
         let header = try!(self.restore_header_from_backtrace(header));

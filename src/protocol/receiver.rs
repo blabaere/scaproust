@@ -127,12 +127,9 @@ impl PolyadicMsgReceiver {
                 Err(e)        => self.on_msg_recv_finished_err(event_loop, e, pipes),
                 Ok(Some(msg)) => self.on_msg_recv_finished_ok(event_loop, msg, pipes),
                 Ok(None)      => {
-                /* 
-                The raw msg has been decoded, but it does not match the current interest.
-                Here the recv operation should probably be started again on the pipe, 
-                otherwise we won't receive anymore during this operation.
-                The correct way is probably to set the pipe's recv operation status flag to PostPoned or None
-                */
+                    if let Some(pipe) = pipes.get_mut(&tok) {
+                        pipe.finish_recv(); // msg was decoded and then dicarded, try again
+                    }
                 }
             }
         }
