@@ -14,7 +14,7 @@ use super::Protocol;
 use pipe::*;
 use endpoint::*;
 use global::*;
-use event_loop_msg::SocketEvt;
+use event_loop_msg::{ SocketEvt, SocketOption };
 use EventLoop;
 use EventLoopAction;
 use Message;
@@ -84,5 +84,9 @@ impl Protocol for Pull {
             Some(msg) => Ok(self.msg_receiver.received_by(event_loop, &mut self.codec, msg, token, &mut self.pipes)),
             None => self.msg_receiver.resume_recv(event_loop, &mut self.codec, token, &mut self.pipes)
         }
+    }
+
+    fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
+        Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
     }
 }

@@ -14,7 +14,7 @@ use super::Protocol;
 use pipe::*;
 use endpoint::*;
 use global::*;
-use event_loop_msg::SocketEvt;
+use event_loop_msg::{ SocketEvt, SocketOption };
 use EventLoop;
 use EventLoopAction;
 use Message;
@@ -82,5 +82,9 @@ impl Protocol for Pub {
             true  => Ok(self.msg_sender.sent_by(event_loop, token, &mut self.pipes)),
             false => self.msg_sender.resume_send(event_loop, token, &mut self.pipes)
         }
+    }
+
+    fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
+        Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
     }
 }

@@ -13,7 +13,7 @@ use super::Protocol;
 use pipe::*;
 use endpoint::*;
 use global::*;
-use event_loop_msg::SocketEvt;
+use event_loop_msg::{ SocketEvt, SocketOption };
 use EventLoop;
 use EventLoopAction;
 use Message;
@@ -98,5 +98,9 @@ impl Protocol for Pair {
         };
 
         send_result.and(recv_result)
+    }
+
+    fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
+        Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
     }
 }

@@ -178,15 +178,25 @@ fn test_pub_sub() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Pub).unwrap();
     let mut client = session.create_socket(SocketType::Sub).unwrap();
+    let timeout = time::Duration::from_millis(50);
 
     server.bind("tcp://127.0.0.1:5463").unwrap();
     client.connect("tcp://127.0.0.1:5463").unwrap();
+    client.set_recv_timeout(timeout).unwrap();
+    client.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
+    client.set_option(SocketOption::Subscribe("B".to_string())).unwrap();
 
-    let sent = vec![65, 66, 67];
-    server.send(sent).unwrap();
-    let received = client.recv().unwrap();
+    server.send(vec![65, 66, 67]).unwrap();
+    let received_a = client.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received_a);
 
-    assert_eq!(vec![65, 66, 67], received);
+    server.send(vec![66, 65, 67]).unwrap();
+    let received_b = client.recv().unwrap();
+    assert_eq!(vec![66, 65, 67], received_b);
+
+    server.send(vec![67, 66, 65]).unwrap();
+    let not_received_c = client.recv().unwrap_err();
+    assert_eq!(io::ErrorKind::TimedOut, not_received_c.kind());
 }
 
 #[test]

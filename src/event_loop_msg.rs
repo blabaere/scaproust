@@ -32,7 +32,9 @@ pub enum SocketCmd {
 
 pub enum SocketOption {
     SendTimeout(time::Duration),
-    RecvTimeout(time::Duration)
+    RecvTimeout(time::Duration),
+    Subscribe(String),
+    Unsubscribe(String)
 }
 
 pub enum EventLoopTimeout {

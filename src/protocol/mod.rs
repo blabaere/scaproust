@@ -10,7 +10,7 @@ use std::io;
 use mio;
 
 use global::SocketType;
-use event_loop_msg::SocketEvt;
+use event_loop_msg::{ SocketEvt, SocketOption };
 use endpoint::Endpoint;
 use EventLoop;
 use EventLoopAction;
@@ -59,4 +59,6 @@ pub trait Protocol {
 
     fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction);
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop);
+
+    fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) -> io::Result<()>;
 }

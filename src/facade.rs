@@ -165,7 +165,7 @@ impl SocketFacade {
         }
     }
 
-    fn set_option(&mut self, option: SocketOption) -> io::Result<()> {
+    pub fn set_option(&mut self, option: SocketOption) -> io::Result<()> {
         let cmd = SocketCmd::SetOption(option);
 
         try!(self.send_cmd(cmd));

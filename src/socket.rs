@@ -249,10 +249,12 @@ impl Socket {
         self.protocol.on_recv_timeout(event_loop);
     }
 
-    pub fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) {
+    pub fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) {
         let set_res = match option {
-            SocketOption::SendTimeout(timeout) => self.options.set_send_timeout(timeout),
-            SocketOption::RecvTimeout(timeout) => self.options.set_recv_timeout(timeout)
+            SocketOption::SendTimeout(timeout)   => self.options.set_send_timeout(timeout),
+            SocketOption::RecvTimeout(timeout)   => self.options.set_recv_timeout(timeout),
+            o_sub @ SocketOption::Subscribe(_)   => self.protocol.set_option(event_loop, o_sub),
+            o_uns @ SocketOption::Unsubscribe(_) => self.protocol.set_option(event_loop, o_uns)
         };
         let evt = match set_res {
             Ok(_)  => SocketEvt::OptionSet,
