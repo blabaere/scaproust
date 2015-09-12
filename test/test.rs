@@ -269,6 +269,7 @@ fn test_recv_reply_before_send_request() {
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_ipc() {
     let session = Session::new().unwrap();
