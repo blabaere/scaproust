@@ -207,15 +207,8 @@ mod tests {
     fn can_connect_socket() {
         let session = SessionFacade::new().unwrap();
         let mut socket = session.create_socket(SocketType::Push).unwrap();
-        let connect_res = socket.connect("tcp://127.0.0.1:18080");
 
-        match connect_res {
-            Ok(()) => {},
-            Err(e) => {
-                //writeln!(&mut io::stderr(), "connect failed: {} !", e);
-                panic!("connection failed: '{}'", e);
-            }
-        }
+        socket.connect("tcp://127.0.0.1:5454").unwrap();
     }
 
     #[test]
