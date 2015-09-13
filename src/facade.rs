@@ -3,7 +3,6 @@
 // Licensed under the MIT license LICENSE or <http://opensource.org/licenses/MIT>
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::io::Write;
 
 use std::io;
 use std::thread;
@@ -193,6 +192,8 @@ impl SocketFacade {
 mod tests {
     use super::SessionFacade;
     use global::SocketType;
+    use std::io;
+    use std::io::Write;
 
     #[test]
     fn session_can_create_a_socket() {
@@ -211,11 +212,10 @@ mod tests {
         match connect_res {
             Ok(()) => {},
             Err(e) => {
-                writeln!(&mut std::io::stderr(), "connect failed: {} !", e);
+                //writeln!(&mut io::stderr(), "connect failed: {} !", e);
+                panic!("connection failed {}", e);
             }
         }
-
-        assert!(connect_res.is_ok());
     }
 
     #[test]
