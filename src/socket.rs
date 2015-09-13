@@ -251,10 +251,11 @@ impl Socket {
 
     pub fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) {
         let set_res = match option {
-            SocketOption::SendTimeout(timeout)   => self.options.set_send_timeout(timeout),
-            SocketOption::RecvTimeout(timeout)   => self.options.set_recv_timeout(timeout),
-            o_sub @ SocketOption::Subscribe(_)   => self.protocol.set_option(event_loop, o_sub),
-            o_uns @ SocketOption::Unsubscribe(_) => self.protocol.set_option(event_loop, o_uns)
+            SocketOption::SendTimeout(timeout)      => self.options.set_send_timeout(timeout),
+            SocketOption::RecvTimeout(timeout)      => self.options.set_recv_timeout(timeout),
+            s_dea @ SocketOption::SurveyDeadline(_) => self.protocol.set_option(event_loop, s_dea),
+            o_sub @ SocketOption::Subscribe(_)      => self.protocol.set_option(event_loop, o_sub),
+            o_uns @ SocketOption::Unsubscribe(_)    => self.protocol.set_option(event_loop, o_uns)
         };
         let evt = match set_res {
             Ok(_)  => SocketEvt::OptionSet,
@@ -262,6 +263,10 @@ impl Socket {
         };
 
         self.send_evt(evt);
+    }
+
+    pub fn on_survey_timeout(&mut self, event_loop: &mut EventLoop) {
+        self.protocol.on_survey_timeout(event_loop);
     }
 }
 

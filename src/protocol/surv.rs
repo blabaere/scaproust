@@ -8,8 +8,6 @@ use std::sync::mpsc::Sender;
 use std::collections::HashMap;
 use std::io;
 
-use time;
-
 use mio;
 
 use byteorder::{ BigEndian, WriteBytesExt, ReadBytesExt };
@@ -18,7 +16,7 @@ use super::Protocol;
 use pipe::*;
 use endpoint::*;
 use global::*;
-use event_loop_msg::{ SocketEvt, SocketOption };
+use event_loop_msg::{ SocketEvt, SocketOption, EventLoopTimeout };
 use EventLoop;
 use EventLoopAction;
 use Message;
@@ -27,23 +25,36 @@ use super::sender::*;
 use super::receiver::*;
 
 pub struct Surv {
+    socket_id: SocketId,
     pipes: HashMap<mio::Token, Pipe>,
     msg_sender: PolyadicMsgSender<MulticastSendingStrategy>,
     msg_receiver: PolyadicMsgReceiver,
-    codec: Codec
-    //deadline_ms: u64 // = 1000
-    // cancel_deadline_timeout: Option<EventLoopAction>, 
+    codec: Codec,
+    deadline_ms: u64,
+    cancel_deadline_timeout: Option<EventLoopAction>
     // to cancel the timer called when the survey deadline is reached
 }
 
 impl Surv {
-    pub fn new(evt_tx: Rc<Sender<SocketEvt>>) -> Surv {
+    pub fn new(evt_tx: Rc<Sender<SocketEvt>>, socket_id: SocketId) -> Surv {
         Surv { 
+            socket_id: socket_id,
             pipes: HashMap::new(),
             msg_sender: new_multicast_msg_sender(evt_tx.clone()),
             msg_receiver: PolyadicMsgReceiver::new(evt_tx.clone()),
-            codec: Codec::new()
+            codec: Codec::new(),
+            deadline_ms: 1000,
+            cancel_deadline_timeout: None
         }
+    }
+
+    fn reset_survey_deadline_timeout(&mut self, event_loop: &mut EventLoop) {
+        self.cancel_deadline_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+
+        let timeout_cmd = EventLoopTimeout::CancelSurvey(self.socket_id);
+        let _ =  event_loop.timeout_ms(timeout_cmd, self.deadline_ms).
+            map(|timeout| self.cancel_deadline_timeout = Some(Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
+            map_err(|err| error!("[{:?}] failed to set survey deadline on send: '{:?}'", self.socket_id, err));
     }
 }
 
@@ -65,6 +76,8 @@ impl Protocol for Surv {
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
+        self.reset_survey_deadline_timeout(event_loop);
+
         match self.codec.encode(msg) {
             Err(e) => self.msg_sender.on_send_err(event_loop, e, &mut self.pipes),
             Ok(raw_msg) => self.msg_sender.send(event_loop, raw_msg, cancel_timeout, &mut self.pipes)
@@ -109,9 +122,28 @@ impl Protocol for Surv {
         send_result.and(recv_result)
     }
 
-    fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
+    fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
+        match option {
+            SocketOption::SurveyDeadline(timeout) => {
+                let deadline = timeout.to_millis();
+
+                if deadline == 0u64 {
+                    Err(io::Error::new(io::ErrorKind::InvalidData, "survey deadline cannot be zero"))
+                } else {
+                    self.deadline_ms = deadline;
+                    Ok(())
+                }
+            },
+            _ => Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
+        }
+        
     }
+
+    fn on_survey_timeout(&mut self, _: &mut EventLoop) {
+        self.codec.clear_pending_survey();
+    }
+
+    fn on_request_timeout(&mut self, _: &mut EventLoop) {}
 }
 
 struct Codec {
@@ -123,7 +155,7 @@ impl Codec {
     fn new() -> Codec {
         Codec {
             pending_survey_id: None,
-            survey_id_seq: time::get_time().nsec as u32
+            survey_id_seq: ::time::get_time().nsec as u32
         }
     }
 

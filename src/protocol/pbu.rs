@@ -87,4 +87,7 @@ impl Protocol for Pub {
     fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
         Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
     }
+
+    fn on_survey_timeout(&mut self, _: &mut EventLoop) {}
+    fn on_request_timeout(&mut self, _: &mut EventLoop) {}
 }

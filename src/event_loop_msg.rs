@@ -34,7 +34,8 @@ pub enum SocketOption {
     SendTimeout(time::Duration),
     RecvTimeout(time::Duration),
     Subscribe(String),
-    Unsubscribe(String)
+    Unsubscribe(String),
+    SurveyDeadline(time::Duration)
 }
 
 pub enum EventLoopTimeout {

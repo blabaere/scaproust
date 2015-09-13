@@ -100,4 +100,6 @@ impl Protocol for Bus {
         Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
     }
 
+    fn on_survey_timeout(&mut self, _: &mut EventLoop) {}
+    fn on_request_timeout(&mut self, _: &mut EventLoop) {}
 }

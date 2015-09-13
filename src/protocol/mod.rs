@@ -9,7 +9,7 @@ use std::io;
 
 use mio;
 
-use global::SocketType;
+use global::{ SocketType, SocketId };
 use event_loop_msg::{ SocketEvt, SocketOption };
 use endpoint::Endpoint;
 use EventLoop;
@@ -30,7 +30,7 @@ pub mod resp;
 pub mod sender;
 pub mod receiver;
 
-pub fn create_protocol(socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Box<Protocol> {
+pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Box<Protocol> {
     match socket_type {
         SocketType::Push       => Box::new(push::Push::new(evt_tx)),
         SocketType::Pull       => Box::new(pull::Pull::new(evt_tx)),
@@ -40,7 +40,7 @@ pub fn create_protocol(socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketEv
         SocketType::Pub        => Box::new(pbu::Pub::new(evt_tx)),
         SocketType::Sub        => Box::new(sub::Sub::new(evt_tx)),
         SocketType::Bus        => Box::new(bus::Bus::new(evt_tx)),
-        SocketType::Surveyor   => Box::new(surv::Surv::new(evt_tx)),
+        SocketType::Surveyor   => Box::new(surv::Surv::new(evt_tx, socket_id)),
         SocketType::Respondent => Box::new(resp::Resp::new(evt_tx))
     }
 }
@@ -61,4 +61,7 @@ pub trait Protocol {
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop);
 
     fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) -> io::Result<()>;
+
+    fn on_survey_timeout(&mut self, event_loop: &mut EventLoop);
+    fn on_request_timeout(&mut self, event_loop: &mut EventLoop);
 }

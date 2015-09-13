@@ -1,5 +1,5 @@
 Update rust-closure-playground repo with FnBox findings
-
+Decide what to do with non-blocking recv and send
 
 ### General:
 - write documentation
@@ -29,3 +29,10 @@ https://github.com/zonyitoo/simplesched
 https://github.com/alexcrichton/wio (for appveyor ci script and doc publication too)  
 https://github.com/burrows-labs/mio-websockets  
 https://github.com/frankmcsherry/abomonation  
+
+### Idea for device implementation
+To implement a device simply, the raw socket facade should support being accessed by two threads
+and the protocol should support 1 send & 1 recv operation in //.
+This requires a dedicated channel for send and another for recv.
+Otherwise the first finished operation would send an event on the unique channel.
+Since the notified event would not match the expectations of one of the waiter, it cannot work.

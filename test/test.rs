@@ -267,6 +267,29 @@ fn test_recv_reply_before_send_request() {
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
+#[test]
+fn test_survey_deadline() {
+    let session = Session::new().unwrap();
+    let mut server = session.create_socket(SocketType::Surveyor).unwrap();
+    let mut client = session.create_socket(SocketType::Respondent).unwrap();
+    let timeout = time::Duration::from_millis(150);
+
+    server.set_option(SocketOption::SurveyDeadline(timeout)).unwrap();
+    server.bind("tcp://127.0.0.1:5468").unwrap();
+    client.connect("tcp://127.0.0.1:5468").unwrap();
+
+    let server_survey = vec!(65, 66, 67);
+    server.send(server_survey).unwrap();
+
+    let client_survey = client.recv().unwrap();
+    assert_eq!(vec!(65, 66, 67), client_survey);
+
+    ::std::thread::sleep_ms(200);
+
+    let err = server.recv().unwrap_err();
+    assert_eq!(io::ErrorKind::Other, err.kind());
+}
+
 #[cfg(not(windows))]
 #[test]
 fn test_ipc() {

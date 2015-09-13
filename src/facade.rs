@@ -192,8 +192,6 @@ impl SocketFacade {
 mod tests {
     use super::SessionFacade;
     use global::SocketType;
-    use std::io;
-    use std::io::Write;
 
     #[test]
     fn session_can_create_a_socket() {

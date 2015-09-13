@@ -42,7 +42,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
     - [x] PULL
   - [ ] SURVEY
     - [x] SURVEYOR
-    - [ ] SURVEYOR deadline
+    - [x] SURVEYOR deadline
     - [x] RESPONDENT  
 
 - [ ] Transports
@@ -84,7 +84,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
 
 - [ ] Protocol options
     - [ ] REQ resend interval
-    - [ ] SURVEYOR deadline
+    - [x] SURVEYOR deadline
     - [x] SUB subscribe
     - [x] SUB unsubscribe
 

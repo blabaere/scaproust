@@ -63,15 +63,21 @@ impl Session {
     }
 
     fn create_socket(&mut self, socket_type: SocketType) {
+        let id = SocketId(self.id_seq.next());
         let (tx, rx) = mpsc::channel();
         let shared_tx = Rc::new(tx);
-        let protocol = protocol::create_protocol(socket_type, shared_tx.clone());
-        let id = SocketId(self.id_seq.next());
+        let protocol = protocol::create_protocol(id, socket_type, shared_tx.clone());
         let socket = Socket::new(id, protocol, shared_tx.clone(), self.id_seq.clone());
 
         self.sockets.insert(id, socket);
 
         self.send_evt(SessionEvt::SocketCreated(id, rx));
+    }
+
+    fn do_on_socket<F>(&mut self, socket_id: SocketId, action: &mut F) where F : FnMut(&mut Socket) {
+        if let Some(socket) = self.sockets.get_mut(&socket_id) {
+            action(socket);
+        }
     }
 
     fn connect(&mut self, event_loop: &mut EventLoop, id: SocketId, addr: String) {
@@ -117,9 +123,7 @@ impl Session {
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop, socket_id: SocketId) {
-        if let Some(socket) = self.sockets.get_mut(&socket_id) {
-            socket.on_send_timeout(event_loop);
-        }
+        self.do_on_socket(socket_id, &mut |socket| socket.on_send_timeout(event_loop));
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, id: SocketId) {
@@ -128,26 +132,22 @@ impl Session {
         }
     }
 
-    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, socket_id: SocketId) {
-        if let Some(socket) = self.sockets.get_mut(&socket_id) {
-            socket.on_recv_timeout(event_loop);
-        }
+    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, id: SocketId) {
+        self.do_on_socket(id, &mut |socket| socket.on_recv_timeout(event_loop));
     }
 
-    fn on_survey_timeout(&mut self, event_loop: &mut EventLoop, socket_id: SocketId) {
-        if let Some(socket) = self.sockets.get_mut(&socket_id) {
-            //socket.on_recv_timeout(event_loop);
-        }
+    fn on_survey_timeout(&mut self, event_loop: &mut EventLoop, id: SocketId) {
+        self.do_on_socket(id, &mut |socket| socket.on_survey_timeout(event_loop));
     }
 
-    fn link(&mut self, mut tokens: Vec<mio::Token>, socket_id: SocketId) {
+    fn link(&mut self, mut tokens: Vec<mio::Token>, id: SocketId) {
         for token in tokens.drain(..) {
-            self.socket_ids.insert(token, socket_id);
+            self.socket_ids.insert(token, id);
         }
     }
 
-    fn set_option(&mut self, event_loop: &mut EventLoop, socket_id: SocketId, opt: SocketOption) {
-        if let Some(socket) = self.sockets.get_mut(&socket_id) {
+    fn set_option(&mut self, event_loop: &mut EventLoop, id: SocketId, opt: SocketOption) {
+        if let Some(socket) = self.sockets.get_mut(&id) {
             socket.set_option(event_loop, opt);
         }
     }

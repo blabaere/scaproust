@@ -6,6 +6,7 @@
 use std::rc::Rc;
 use std::cell::Cell;
 use std::io::{ Error, ErrorKind };
+use std::time;
 
 use mio::NotifyError;
 
@@ -59,6 +60,19 @@ pub fn convert_notify_err<T>(err: NotifyError<T>) -> Error {
         NotifyError::Io(e)     => e,
         NotifyError::Closed(_) => other_io_error("cmd channel closed"),
         NotifyError::Full(_)   => Error::new(ErrorKind::WouldBlock, "cmd channel full")
+    }
+}
+
+pub trait ToMillis {
+    fn to_millis(&self) -> u64;
+}
+
+impl ToMillis for time::Duration {
+    fn to_millis(&self) -> u64 {
+        let millis_from_secs = self.as_secs() * 1_000;
+        let millis_from_nanos = self.subsec_nanos() as f64 / 1_000_000f64;
+
+        millis_from_secs + millis_from_nanos as u64
     }
 }
 
