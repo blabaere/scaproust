@@ -213,7 +213,7 @@ mod tests {
             Ok(()) => {},
             Err(e) => {
                 //writeln!(&mut io::stderr(), "connect failed: {} !", e);
-                panic!("connection failed {}", e);
+                panic!("connection failed: '{}'", e);
             }
         }
     }
