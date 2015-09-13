@@ -115,6 +115,10 @@ impl PolyadicMsgReceiver {
         self.on_msg_recv_finished_err(event_loop, err, pipes);
     }
 
+    pub fn on_recv_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut PipeHashMap) {
+        self.on_msg_recv_finished_err(event_loop, err, pipes);
+    }
+
     fn process_recv_result(&mut self,
         event_loop: &mut EventLoop,
         decoder: &mut MsgDecoder,

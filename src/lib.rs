@@ -77,3 +77,9 @@ impl Message {
         (self.header, self.body)
     }
 }
+
+impl Clone for Message {
+    fn clone(&self) -> Self {
+        Message::with_header_and_body(self.header.clone(), self.body.clone())
+    }
+}

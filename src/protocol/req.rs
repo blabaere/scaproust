@@ -18,7 +18,7 @@ use super::Protocol;
 use pipe::*;
 use endpoint::*;
 use global::*;
-use event_loop_msg::{ SocketEvt, SocketOption };
+use event_loop_msg::{ SocketEvt, SocketOption, EventLoopTimeout };
 use EventLoop;
 use EventLoopAction;
 use Message;
@@ -27,23 +27,40 @@ use super::sender::*;
 use super::receiver::*;
 
 pub struct Req {
+    socket_id: SocketId,
     pipes: HashMap<mio::Token, Pipe>,
     msg_sender: PolyadicMsgSender<UnicastSendingStrategy>,
     msg_receiver: PolyadicMsgReceiver,
     codec: Codec,
-    resend_interval: Option<u64>
+    //last_req: Option<Message>,
+    resend_interval: u64,
+    //cancel_resend_timeout: Option<EventLoopAction>
 }
 
 impl Req {
-    pub fn new(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Req {
+    pub fn new(evt_tx: Rc<mpsc::Sender<SocketEvt>>, socket_id: SocketId) -> Req {
         Req { 
+            socket_id: socket_id,
             pipes: HashMap::new(),
             msg_sender: new_unicast_msg_sender(evt_tx.clone()),
             msg_receiver: PolyadicMsgReceiver::new(evt_tx.clone()),
             codec: Codec::new(),
-            resend_interval: Some(60_000)
+            //last_req: None,
+            resend_interval: 60_000,
+            //cancel_resend_timeout: None
         }
     }
+
+    //fn cancel_resend_timeout(&mut self, event_loop: &mut EventLoop) {
+    //    self.cancel_resend_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+    //}
+
+    //fn start_resend_timeout(&mut self, event_loop: &mut EventLoop) {
+    //    let timeout_cmd = EventLoopTimeout::CancelResend(self.socket_id);
+    //    let _ =  event_loop.timeout_ms(timeout_cmd, self.resend_interval).
+    //        map(|timeout| self.cancel_resend_timeout = Some(Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
+    //        map_err(|err| error!("[{:?}] failed to set resend timeout on send: '{:?}'", self.socket_id, err));
+    //}
 }
 
 impl Protocol for Req {
@@ -64,13 +81,21 @@ impl Protocol for Req {
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
+        //self.cancel_resend_timeout(event_loop);
+
         match self.codec.encode(msg) {
             Err(e) => self.msg_sender.on_send_err(event_loop, e, &mut self.pipes),
-            Ok(raw_msg) => self.msg_sender.send(event_loop, raw_msg, cancel_timeout, &mut self.pipes)
+            Ok(raw_msg) => {
+                //self.last_req = Some(raw_msg.clone());
+                //self.start_resend_timeout(event_loop);
+                self.msg_sender.send(event_loop, raw_msg, cancel_timeout, &mut self.pipes);
+            }
         };
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
+        //self.last_req = None;
+        //self.cancel_resend_timeout(event_loop);
         self.codec.clear_pending_request();
         self.msg_sender.on_send_timeout(event_loop, &mut self.pipes);
     }
@@ -78,11 +103,12 @@ impl Protocol for Req {
     fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
         match self.codec.has_pending_request() {
             true  => self.msg_receiver.recv(event_loop, &mut self.codec, cancel_timeout, &mut self.pipes),
-            false => self.msg_sender.on_send_err(event_loop, other_io_error("no pending request sent"), &mut self.pipes)
+            false => self.msg_receiver.on_recv_err(event_loop, other_io_error("no pending request sent"), &mut self.pipes)
         }
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
+        //self.last_req = None;
         self.msg_receiver.on_recv_timeout(event_loop, &mut self.pipes)
     }
 
@@ -109,12 +135,30 @@ impl Protocol for Req {
         send_result.and(recv_result)
     }
 
-    fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
+    fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
+        match option {
+            SocketOption::ResendInterval(timeout) => {
+                let ivl = timeout.to_millis();
+
+                if ivl == 0u64 {
+                    Err(io::Error::new(io::ErrorKind::InvalidData, "req resend ivl cannot be zero"))
+                } else {
+                    self.resend_interval = ivl;
+                    Ok(())
+                }
+            },
+            _ => Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
+        }
     }
 
     fn on_survey_timeout(&mut self, _: &mut EventLoop) {}
-    fn on_request_timeout(&mut self, _: &mut EventLoop) {}
+    fn on_request_timeout(&mut self, event_loop: &mut EventLoop) {
+        //if let Some(raw_msg) = self.last_req.take() {
+        //    self.last_req = Some(raw_msg.clone());
+        //    self.start_resend_timeout(event_loop);
+        //    self.msg_sender.resend(event_loop, raw_msg, &mut self.pipes);
+        //}
+    }
 }
 
 struct Codec {

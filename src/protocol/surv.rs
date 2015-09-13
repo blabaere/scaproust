@@ -32,7 +32,6 @@ pub struct Surv {
     codec: Codec,
     deadline_ms: u64,
     cancel_deadline_timeout: Option<EventLoopAction>
-    // to cancel the timer called when the survey deadline is reached
 }
 
 impl Surv {
@@ -136,7 +135,6 @@ impl Protocol for Surv {
             },
             _ => Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
         }
-        
     }
 
     fn on_survey_timeout(&mut self, _: &mut EventLoop) {

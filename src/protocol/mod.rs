@@ -35,7 +35,7 @@ pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<
         SocketType::Push       => Box::new(push::Push::new(evt_tx)),
         SocketType::Pull       => Box::new(pull::Pull::new(evt_tx)),
         SocketType::Pair       => Box::new(pair::Pair::new(evt_tx)),
-        SocketType::Req        => Box::new(req::Req::new(evt_tx)),
+        SocketType::Req        => Box::new(req::Req::new(evt_tx, socket_id)),
         SocketType::Rep        => Box::new(rep::Rep::new(evt_tx)),
         SocketType::Pub        => Box::new(pbu::Pub::new(evt_tx)),
         SocketType::Sub        => Box::new(sub::Sub::new(evt_tx)),

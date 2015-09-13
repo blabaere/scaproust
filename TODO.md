@@ -1,6 +1,17 @@
 Update rust-closure-playground repo with FnBox findings
 Decide what to do with non-blocking recv and send
 
+### Current problem:
+To implement request resend, a timeout is scheduled every x seconds.
+First, this timeout should be scheduled only AFTER the message is actually sent,
+otherwise a socket could have both a pending send and resend.
+This means someone needs to know when the msg is sent, and store a copy.
+When the reply is received or when another request is sent, the timeout should be cancelled.
+The problem here is have the receiving part tell the sending part to cancel the timer.
+When the timeout is reached, the copy must be grabbed and
+
+BONUS: if the pipe that the request was sent to is removed, the request could be resent right away ...
+
 ### General:
 - write documentation
 - adds embedded code example to the front page

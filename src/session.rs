@@ -140,6 +140,10 @@ impl Session {
         self.do_on_socket(id, &mut |socket| socket.on_survey_timeout(event_loop));
     }
 
+    fn on_request_timeout(&mut self, event_loop: &mut EventLoop, id: SocketId) {
+        self.do_on_socket(id, &mut |socket| socket.on_request_timeout(event_loop));
+    }
+
     fn link(&mut self, mut tokens: Vec<mio::Token>, id: SocketId) {
         for token in tokens.drain(..) {
             self.socket_ids.insert(token, id);
@@ -190,7 +194,8 @@ impl mio::Handler for Session {
             EventLoopTimeout::Rebind(token, addr)     => self.rebind(event_loop, token, addr),
             EventLoopTimeout::CancelSend(socket_id)   => self.on_send_timeout(event_loop, socket_id),
             EventLoopTimeout::CancelRecv(socket_id)   => self.on_recv_timeout(event_loop, socket_id),
-            EventLoopTimeout::CancelSurvey(socket_id) => self.on_survey_timeout(event_loop, socket_id)
+            EventLoopTimeout::CancelSurvey(socket_id) => self.on_survey_timeout(event_loop, socket_id),
+            EventLoopTimeout::CancelResend(socket_id) => self.on_request_timeout(event_loop, socket_id)
         }
     }
 

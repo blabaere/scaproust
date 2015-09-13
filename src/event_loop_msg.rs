@@ -35,7 +35,8 @@ pub enum SocketOption {
     RecvTimeout(time::Duration),
     Subscribe(String),
     Unsubscribe(String),
-    SurveyDeadline(time::Duration)
+    SurveyDeadline(time::Duration),
+    ResendInterval(time::Duration)
 }
 
 pub enum EventLoopTimeout {
@@ -43,8 +44,8 @@ pub enum EventLoopTimeout {
     Rebind(mio::Token, String),
     CancelSend(SocketId),
     CancelRecv(SocketId),
-    CancelSurvey(SocketId)/*,
-    Resend(SocketId)*/
+    CancelSurvey(SocketId),
+    CancelResend(SocketId)
 }
 
 pub enum SessionEvt {

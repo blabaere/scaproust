@@ -290,6 +290,38 @@ fn test_survey_deadline() {
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
+//#[test]
+//fn test_req_resend() {
+//    let session = Session::new().unwrap();
+//    let mut server = session.create_socket(SocketType::Rep).unwrap();
+//    let mut client = session.create_socket(SocketType::Req).unwrap();
+//    let timeout = time::Duration::from_millis(300);
+//    let resend_ivl = time::Duration::from_millis(150);
+//
+//    server.bind("tcp://127.0.0.1:5469").unwrap();
+//    client.set_recv_timeout(timeout).unwrap();
+//    client.set_option(SocketOption::ResendInterval(resend_ivl)).unwrap();
+//    client.connect("tcp://127.0.0.1:5469").unwrap();
+//
+//    let client_request = vec!(65, 66, 67);
+//    client.send(client_request).unwrap();
+//
+//    let server_request = server.recv().unwrap();
+//    assert_eq!(vec!(65, 66, 67), server_request);
+//
+//    ::std::thread::sleep_ms(200);
+//    // the request should have been resent at this point, so we can receive it again !
+//
+//    let server_request2 = server.recv().unwrap();
+//    assert_eq!(vec!(65, 66, 67), server_request2);
+//
+//    server.send(vec!(69, 69, 69)).unwrap();
+//
+//    let client_reply = client.recv().unwrap();
+//
+//    assert_eq!(vec!(69, 69, 69), client_reply);
+//}
+
 #[cfg(not(windows))]
 #[test]
 fn test_ipc() {
