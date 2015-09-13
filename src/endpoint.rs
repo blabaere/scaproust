@@ -164,7 +164,7 @@ impl HandshakeEndpointState {
             self.connection.as_evented(), 
             self.token, 
             mio::EventSet::all(), 
-            mio::PollOpt::oneshot())
+            mio::PollOpt::edge())
     }
 
     fn reopen(&self, event_loop: &mut EventLoop) -> io::Result<()> {
@@ -172,7 +172,7 @@ impl HandshakeEndpointState {
             self.connection.as_evented(), 
             self.token, 
             mio::EventSet::all(), 
-            mio::PollOpt::oneshot())
+            mio::PollOpt::edge())
     }
 
     fn close(&self, event_loop: &mut EventLoop) -> io::Result<()> {
