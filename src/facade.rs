@@ -205,7 +205,7 @@ mod tests {
         let session = SessionFacade::new().unwrap();
         let mut socket = session.create_socket(SocketType::Push).unwrap();
 
-        assert!(socket.connect("tcp://127.0.0.1:5454").is_ok());
+        assert!(socket.connect("tcp://127.0.0.1:18080").is_ok());
     }
 
     #[test]
