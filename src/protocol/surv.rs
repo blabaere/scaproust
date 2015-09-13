@@ -31,6 +31,9 @@ pub struct Surv {
     msg_sender: PolyadicMsgSender<MulticastSendingStrategy>,
     msg_receiver: PolyadicMsgReceiver,
     codec: Codec
+    //deadline_ms: u64 // = 1000
+    // cancel_deadline_timeout: Option<EventLoopAction>, 
+    // to cancel the timer called when the survey deadline is reached
 }
 
 impl Surv {
@@ -73,7 +76,10 @@ impl Protocol for Surv {
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
-        self.msg_receiver.recv(event_loop, &mut self.codec, cancel_timeout, &mut self.pipes);
+        match self.codec.has_pending_survey() {
+            true  => self.msg_receiver.recv(event_loop, &mut self.codec, cancel_timeout, &mut self.pipes),
+            false => self.msg_sender.on_send_err(event_loop, other_io_error("no running survey"), &mut self.pipes)
+        }
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -139,6 +145,14 @@ impl Codec {
         self.survey_id_seq += 1;
 
         next_id
+    }
+
+    fn has_pending_survey(&self) -> bool {
+        self.pending_survey_id.is_some()
+    }
+
+    fn clear_pending_survey(&mut self) {
+        self.pending_survey_id = None;
     }
 }
 

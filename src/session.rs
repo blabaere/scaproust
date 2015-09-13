@@ -134,6 +134,12 @@ impl Session {
         }
     }
 
+    fn on_survey_timeout(&mut self, event_loop: &mut EventLoop, socket_id: SocketId) {
+        if let Some(socket) = self.sockets.get_mut(&socket_id) {
+            //socket.on_recv_timeout(event_loop);
+        }
+    }
+
     fn link(&mut self, mut tokens: Vec<mio::Token>, socket_id: SocketId) {
         for token in tokens.drain(..) {
             self.socket_ids.insert(token, socket_id);
@@ -180,10 +186,11 @@ impl mio::Handler for Session {
 
     fn timeout(&mut self, event_loop: &mut EventLoop, timeout: Self::Timeout) {
         match timeout {
-            EventLoopTimeout::Reconnect(token, addr) => self.reconnect(event_loop, token, addr),
-            EventLoopTimeout::Rebind(token, addr)    => self.rebind(event_loop, token, addr),
-            EventLoopTimeout::CancelSend(socket_id)  => self.on_send_timeout(event_loop, socket_id),
-            EventLoopTimeout::CancelRecv(socket_id)  => self.on_recv_timeout(event_loop, socket_id)
+            EventLoopTimeout::Reconnect(token, addr)  => self.reconnect(event_loop, token, addr),
+            EventLoopTimeout::Rebind(token, addr)     => self.rebind(event_loop, token, addr),
+            EventLoopTimeout::CancelSend(socket_id)   => self.on_send_timeout(event_loop, socket_id),
+            EventLoopTimeout::CancelRecv(socket_id)   => self.on_recv_timeout(event_loop, socket_id),
+            EventLoopTimeout::CancelSurvey(socket_id) => self.on_survey_timeout(event_loop, socket_id)
         }
     }
 

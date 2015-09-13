@@ -28,3 +28,4 @@ https://github.com/dwrensha/gj
 https://github.com/zonyitoo/simplesched  
 https://github.com/alexcrichton/wio (for appveyor ci script and doc publication too)  
 https://github.com/burrows-labs/mio-websockets  
+https://github.com/frankmcsherry/abomonation  

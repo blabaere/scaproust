@@ -3,6 +3,8 @@
 // Licensed under the MIT license LICENSE or <http://opensource.org/licenses/MIT>
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::io::Write;
+
 use std::io;
 use std::thread;
 use std::sync::mpsc;
@@ -204,8 +206,16 @@ mod tests {
     fn can_connect_socket() {
         let session = SessionFacade::new().unwrap();
         let mut socket = session.create_socket(SocketType::Push).unwrap();
+        let connect_res = socket.connect("tcp://127.0.0.1:18080");
 
-        assert!(socket.connect("tcp://127.0.0.1:18080").is_ok());
+        match connect_res {
+            Ok(()) => {},
+            Err(e) => {
+                writeln!(&mut std::io::stderr(), "connect failed: {} !", e);
+            }
+        }
+
+        assert!(connect_res.is_ok());
     }
 
     #[test]
