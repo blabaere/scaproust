@@ -64,19 +64,16 @@ fn test_send_while_not_connected() {
     recver.join().unwrap();
 }
 
-#[cfg(not(windows))] // what the hell is happening on winwdows ?
 #[test]
 fn test_send_timeout() {
     let session = Session::new().unwrap();
-    let mut pull = session.create_socket(SocketType::Pull).unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
     let timeout = time::Duration::from_millis(50);
 
-    pull.bind("tcp://127.0.0.1:5457").unwrap();
-    push.connect("tcp://127.0.0.1:5457").unwrap();
+    push.bind("tcp://127.0.0.1:5457").unwrap();
     push.set_send_timeout(timeout).unwrap();
 
-    let err = push.send(vec![0; 5 * 1024 * 1024]).unwrap_err();
+    let err = push.send(vec![65, 66, 67]).unwrap_err();
 
     assert_eq!(io::ErrorKind::TimedOut, err.kind());
 }

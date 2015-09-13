@@ -7,7 +7,7 @@
 Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "Scalability Protocols" in the [Rust programming language](http://www.rust-lang.org/).
 
 **Experimental work !** For working stuff, please see [nanomsg-rs](https://github.com/blabaere/nanomsg.rs).  
-Scaproust is internally based on [mio](https://github.com/carllerche/mio), so MS Windows is not yet supported.
+Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IPC on MS Windows is not yet supported.
 
 ## Goals
 * Support for all of nanomsg's protocols.
