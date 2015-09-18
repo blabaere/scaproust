@@ -52,14 +52,18 @@ impl Req {
     }
 
     //fn cancel_resend_timeout(&mut self, event_loop: &mut EventLoop) {
+    //    self.last_req = None;
     //    self.cancel_resend_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
     //}
 
-    //fn start_resend_timeout(&mut self, event_loop: &mut EventLoop) {
-    //    let timeout_cmd = EventLoopTimeout::CancelResend(self.socket_id);
-    //    let _ =  event_loop.timeout_ms(timeout_cmd, self.resend_interval).
-    //        map(|timeout| self.cancel_resend_timeout = Some(Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
-    //        map_err(|err| error!("[{:?}] failed to set resend timeout on send: '{:?}'", self.socket_id, err));
+    //fn start_resend_timeout(&mut self, event_loop: &mut EventLoop, raw_msg: Message) {
+    //    if self.resend_interval > 0u64 {
+    //        let timeout_cmd = EventLoopTimeout::CancelResend(self.socket_id);
+    //        let _ =  event_loop.timeout_ms(timeout_cmd, self.resend_interval).
+    //            map(|timeout| self.cancel_resend_timeout = Some(Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
+    //            map_err(|err| error!("[{:?}] failed to set resend timeout on send: '{:?}'", self.socket_id, err));
+    //        self.last_req = Some(raw_msg);
+    //    }
     //}
 }
 
@@ -86,15 +90,13 @@ impl Protocol for Req {
         match self.codec.encode(msg) {
             Err(e) => self.msg_sender.on_send_err(event_loop, e, &mut self.pipes),
             Ok(raw_msg) => {
-                //self.last_req = Some(raw_msg.clone());
-                //self.start_resend_timeout(event_loop);
+                //self.start_resend_timeout(event_loop, raw_msg.clone());
                 self.msg_sender.send(event_loop, raw_msg, cancel_timeout, &mut self.pipes);
             }
         };
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        //self.last_req = None;
         //self.cancel_resend_timeout(event_loop);
         self.codec.clear_pending_request();
         self.msg_sender.on_send_timeout(event_loop, &mut self.pipes);
@@ -108,7 +110,6 @@ impl Protocol for Req {
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        //self.last_req = None;
         self.msg_receiver.on_recv_timeout(event_loop, &mut self.pipes)
     }
 
@@ -121,6 +122,10 @@ impl Protocol for Req {
             sent = s;
             received = r;
         }
+
+        //if received.is_some() {
+        //    self.cancel_resend_timeout(event_loop);
+        //}
 
         let send_result = match sent {
             true  => Ok(self.msg_sender.sent_by(event_loop, token, &mut self.pipes)),
@@ -138,14 +143,8 @@ impl Protocol for Req {
     fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
         match option {
             SocketOption::ResendInterval(timeout) => {
-                let ivl = timeout.to_millis();
-
-                if ivl == 0u64 {
-                    Err(io::Error::new(io::ErrorKind::InvalidData, "req resend ivl cannot be zero"))
-                } else {
-                    self.resend_interval = ivl;
-                    Ok(())
-                }
+                self.resend_interval = timeout.to_millis();
+                Ok(())
             },
             _ => Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
         }
@@ -154,8 +153,7 @@ impl Protocol for Req {
     fn on_survey_timeout(&mut self, _: &mut EventLoop) {}
     fn on_request_timeout(&mut self, event_loop: &mut EventLoop) {
         //if let Some(raw_msg) = self.last_req.take() {
-        //    self.last_req = Some(raw_msg.clone());
-        //    self.start_resend_timeout(event_loop);
+        //    self.start_resend_timeout(event_loop, raw_msg.clone());
         //    self.msg_sender.resend(event_loop, raw_msg, &mut self.pipes);
         //}
     }

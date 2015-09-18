@@ -1,14 +1,10 @@
 Update rust-closure-playground repo with FnBox findings
 Decide what to do with non-blocking recv and send
 
-### Current problem:
-To implement request resend, a timeout is scheduled every x seconds.
-First, this timeout should be scheduled only AFTER the message is actually sent,
-otherwise a socket could have both a pending send and resend.
-This means someone needs to know when the msg is sent, and store a copy.
-When the reply is received or when another request is sent, the timeout should be cancelled.
-The problem here is have the receiving part tell the sending part to cancel the timer.
-When the timeout is reached, the copy must be grabbed and
+### Current problem: REQ resend
+There can be only one operation in progress for a given socket but resend occurs in background.
+Resend must be scheduled when a regular send succeeds, and cancelled when the matching recv occurs.
+What if a user command is received is when a resend is in progress (a some bytes sent, but not all).
 
 BONUS: if the pipe that the request was sent to is removed, the request could be resent right away ...
 
@@ -16,7 +12,6 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 - write documentation
 - adds embedded code example to the front page
 - setup documentation generation and site and github pages
-- setup CI with appveyor once mio is compatible with windows
 
 ### Refactors:  
 - Rename session into something less oriented ? (context, environment ...)
@@ -34,12 +29,12 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 - Expose the event loop configuration ?
 
 ### Stuff to look at:
+https://github.com/tailhook/rotor  
 https://github.com/dpc/mioco  
 https://github.com/dwrensha/gj  
 https://github.com/zonyitoo/simplesched  
 https://github.com/alexcrichton/wio (for appveyor ci script and doc publication too)  
 https://github.com/burrows-labs/mio-websockets  
-https://github.com/frankmcsherry/abomonation  
 
 ### Idea for device implementation
 To implement a device simply, the raw socket facade should support being accessed by two threads
@@ -47,3 +42,6 @@ and the protocol should support 1 send & 1 recv operation in //.
 This requires a dedicated channel for send and another for recv.
 Otherwise the first finished operation would send an event on the unique channel.
 Since the notified event would not match the expectations of one of the waiter, it cannot work.
+
+Some protocols do not support send or recv and return an error.
+So how could the device function call it safely ?

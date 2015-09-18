@@ -87,7 +87,7 @@ impl Listener for TcpListener {
 
         loop {
             match try!(self.listener.accept()) {
-                Some(s) => conns.push(Box::new(TcpConnection { stream: s })),
+                Some((s, _)) => conns.push(Box::new(TcpConnection { stream: s })),
                 None    => break
             }
         }
