@@ -105,19 +105,19 @@ impl Pipe {
     pub fn recv(&mut self) -> io::Result<RecvStatus> {
         let result = match self.endpoint.recv() {
             Ok(RecvStatus::Completed(msg)) => {
-                self.send_status = Some(OperationStatus::Completed);
+                self.recv_status = Some(OperationStatus::Completed);
                 Ok(RecvStatus::Completed(msg))
             },
             Ok(RecvStatus::InProgress) => {
-                self.send_status = Some(OperationStatus::InProgress);
+                self.recv_status = Some(OperationStatus::InProgress);
                 Ok(RecvStatus::InProgress)
             },
             Ok(RecvStatus::Postponed) => {
-                self.send_status = Some(OperationStatus::Postponed);
+                self.recv_status = Some(OperationStatus::Postponed);
                 Ok(RecvStatus::Postponed)
             }
             Err(e) => {
-                self.send_status = Some(OperationStatus::Failed);
+                self.recv_status = Some(OperationStatus::Failed);
                 Err(e)
             }
         };

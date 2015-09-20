@@ -1,5 +1,12 @@
+Switch Pipe and Endpoint names, and maybe find a better name for Pipe
+
+Split that renamed endpoint struct into Endpoint trait, StatelessEndpoint struct and StatefullEndpoint.
+
 Update rust-closure-playground repo with FnBox findings
 Decide what to do with non-blocking recv and send
+
+Idea: use the event loop messages to let the protocol tell the socket a pipe has errored ?
+This would allow all the send/recv related protocol functions to return void, and therefore to use a fsm.
 
 ### Current problem: REQ resend
 There can be only one operation in progress for a given socket but resend occurs in background.

@@ -40,9 +40,9 @@ pub enum RecvStatus {
 impl Endpoint {
 
     pub fn new(
-        token: mio::Token, 
-        addr: Option<String>, 
-        proto_ids: (u16, u16), 
+        token: mio::Token,
+        addr: Option<String>,
+        proto_ids: (u16, u16),
         connection: Box<Connection>) -> Endpoint {
 
         let handshake = HandshakeEndpointState::new(token, proto_ids, connection);

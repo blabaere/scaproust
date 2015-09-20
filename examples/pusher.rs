@@ -7,7 +7,7 @@ use std::io;
 use scaproust::{Session, SocketType, Socket};
 
 fn handle_comand(cmd: &str, socket: &mut Socket) {
-	println!("User command: {:?}", cmd);
+    println!("User command: {:?}", cmd);
     let big: usize = 3/* * 1024 * 1024*/; // this to force a partial write
     let mut msg = Vec::with_capacity(big);
     for x in 0..big {
@@ -34,11 +34,11 @@ fn main() {
 
     let mut input = String::new();
     loop {
-		match io::stdin().read_line(&mut input) {
-		    Ok(0) => return,
-		    Ok(_) => handle_comand(&input ,&mut socket),
-		    Err(error) => println!("error: {}", error),
-		};
-		input.clear();
+        match io::stdin().read_line(&mut input) {
+            Ok(0) => return,
+            Ok(_) => handle_comand(&input ,&mut socket),
+            Err(error) => println!("error: {}", error),
+        };
+        input.clear();
     }
 }
