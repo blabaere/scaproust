@@ -9,39 +9,41 @@ use std::io;
 
 use mio;
 
-use global::{ SocketType, SocketId };
+use global::{ SocketType, SocketId, other_io_error };
 use event_loop_msg::{ SocketEvt, SocketOption };
-use endpoint::Endpoint;
+use pipe::Pipe;
 use EventLoop;
 use EventLoopAction;
 use Message;
 
-pub mod push;
-pub mod pull;
+mod priolist;
+
+//pub mod push;
+//pub mod pull;
 pub mod pair;
-pub mod req;
-pub mod rep;
-pub mod pbu;
-pub mod sub;
-pub mod bus;
-pub mod surv;
-pub mod resp;
+//pub mod req;
+//pub mod rep;
+//pub mod pbu;
+//pub mod sub;
+//pub mod bus;
+//pub mod surv;
+//pub mod resp;
 
 pub mod sender;
 pub mod receiver;
 
 pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Box<Protocol> {
     match socket_type {
-        SocketType::Push       => Box::new(push::Push::new(evt_tx)),
-        SocketType::Pull       => Box::new(pull::Pull::new(evt_tx)),
-        SocketType::Pair       => Box::new(pair::Pair::new(evt_tx)),
-        SocketType::Req        => Box::new(req::Req::new(evt_tx, socket_id)),
-        SocketType::Rep        => Box::new(rep::Rep::new(evt_tx)),
-        SocketType::Pub        => Box::new(pbu::Pub::new(evt_tx)),
-        SocketType::Sub        => Box::new(sub::Sub::new(evt_tx)),
-        SocketType::Bus        => Box::new(bus::Bus::new(evt_tx)),
-        SocketType::Surveyor   => Box::new(surv::Surv::new(evt_tx, socket_id)),
-        SocketType::Respondent => Box::new(resp::Resp::new(evt_tx))
+        SocketType::Push       => Box::new(NullProtocol),
+        SocketType::Pull       => Box::new(NullProtocol),
+        SocketType::Pair       => Box::new(NullProtocol),
+        SocketType::Req        => Box::new(NullProtocol),
+        SocketType::Rep        => Box::new(NullProtocol),
+        SocketType::Pub        => Box::new(NullProtocol),
+        SocketType::Sub        => Box::new(NullProtocol),
+        SocketType::Bus        => Box::new(NullProtocol),
+        SocketType::Surveyor   => Box::new(NullProtocol),
+        SocketType::Respondent => Box::new(NullProtocol)
     }
 }
 
@@ -49,19 +51,49 @@ pub trait Protocol {
     fn id(&self) -> u16;
     fn peer_id(&self) -> u16;
 
-    fn add_endpoint(&mut self, token: mio::Token, endpoint: Endpoint);
-    fn remove_endpoint(&mut self, token: mio::Token) -> Option<Endpoint>;
+    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe);
+    fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
 
-    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()>;
-
+    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet);
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction);
-    fn on_send_timeout(&mut self, event_loop: &mut EventLoop);
-
     fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction);
+
+    fn on_send_timeout(&mut self, event_loop: &mut EventLoop);
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop);
-
+    
     fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) -> io::Result<()>;
-
     fn on_survey_timeout(&mut self, event_loop: &mut EventLoop);
     fn on_request_timeout(&mut self, event_loop: &mut EventLoop);
+}
+
+struct NullProtocol;
+
+impl Protocol for NullProtocol {
+    fn id(&self) -> u16 {
+        0
+    }
+    fn peer_id(&self) -> u16 {
+        0
+    }
+
+    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {}
+    fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
+        None
+    }
+
+    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
+    }
+
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {}
+    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {}
+
+    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {}
+    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {}
+
+    fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) -> io::Result<()> {
+        Err(other_io_error("not implemented"))
+    }
+
+    fn on_survey_timeout(&mut self, event_loop: &mut EventLoop) {}
+    fn on_request_timeout(&mut self, event_loop: &mut EventLoop) {}
 }

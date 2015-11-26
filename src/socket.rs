@@ -15,7 +15,7 @@ use global::*;
 use event_loop_msg::*;
 
 use protocol::Protocol;
-use endpoint::Endpoint;
+use pipe::Pipe;
 use acceptor::Acceptor;
 use transport::{create_transport, Connection, Listener};
 
@@ -26,26 +26,39 @@ pub struct Socket {
     id: SocketId,
     protocol: Box<Protocol>,
     evt_sender: Rc<Sender<SocketEvt>>,
+    sig_sender: mio::Sender<EventLoopSignal>,
     acceptors: HashMap<mio::Token, Acceptor>,
     id_seq: IdSequence,
-    added_tokens: Option<Vec<mio::Token>>,
-    removed_tokens: Option<Vec<mio::Token>>,
+    added_tokens: Option<Vec<mio::Token>>, // replace that by a user signal
+    removed_tokens: Option<Vec<mio::Token>>, // replace that by a user signal
     options: SocketImplOptions
 }
 
 impl Socket {
 
-    pub fn new(id: SocketId, proto: Box<Protocol>, evt_tx: Rc<Sender<SocketEvt>>, id_seq: IdSequence) -> Socket {
-        Socket { 
+    pub fn new(
+        id: SocketId, 
+        proto: Box<Protocol>, 
+        evt_tx: Rc<Sender<SocketEvt>>, 
+        sig_tx: mio::Sender<EventLoopSignal>,
+        id_seq: IdSequence) -> Socket {
+        Socket {
             id: id,
             protocol: proto, 
             evt_sender: evt_tx,
+            sig_sender: sig_tx,
             acceptors: HashMap::new(),
             id_seq: id_seq,
             added_tokens: None,
             removed_tokens: None,
             options: SocketImplOptions::new()
         }
+    }
+
+    fn next_token(&self) -> mio::Token {
+        let id = self.id_seq.next();
+
+        mio::Token(id)
     }
 
     fn send_evt(&self, evt: SocketEvt) {
@@ -56,10 +69,31 @@ impl Socket {
         } 
     }
 
-    pub fn connect(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {
-        debug!("[{:?}] endpoint [{:?}] connect: '{}'", self.id, token, addr);
+    fn send_signal(&self, sig: SocketSignal) {
+        let sig = EventLoopSignal::Socket(self.id, sig);
 
-        let connect_result = self.
+        self.sig_sender.send(sig);
+    }
+
+    pub fn handle_signal(&mut self, event_loop: &mut EventLoop, signal: SocketSignal) {
+        match signal {
+            SocketSignal::Connect(addr)  => self.connect(event_loop, addr),
+            /*SocketSignal::Bind(addr)     => self.bind(event_loop, addr),
+            SocketSignal::SendMsg(msg)   => self.send(event_loop, msg),
+            SocketSignal::RecvMsg        => self.recv(event_loop),
+            SocketSignal::SetOption(opt) => self.set_option(event_loop, opt)*/
+            _ => {}
+        }
+    }
+
+    fn connect(&mut self, event_loop: &mut EventLoop, addr: String) {
+        debug!("[{:?}] connect: '{}'", self.id, addr);
+
+        self.
+            create_connection(&addr).
+            map(|conn| self.on_connection_created(Some(addr), conn)).
+            map_err(|err| self.on_connection_not_created(err));
+        /*let connect_result = self.
             create_connection(&addr).
             and_then(|conn| self.on_connected(Some(addr), event_loop, token, conn));
         let evt = match connect_result {
@@ -67,28 +101,19 @@ impl Socket {
             Err(e) => SocketEvt::NotConnected(e)
         };
 
-        self.send_evt(evt);
+        event_loop.
+        self.send_evt(evt);*/
     }
 
     pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {
-        debug!("[{:?}] endpoint [{:?}] reconnect: '{}'", self.id, token, addr);
+        debug!("[{:?}] pipe [{:?}] reconnect: '{}'", self.id, token, addr);
+
+        let conn_addr = addr.clone();
+        let reconn_addr = addr.clone();
 
         self.create_connection(&addr).
-            and_then(|c| self.on_connected(Some(addr), event_loop, token, c)).
-            unwrap_or_else(|e| self.on_endpoint_error(event_loop, token, e));
-    }
-
-    fn on_endpoint_error(&mut self, event_loop: &mut EventLoop, token: mio::Token, err: io::Error) {
-        debug!("[{:?}] endpoint [{:?}] error: '{:?}'", self.id, token, err);
-
-        if let Some(endpoint) = self.protocol.remove_endpoint(token) {
-            let _ = endpoint.close(event_loop);
-            if let Some(addr) = endpoint.addr() {
-                let _ = event_loop.
-                    timeout_ms(EventLoopTimeout::Reconnect(token, addr), 200).
-                    map_err(|err| error!("[{:?}] endpoint [{:?}] reconnect timeout failed: '{:?}'", self.id, token, err));
-            }
-        }
+            and_then(|c| self.on_connected(Some(conn_addr), event_loop, token, c)).
+            unwrap_or_else(|_| self.schedule_reconnect(event_loop, token, reconn_addr));
     }
 
     fn create_connection(&self, addr: &str) -> io::Result<Box<Connection>> {
@@ -101,11 +126,26 @@ impl Socket {
         transport.connect(specific_addr)
     }
 
+    fn on_connection_created(&mut self, addr: Option<String>, conn: Box<Connection>) {
+        let token = self.next_token();
+        let protocol_ids = (self.protocol.id(), self.protocol.peer_id());
+        let pipe = Pipe::new(token, addr, protocol_ids, conn);
+
+        self.protocol.add_pipe(token, pipe);
+
+        self.send_evt(SocketEvt::Connected);
+        self.send_signal(SocketSignal::Connected(token));
+    }
+
+    fn on_connection_not_created(&mut self, err: io::Error) {
+        self.send_evt(SocketEvt::NotConnected(err));
+    }
+
     fn on_connected(&mut self, addr: Option<String>, event_loop: &mut EventLoop, token: mio::Token, conn: Box<Connection>) -> io::Result<()> {
         let protocol_ids = (self.protocol.id(), self.protocol.peer_id());
-        let endpoint = Endpoint::new(token, addr, protocol_ids, conn);
+        let pipe = Pipe::new(token, addr, protocol_ids, conn);
 
-        endpoint.open(event_loop).and_then(|_| Ok(self.protocol.add_endpoint(token, endpoint)))
+        pipe.open(event_loop).and_then(|_| Ok(self.protocol.add_pipe(token, pipe)))
     }
 
     pub fn bind(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {
@@ -156,7 +196,7 @@ impl Socket {
         if self.acceptors.contains_key(&token) {
             self.acceptor_ready(event_loop, token, events)
         } else {
-            self.endpoint_ready(event_loop, token, events)
+            self.pipe_ready(event_loop, token, events)
         }
 
         self.added_tokens.take()
@@ -171,12 +211,31 @@ impl Socket {
             unwrap_or_else(|e| self.on_acceptor_error(event_loop, token, e));
     }
 
-    fn endpoint_ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
-        debug!("[{:?}] endpoint [{:?}] ready: '{:?}'", self.id, token, events);
+    fn pipe_ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
+        debug!("[{:?}] pipe [{:?}] ready: '{:?}'", self.id, token, events);
 
-        self.protocol.
-            ready(event_loop, token, events).
-            unwrap_or_else(|e| self.on_endpoint_error(event_loop, token, e));
+        if events.is_hup() {
+            self.remove_pipe_and_schedule_reconnect(event_loop, token);
+        } else if events.is_error() {
+            self.remove_pipe_and_schedule_reconnect(event_loop, token);
+        } else {
+            self.protocol.ready(event_loop, token, events);
+        }
+    }
+
+    fn remove_pipe_and_schedule_reconnect(&mut self, event_loop: &mut EventLoop, token: mio::Token) {
+        if let Some(pipe) = self.protocol.remove_pipe(token) {
+            let _ = pipe.close(event_loop);
+            if let Some(addr) = pipe.addr() {
+                self.schedule_reconnect(event_loop, token, addr);
+            }
+        }
+    }
+
+    fn schedule_reconnect(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
+        let _ = event_loop.
+            timeout_ms(EventLoopTimeout::Reconnect(token, addr), 200).
+            map_err(|err| error!("[{:?}] pipe [{:?}] reconnect timeout failed: '{:?}'", self.id, token, err));
     }
 
     fn on_connections_accepted(&mut self, event_loop: &mut EventLoop, mut conns: Vec<Box<Connection>>) -> io::Result<()> {
@@ -196,7 +255,7 @@ impl Socket {
 
         self.
             on_connected(None, event_loop, token, conn).
-            unwrap_or_else(|e| self.on_endpoint_error(event_loop, token, e));
+            map_err(|err| error!("[{:?}] pipe [{:?}] pipe failed when accepted: '{:?}'", self.id, token, err));
 
         token
     }

@@ -340,3 +340,4 @@ fn test_ipc() {
     let received = connected.recv().unwrap();
     assert_eq!(vec!(67, 66, 65), received);
 }
+

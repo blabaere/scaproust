@@ -12,18 +12,19 @@ use mio;
 use global::*;
 use Message;
 
-pub enum EventLoopCmd {
-    SessionLevel(SessionCmd),
-    SocketLevel(SocketId, SocketCmd)
+pub enum EventLoopSignal {
+    Session(SessionSignal),
+    Socket(SocketId, SocketSignal)
 }
 
-pub enum SessionCmd {
+pub enum SessionSignal {
     CreateSocket(SocketType),
     Shutdown
 }
 
-pub enum SocketCmd {
+pub enum SocketSignal {
     Connect(String),
+    Connected(mio::Token),
     Bind(String),
     SendMsg(Message),
     RecvMsg,

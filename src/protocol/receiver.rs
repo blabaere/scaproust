@@ -12,17 +12,17 @@ use std::io;
 use mio;
 
 use super::Protocol;
-use pipe::*;
+use pipe::RecvStatus;
 use endpoint::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
 use EventLoopAction;
 use Message;
 
-type PipeHashMap = HashMap<mio::Token, Pipe>;
+type EndpointHashMap = HashMap<mio::Token, Endpoint>;
 
 pub trait MsgDecoder {
-    fn decode(&mut self, msg: Message, pipe_token: mio::Token) -> io::Result<Option<Message>>;
+    fn decode(&mut self, msg: Message, endpoint_token: mio::Token) -> io::Result<Option<Message>>;
 }
 
 pub struct NoopMsgDecoder;
@@ -52,23 +52,23 @@ impl PolyadicMsgReceiver {
         event_loop: &mut EventLoop,
         decoder: &mut MsgDecoder,
         cancel_timeout: EventLoopAction,
-        pipes: &mut PipeHashMap) {
+        endpoints: &mut EndpointHashMap) {
 
         self.cancel_timeout = Some(cancel_timeout);
 
         let mut received = None;
         let mut receiving = None;
-        for (_, pipe) in pipes.iter_mut() {
-            match pipe.recv() {
-                Ok(RecvStatus::Completed(msg)) => received = Some((msg, pipe.token())),
-                Ok(RecvStatus::InProgress)     => receiving = Some(pipe.token()),
+        for (_, endpoint) in endpoints.iter_mut() {
+            match endpoint.recv() {
+                Ok(RecvStatus::Completed(msg)) => received = Some((msg, endpoint.token())),
+                Ok(RecvStatus::InProgress)     => receiving = Some(endpoint.token()),
                 _ => continue
             }
             break;
         }
 
         self.pending_recv = true;
-        self.process_recv_result(event_loop, decoder, received, receiving, pipes);
+        self.process_recv_result(event_loop, decoder, received, receiving, endpoints);
     }
 
     pub fn received_by(&mut self,
@@ -76,16 +76,16 @@ impl PolyadicMsgReceiver {
         decoder: &mut MsgDecoder,
         raw_msg: Message, 
         token: mio::Token,
-        pipes: &mut PipeHashMap) {
+        endpoints: &mut EndpointHashMap) {
 
-        self.process_recv_result(event_loop, decoder, Some((raw_msg, token)), None, pipes);
+        self.process_recv_result(event_loop, decoder, Some((raw_msg, token)), None, endpoints);
     }
 
     pub fn resume_recv(&mut self,
         event_loop: &mut EventLoop,
         decoder: &mut MsgDecoder,
         token: mio::Token,
-        pipes: &mut PipeHashMap) -> io::Result<()> {
+        endpoints: &mut EndpointHashMap) -> io::Result<()> {
 
         if self.pending_recv == false {
             return Ok(());
@@ -94,29 +94,29 @@ impl PolyadicMsgReceiver {
         let mut received = None;
         let mut receiving = None;
 
-        if let Some(pipe) = pipes.get_mut(&token) {
-            if pipe.can_resume_recv() {
-                match try!(pipe.recv()) {
-                    RecvStatus::Completed(msg) => received = Some((msg, pipe.token())),
+        if let Some(endpoint) = endpoints.get_mut(&token) {
+            if endpoint.can_resume_recv() {
+                match try!(endpoint.recv()) {
+                    RecvStatus::Completed(msg) => received = Some((msg, endpoint.token())),
                     RecvStatus::InProgress     => receiving = Some(token),
                     _ => {}
                 }
             }
         }
 
-        self.process_recv_result(event_loop, decoder, received, receiving, pipes);
+        self.process_recv_result(event_loop, decoder, received, receiving, endpoints);
 
         Ok(())
     }
 
-    pub fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, pipes: &mut PipeHashMap) {
+    pub fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, endpoints: &mut EndpointHashMap) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
 
-        self.on_msg_recv_finished_err(event_loop, err, pipes);
+        self.on_msg_recv_finished_err(event_loop, err, endpoints);
     }
 
-    pub fn on_recv_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut PipeHashMap) {
-        self.on_msg_recv_finished_err(event_loop, err, pipes);
+    pub fn on_recv_err(&mut self, event_loop: &mut EventLoop, err: io::Error, endpoints: &mut EndpointHashMap) {
+        self.on_msg_recv_finished_err(event_loop, err, endpoints);
     }
 
     fn process_recv_result(&mut self,
@@ -124,37 +124,37 @@ impl PolyadicMsgReceiver {
         decoder: &mut MsgDecoder,
         received: Option<(Message, mio::Token)>,
         receiving: Option<mio::Token>,
-        pipes: &mut PipeHashMap) {
+        endpoints: &mut EndpointHashMap) {
 
         if let Some((raw_msg, tok)) = received {
             match decoder.decode(raw_msg, tok) {
-                Err(e)        => self.on_msg_recv_finished_err(event_loop, e, pipes),
-                Ok(Some(msg)) => self.on_msg_recv_finished_ok(event_loop, msg, pipes),
+                Err(e)        => self.on_msg_recv_finished_err(event_loop, e, endpoints),
+                Ok(Some(msg)) => self.on_msg_recv_finished_ok(event_loop, msg, endpoints),
                 Ok(None)      => {
-                    if let Some(pipe) = pipes.get_mut(&tok) {
-                        pipe.finish_recv(); // msg was decoded and then discarded, try again
+                    if let Some(endpoint) = endpoints.get_mut(&tok) {
+                        endpoint.finish_recv(); // msg was decoded and then discarded, try again
                     }
                 }
             }
         }
         else if let Some(token) = receiving {
-            self.on_msg_recv_started(token, pipes);
+            self.on_msg_recv_started(token, endpoints);
         }
     }
 
-    fn on_msg_recv_finished_ok(&mut self, event_loop: &mut EventLoop, msg: Message, pipes: &mut PipeHashMap) {
+    fn on_msg_recv_finished_ok(&mut self, event_loop: &mut EventLoop, msg: Message, endpoints: &mut EndpointHashMap) {
         self.on_msg_recv_finished(event_loop, SocketEvt::MsgRecv(msg));
 
-        for (_, pipe) in pipes.iter_mut() {
-            pipe.finish_recv(); 
+        for (_, endpoint) in endpoints.iter_mut() {
+            endpoint.finish_recv(); 
         }
     }
 
-    fn on_msg_recv_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut PipeHashMap) {
+    fn on_msg_recv_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, endpoints: &mut EndpointHashMap) {
         self.on_msg_recv_finished(event_loop, SocketEvt::MsgNotRecv(err));
 
-        for (_, pipe) in pipes.iter_mut() {
-            pipe.cancel_recv(); 
+        for (_, endpoint) in endpoints.iter_mut() {
+            endpoint.cancel_recv(); 
         }
     }
 
@@ -167,13 +167,13 @@ impl PolyadicMsgReceiver {
         self.pending_recv = false;
     }
 
-    fn on_msg_recv_started(&mut self, token: mio::Token, pipes: &mut PipeHashMap) {
+    fn on_msg_recv_started(&mut self, token: mio::Token, endpoints: &mut EndpointHashMap) {
         self.pending_recv = false;
-        for (_, pipe) in pipes.iter_mut() {
-            if pipe.token() == token {
+        for (_, endpoint) in endpoints.iter_mut() {
+            if endpoint.token() == token {
                 continue;
             } else {
-                pipe.discard_recv();
+                endpoint.discard_recv();
             }
         }
     }
@@ -198,25 +198,25 @@ impl UnaryMsgReceiver {
         event_loop: &mut EventLoop,
         decoder: &mut MsgDecoder,
         cancel_timeout: EventLoopAction,
-        pipe_cell: Option<&mut Pipe>) {
+        endpoint_cell: Option<&mut Endpoint>) {
 
         self.cancel_timeout = Some(cancel_timeout);
         self.pending_recv = true;
 
-        if pipe_cell.is_none() {
+        if endpoint_cell.is_none() {
             return;
         }
 
-        let mut pipe = pipe_cell.unwrap();
+        let mut endpoint = endpoint_cell.unwrap();
         let mut received = None;
         let mut receiving = None;
-        match pipe.recv() {
-            Ok(RecvStatus::Completed(msg)) => received = Some((msg, pipe.token())),
-            Ok(RecvStatus::InProgress)     => receiving = Some(pipe.token()),
+        match endpoint.recv() {
+            Ok(RecvStatus::Completed(msg)) => received = Some((msg, endpoint.token())),
+            Ok(RecvStatus::InProgress)     => receiving = Some(endpoint.token()),
             _ => {}
         }
         
-        self.process_recv_result(event_loop, decoder, received, receiving, Some(pipe));
+        self.process_recv_result(event_loop, decoder, received, receiving, Some(endpoint));
     }
 
     pub fn received_by(&mut self,
@@ -224,46 +224,46 @@ impl UnaryMsgReceiver {
         decoder: &mut MsgDecoder,
         raw_msg: Message, 
         token: mio::Token,
-        pipe_cell: Option<&mut Pipe>) {
+        endpoint_cell: Option<&mut Endpoint>) {
 
-        self.process_recv_result(event_loop, decoder, Some((raw_msg, token)), None, pipe_cell);
+        self.process_recv_result(event_loop, decoder, Some((raw_msg, token)), None, endpoint_cell);
     }
 
     pub fn resume_recv(&mut self,
         event_loop: &mut EventLoop,
         decoder: &mut MsgDecoder,
         token: mio::Token,
-        pipe_cell: Option<&mut Pipe>) -> io::Result<()> {
+        endpoint_cell: Option<&mut Endpoint>) -> io::Result<()> {
 
         if self.pending_recv == false {
             return Ok(());
         }
 
-        if pipe_cell.is_none() {
+        if endpoint_cell.is_none() {
             return Ok(());
         }
 
-        let mut pipe = pipe_cell.unwrap();
+        let mut endpoint = endpoint_cell.unwrap();
         let mut received = None;
         let mut receiving = None;
 
-        if pipe.can_resume_recv() {
-            match try!(pipe.recv()) {
+        if endpoint.can_resume_recv() {
+            match try!(endpoint.recv()) {
                 RecvStatus::Completed(msg) => received = Some((msg, token)),
                 RecvStatus::InProgress     => receiving = Some(token),
                 _ => {}
             }
         }
 
-        self.process_recv_result(event_loop, decoder, received, receiving, Some(pipe));
+        self.process_recv_result(event_loop, decoder, received, receiving, Some(endpoint));
 
         Ok(())
     }
 
-    pub fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, pipe_cell: Option<&mut Pipe>) {
+    pub fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, endpoint_cell: Option<&mut Endpoint>) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
 
-        self.on_msg_recv_finished_err(event_loop, err, pipe_cell);
+        self.on_msg_recv_finished_err(event_loop, err, endpoint_cell);
     }
 
     fn process_recv_result(&mut self,
@@ -271,15 +271,15 @@ impl UnaryMsgReceiver {
         decoder: &mut MsgDecoder,
         received: Option<(Message, mio::Token)>,
         receiving: Option<mio::Token>,
-        pipe_cell: Option<&mut Pipe>) {
+        endpoint_cell: Option<&mut Endpoint>) {
 
         if let Some((raw_msg, tok)) = received {
             match decoder.decode(raw_msg, tok) {
-                Err(e)        => self.on_msg_recv_finished_err(event_loop, e, pipe_cell),
-                Ok(Some(msg)) => self.on_msg_recv_finished_ok(event_loop, msg, pipe_cell),
+                Err(e)        => self.on_msg_recv_finished_err(event_loop, e, endpoint_cell),
+                Ok(Some(msg)) => self.on_msg_recv_finished_ok(event_loop, msg, endpoint_cell),
                 Ok(None)      => {
-                    if let Some(pipe) = pipe_cell {
-                        pipe.finish_recv(); // msg was decoded and then discarded, try again
+                    if let Some(endpoint) = endpoint_cell {
+                        endpoint.finish_recv(); // msg was decoded and then discarded, try again
                     }
                 }
             }
@@ -289,19 +289,19 @@ impl UnaryMsgReceiver {
         }
     }
 
-    fn on_msg_recv_finished_ok(&mut self, event_loop: &mut EventLoop, msg: Message, pipe_cell: Option<&mut Pipe>) {
+    fn on_msg_recv_finished_ok(&mut self, event_loop: &mut EventLoop, msg: Message, endpoint_cell: Option<&mut Endpoint>) {
         self.on_msg_recv_finished(event_loop, SocketEvt::MsgRecv(msg));
 
-        if let Some(pipe) = pipe_cell {
-            pipe.finish_recv(); 
+        if let Some(endpoint) = endpoint_cell {
+            endpoint.finish_recv(); 
         }
     }
 
-    fn on_msg_recv_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipe_cell: Option<&mut Pipe>) {
+    fn on_msg_recv_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, endpoint_cell: Option<&mut Endpoint>) {
         self.on_msg_recv_finished(event_loop, SocketEvt::MsgNotRecv(err));
 
-        if let Some(pipe) = pipe_cell {
-            pipe.cancel_recv(); 
+        if let Some(endpoint) = endpoint_cell {
+            endpoint.cancel_recv(); 
         }
     }
 

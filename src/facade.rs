@@ -21,7 +21,7 @@ use EventLoop;
 use session::Session;
 
 pub struct SessionFacade {
-    cmd_sender: mio::Sender<EventLoopCmd>,
+    cmd_sender: mio::Sender<EventLoopSignal>,
     evt_receiver: mpsc::Receiver<SessionEvt>
 }
 
@@ -58,14 +58,14 @@ impl SessionFacade {
         }
     }
 
-    fn send_cmd(&self, session_cmd: SessionCmd) -> Result<(), io::Error> {
-        let cmd = EventLoopCmd::SessionLevel(session_cmd);
+    fn send_cmd(&self, session_cmd: SessionSignal) -> Result<(), io::Error> {
+        let cmd = EventLoopSignal::Session(session_cmd);
 
         self.cmd_sender.send(cmd).map_err(|e| convert_notify_err(e))
     }
 
     pub fn create_socket(&self, socket_type: SocketType) -> io::Result<SocketFacade> {
-        let session_cmd = SessionCmd::CreateSocket(socket_type);
+        let session_cmd = SessionSignal::CreateSocket(socket_type);
 
         try!(self.send_cmd(session_cmd));
 
@@ -82,8 +82,8 @@ impl SessionFacade {
 
 impl Drop for SessionFacade {
     fn drop(&mut self) {
-        let session_cmd = SessionCmd::Shutdown;
-        let cmd = EventLoopCmd::SessionLevel(session_cmd);
+        let session_cmd = SessionSignal::Shutdown;
+        let cmd = EventLoopSignal::Session(session_cmd);
         
         let _ = self.cmd_sender.send(cmd);
     }
@@ -91,25 +91,25 @@ impl Drop for SessionFacade {
 
 pub struct SocketFacade {
     id: SocketId,
-    cmd_sender: Sender<EventLoopCmd>,
+    cmd_sender: Sender<EventLoopSignal>,
     evt_receiver: Receiver<SocketEvt>
     // Could use https://github.com/polyfractal/bounded-spsc-queue ?
     // Maybe once a smart waiting strategy is available (like spin, then sleep 0, then sleep 1, then mutex ?)
 }
 
 impl SocketFacade {
-    pub fn new(id: SocketId, cmd_tx: Sender<EventLoopCmd>, evt_rx: Receiver<SocketEvt>) -> SocketFacade {
+    pub fn new(id: SocketId, cmd_tx: Sender<EventLoopSignal>, evt_rx: Receiver<SocketEvt>) -> SocketFacade {
         SocketFacade { id: id, cmd_sender: cmd_tx, evt_receiver: evt_rx }
     }
 
-    fn send_cmd(&self, socket_cmd: SocketCmd) -> Result<(), io::Error> {
-        let cmd = EventLoopCmd::SocketLevel(self.id, socket_cmd);
+    fn send_cmd(&self, socket_cmd: SocketSignal) -> Result<(), io::Error> {
+        let cmd = EventLoopSignal::Socket(self.id, socket_cmd);
 
         self.cmd_sender.send(cmd).map_err(|e| convert_notify_err(e))
     }
 
     pub fn connect(&mut self, addr: &str) -> Result<(), io::Error> {
-        let cmd = SocketCmd::Connect(addr.to_owned());
+        let cmd = SocketSignal::Connect(addr.to_owned());
         
         try!(self.send_cmd(cmd));
 
@@ -122,7 +122,7 @@ impl SocketFacade {
     }
 
     pub fn bind(&mut self, addr: &str) -> Result<(), io::Error> {
-        let cmd = SocketCmd::Bind(addr.to_owned());
+        let cmd = SocketSignal::Bind(addr.to_owned());
         
         try!(self.send_cmd(cmd));
 
@@ -139,7 +139,7 @@ impl SocketFacade {
     }
 
     pub fn send_msg(&mut self, msg: Message) -> Result<(), io::Error> {
-        let cmd = SocketCmd::SendMsg(msg);
+        let cmd = SocketSignal::SendMsg(msg);
 
         try!(self.send_cmd(cmd));
 
@@ -156,7 +156,7 @@ impl SocketFacade {
     }
 
     pub fn recv_msg(&mut self) -> Result<Message, io::Error> {
-        try!(self.send_cmd(SocketCmd::RecvMsg));
+        try!(self.send_cmd(SocketSignal::RecvMsg));
 
         match self.evt_receiver.recv() {
             Ok(SocketEvt::MsgRecv(msg))  => Ok(msg),
@@ -167,7 +167,7 @@ impl SocketFacade {
     }
 
     pub fn set_option(&mut self, option: SocketOption) -> io::Result<()> {
-        let cmd = SocketCmd::SetOption(option);
+        let cmd = SocketSignal::SetOption(option);
 
         try!(self.send_cmd(cmd));
 

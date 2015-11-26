@@ -37,21 +37,24 @@ impl Session {
         }
     }
 
-    fn handle_session_cmd(&mut self, event_loop: &mut EventLoop, cmd: SessionCmd) {
-        match cmd {
-            SessionCmd::CreateSocket(socket_type) => self.create_socket(socket_type),
-            SessionCmd::Shutdown => event_loop.shutdown()
+    fn handle_session_signal(&mut self, event_loop: &mut EventLoop, signal: SessionSignal) {
+        match signal {
+            SessionSignal::CreateSocket(t) => self.create_socket(event_loop, t),
+            SessionSignal::Shutdown                  => event_loop.shutdown()
         }
     }
 
-    fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: SocketId, cmd: SocketCmd) {
-        match cmd {
-            SocketCmd::Connect(addr)  => self.connect(event_loop, id, addr),
-            SocketCmd::Bind(addr)     => self.bind(event_loop, id, addr),
-            SocketCmd::SendMsg(msg)   => self.send(event_loop, id, msg),
-            SocketCmd::RecvMsg        => self.recv(event_loop, id),
-            SocketCmd::SetOption(opt) => self.set_option(event_loop, id, opt)
+    fn handle_socket_signal(&mut self, event_loop: &mut EventLoop, id: SocketId, signal: SocketSignal) {
+        if let Some(socket) = self.sockets.get_mut(&id) {
+            socket.handle_signal(event_loop, signal);
         }
+        /*match signal {
+            SocketSignal::Connect(addr)  => self.connect(event_loop, id, addr),
+            SocketSignal::Bind(addr)     => self.bind(event_loop, id, addr),
+            SocketSignal::SendMsg(msg)   => self.send(event_loop, id, msg),
+            SocketSignal::RecvMsg        => self.recv(event_loop, id),
+            SocketSignal::SetOption(opt) => self.set_option(event_loop, id, opt)
+        }*/
     }
 
     fn send_evt(&self, evt: SessionEvt) {
@@ -62,12 +65,13 @@ impl Session {
         } 
     }
 
-    fn create_socket(&mut self, socket_type: SocketType) {
+    fn create_socket(&mut self, event_loop: &mut EventLoop, socket_type: SocketType) {
         let id = SocketId(self.id_seq.next());
         let (tx, rx) = mpsc::channel();
-        let shared_tx = Rc::new(tx);
-        let protocol = protocol::create_protocol(id, socket_type, shared_tx.clone());
-        let socket = Socket::new(id, protocol, shared_tx.clone(), self.id_seq.clone());
+        let evt_tx = Rc::new(tx);
+        let sig_tx = event_loop.channel();
+        let protocol = protocol::create_protocol(id, socket_type, evt_tx.clone());
+        let socket = Socket::new(id, protocol, evt_tx.clone(), sig_tx, self.id_seq.clone());
 
         self.sockets.insert(id, socket);
 
@@ -80,7 +84,7 @@ impl Session {
         }
     }
 
-    fn connect(&mut self, event_loop: &mut EventLoop, id: SocketId, addr: String) {
+    /*fn connect(&mut self, event_loop: &mut EventLoop, id: SocketId, addr: String) {
         let token = mio::Token(self.id_seq.next());
 
         self.socket_ids.insert(token, id);
@@ -88,7 +92,7 @@ impl Session {
         if let Some(socket) = self.sockets.get_mut(&id) {
             socket.connect(addr, event_loop, token);
         }
-    }
+    }*/
 
     fn reconnect(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
         if let Some(socket_id) = self.socket_ids.get_mut(&token) {
@@ -99,6 +103,7 @@ impl Session {
     }
 
     fn bind(&mut self, event_loop: &mut EventLoop, id: SocketId, addr: String) {
+        // let the socket allocate the token and signal it
         let token = mio::Token(self.id_seq.next());
 
         self.socket_ids.insert(token, id);
@@ -159,13 +164,14 @@ impl Session {
 
 impl mio::Handler for Session {
     type Timeout = EventLoopTimeout;
-    type Message = EventLoopCmd;
+    type Message = EventLoopSignal;
 
-    fn notify(&mut self, event_loop: &mut EventLoop, msg: Self::Message) {
+    fn notify(&mut self, event_loop: &mut EventLoop, signal: Self::Message) {
         debug!("session backend received a command");
-        match msg {
-            EventLoopCmd::SessionLevel(cmd) => self.handle_session_cmd(event_loop, cmd),
-            EventLoopCmd::SocketLevel(id, cmd) => self.handle_socket_cmd(event_loop, id, cmd)
+
+        match signal {
+            EventLoopSignal::Session(signal)    => self.handle_session_signal(event_loop, signal),
+            EventLoopSignal::Socket(id, signal) => self.handle_socket_signal(event_loop, id, signal)
         }
     }
 

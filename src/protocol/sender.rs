@@ -12,14 +12,14 @@ use std::io;
 use mio;
 
 use super::Protocol;
-use pipe::*;
+use pipe::SendStatus;
 use endpoint::*;
 use event_loop_msg::SocketEvt;
 use EventLoop;
 use EventLoopAction;
 use Message;
 
-type PipeHashMap = HashMap<mio::Token, Pipe>;
+type EndpointHashMap = HashMap<mio::Token, Endpoint>;
 
 pub fn new_unicast_msg_sender(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> PolyadicMsgSender<UnicastSendingStrategy> {
     PolyadicMsgSender::new(evt_tx, UnicastSendingStrategy)
@@ -36,16 +36,16 @@ pub fn new_return_sender(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> ReturnSender {
 pub trait MsgSendingStrategy {
     // returns: finished, keep msg pending
     // finished: msg was sent, raise success notification
-    // keep: msg should be kept for other pipes
+    // keep: msg should be kept for other endpoints
 
     // send the message according to the strategy specification
-    fn send(&self, msg: Rc<Message>, pipes: &mut HashMap<mio::Token, Pipe>) -> (bool, bool);
+    fn send(&self, msg: Rc<Message>, endpoints: &mut HashMap<mio::Token, Endpoint>) -> (bool, bool);
 
-    // the specified pipe has successfully sent the current message
-    fn sent_by(&self, token: mio::Token, pipes: &mut PipeHashMap) -> (bool, bool);
+    // the specified endpoint has successfully sent the current message
+    fn sent_by(&self, token: mio::Token, endpoints: &mut EndpointHashMap) -> (bool, bool);
 
-    // resume sending on the specified pipe
-    fn resume_send(&self, msg: &Rc<Message>, token: mio::Token, pipes: &mut PipeHashMap) -> io::Result<(bool, bool)>;
+    // resume sending on the specified endpoint
+    fn resume_send(&self, msg: &Rc<Message>, token: mio::Token, endpoints: &mut EndpointHashMap) -> io::Result<(bool, bool)>;
 }
 
 pub struct PolyadicMsgSender<TStrategy : MsgSendingStrategy> {
@@ -69,15 +69,15 @@ impl<TStrategy : MsgSendingStrategy> PolyadicMsgSender<TStrategy> {
         event_loop: &mut EventLoop,
         msg: Message,
         cancel_timeout: EventLoopAction,
-        pipes: &mut PipeHashMap) {
+        endpoints: &mut EndpointHashMap) {
 
         self.cancel_timeout = Some(cancel_timeout);
 
         let msg = Rc::new(msg);
-        let (finished, keep) = self.sending_strategy.send(msg.clone(), pipes);
+        let (finished, keep) = self.sending_strategy.send(msg.clone(), endpoints);
 
         if finished {
-            self.on_msg_send_finished_ok(event_loop, pipes);
+            self.on_msg_send_finished_ok(event_loop, endpoints);
         } else if keep {
             self.pending_send = Some(msg);
         }
@@ -86,12 +86,12 @@ impl<TStrategy : MsgSendingStrategy> PolyadicMsgSender<TStrategy> {
     pub fn sent_by(&mut self,
         event_loop: &mut EventLoop, 
         token: mio::Token,
-        pipes: &mut PipeHashMap) {
+        endpoints: &mut EndpointHashMap) {
 
-        let (finished, keep) = self.sending_strategy.sent_by(token, pipes);
+        let (finished, keep) = self.sending_strategy.sent_by(token, endpoints);
 
         if finished {
-            self.on_msg_send_finished_ok(event_loop, pipes);
+            self.on_msg_send_finished_ok(event_loop, endpoints);
         } else if !keep {
             self.pending_send = None;
         }
@@ -100,17 +100,17 @@ impl<TStrategy : MsgSendingStrategy> PolyadicMsgSender<TStrategy> {
     pub fn resume_send(&mut self,
         event_loop: &mut EventLoop,
         token: mio::Token,
-        pipes: &mut PipeHashMap) -> io::Result<()> {
+        endpoints: &mut EndpointHashMap) -> io::Result<()> {
 
         if self.pending_send.is_none() {
             return Ok(());
         }
 
         let msg = self.pending_send.take().unwrap();
-        let (finished, keep) = try!(self.sending_strategy.resume_send(&msg, token, pipes));
+        let (finished, keep) = try!(self.sending_strategy.resume_send(&msg, token, endpoints));
 
         if finished {
-            self.on_msg_send_finished_ok(event_loop, pipes);
+            self.on_msg_send_finished_ok(event_loop, endpoints);
         } else if keep {
             self.pending_send = Some(msg);
         }
@@ -118,27 +118,27 @@ impl<TStrategy : MsgSendingStrategy> PolyadicMsgSender<TStrategy> {
         Ok(())
     }
 
-    pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop, pipes: &mut HashMap<mio::Token, Pipe>) {
+    pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop, endpoints: &mut HashMap<mio::Token, Endpoint>) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
 
-        self.on_msg_send_finished_err(event_loop, err, pipes);
+        self.on_msg_send_finished_err(event_loop, err, endpoints);
     }
 
-    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut PipeHashMap) {
-        self.on_msg_send_finished_err(event_loop, err, pipes);
+    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, endpoints: &mut EndpointHashMap) {
+        self.on_msg_send_finished_err(event_loop, err, endpoints);
     }
 
-    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, pipes: &mut PipeHashMap) {
+    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, endpoints: &mut EndpointHashMap) {
         self.on_msg_send_finished(event_loop, SocketEvt::MsgSent);
-        for (_, pipe) in pipes.iter_mut() {
-            pipe.finish_send(); 
+        for (_, endpoint) in endpoints.iter_mut() {
+            endpoint.finish_send(); 
         }
     }
 
-    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut PipeHashMap) {
+    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, endpoints: &mut EndpointHashMap) {
         self.on_msg_send_finished(event_loop, SocketEvt::MsgNotSent(err));
-        for (_, pipe) in pipes.iter_mut() {
-            pipe.cancel_send();
+        for (_, endpoint) in endpoints.iter_mut() {
+            endpoint.cancel_send();
         }
     }
 
@@ -157,18 +157,18 @@ pub struct UnicastSendingStrategy;
 
 impl UnicastSendingStrategy {
 
-    fn on_msg_send_started(&self, token: mio::Token, pipes: &mut PipeHashMap) {
-        let filter_other = |p: &&mut Pipe| p.token() != token;
-        let mut other_pipes = pipes.iter_mut().map(|(_, p)| p).filter(filter_other);
+    fn on_msg_send_started(&self, token: mio::Token, endpoints: &mut EndpointHashMap) {
+        let filter_other = |p: &&mut Endpoint| p.token() != token;
+        let mut other_endpoints = endpoints.iter_mut().map(|(_, p)| p).filter(filter_other);
 
-        while let Some(pipe) = other_pipes.next() {
-            pipe.discard_send(); 
+        while let Some(endpoint) = other_endpoints.next() {
+            endpoint.discard_send(); 
         }
     }
 
-    fn is_finished_or_keep(&self, sent: bool, sending: Option<mio::Token>, pipes: &mut PipeHashMap) -> (bool, bool) {
+    fn is_finished_or_keep(&self, sent: bool, sending: Option<mio::Token>, endpoints: &mut EndpointHashMap) -> (bool, bool) {
         if let Some(token) = sending {
-            self.on_msg_send_started(token, pipes);
+            self.on_msg_send_started(token, endpoints);
 
             (false, false)
         } else {
@@ -178,33 +178,33 @@ impl UnicastSendingStrategy {
 }
 
 impl MsgSendingStrategy for UnicastSendingStrategy {
-    fn send(&self, msg: Rc<Message>, pipes: &mut PipeHashMap) -> (bool, bool) {
+    fn send(&self, msg: Rc<Message>, endpoints: &mut EndpointHashMap) -> (bool, bool) {
         let mut sent = false;
         let mut sending = None;
 
-        for (_, pipe) in pipes.into_iter() {
-            match pipe.send(msg.clone()) {
+        for (_, endpoint) in endpoints.into_iter() {
+            match endpoint.send(msg.clone()) {
                 Ok(SendStatus::Completed)  => sent = true,
-                Ok(SendStatus::InProgress) => sending = Some(pipe.token()),
+                Ok(SendStatus::InProgress) => sending = Some(endpoint.token()),
                 _ => continue
             }
             break;
         }
 
-        self.is_finished_or_keep(sent, sending, pipes)
+        self.is_finished_or_keep(sent, sending, endpoints)
     }
 
-    fn sent_by(&self, _: mio::Token, _: &mut PipeHashMap) -> (bool, bool) {
+    fn sent_by(&self, _: mio::Token, _: &mut EndpointHashMap) -> (bool, bool) {
         (true, false)
     }
 
-    fn resume_send(&self, msg: &Rc<Message>, token: mio::Token, pipes: &mut PipeHashMap) -> io::Result<(bool, bool)> {
+    fn resume_send(&self, msg: &Rc<Message>, token: mio::Token, endpoints: &mut EndpointHashMap) -> io::Result<(bool, bool)> {
         let mut sent = false;
         let mut sending = None;
 
-        if let Some(pipe) = pipes.get_mut(&token) {
-            if pipe.can_resume_send() {
-                match try!(pipe.send(msg.clone())) {
+        if let Some(endpoint) = endpoints.get_mut(&token) {
+            if endpoint.can_resume_send() {
+                match try!(endpoint.send(msg.clone())) {
                     SendStatus::Completed  => sent = true,
                     SendStatus::InProgress => sending = Some(token),
                     _ => {}
@@ -212,17 +212,17 @@ impl MsgSendingStrategy for UnicastSendingStrategy {
             }
         }
 
-        Ok(self.is_finished_or_keep(sent, sending, pipes))
+        Ok(self.is_finished_or_keep(sent, sending, endpoints))
     }
 }
 
 pub struct MulticastSendingStrategy;
 
 impl MulticastSendingStrategy {
-    fn is_finished_or_keep(&self, sent: bool, pipes: &mut PipeHashMap) -> (bool, bool) {
+    fn is_finished_or_keep(&self, sent: bool, endpoints: &mut EndpointHashMap) -> (bool, bool) {
         if sent {
-            let total_count = pipes.len();
-            let done_count = pipes.values().filter(|p| p.is_send_finished()).count();
+            let total_count = endpoints.len();
+            let done_count = endpoints.values().filter(|p| p.is_send_finished()).count();
             let finished = total_count == done_count;
 
             (finished, !finished)
@@ -233,36 +233,36 @@ impl MulticastSendingStrategy {
 }
 
 impl MsgSendingStrategy for MulticastSendingStrategy {
-    fn send(&self, msg: Rc<Message>, pipes: &mut PipeHashMap) -> (bool, bool) {
+    fn send(&self, msg: Rc<Message>, endpoints: &mut EndpointHashMap) -> (bool, bool) {
         let mut sent = false;
 
-        for (_, pipe) in pipes.into_iter() {
-            match pipe.send(msg.clone()) {
+        for (_, endpoint) in endpoints.into_iter() {
+            match endpoint.send(msg.clone()) {
                 Ok(SendStatus::Completed)  => sent = true,
                 _ => continue
             }
         }
 
-        self.is_finished_or_keep(sent, pipes)
+        self.is_finished_or_keep(sent, endpoints)
     }
 
-    fn sent_by(&self, _: mio::Token, pipes: &mut PipeHashMap) -> (bool, bool) {
-        self.is_finished_or_keep(true, pipes)
+    fn sent_by(&self, _: mio::Token, endpoints: &mut EndpointHashMap) -> (bool, bool) {
+        self.is_finished_or_keep(true, endpoints)
      }
 
-    fn resume_send(&self, msg: &Rc<Message>, token: mio::Token, pipes: &mut PipeHashMap) -> io::Result<(bool, bool)> {
+    fn resume_send(&self, msg: &Rc<Message>, token: mio::Token, endpoints: &mut EndpointHashMap) -> io::Result<(bool, bool)> {
         let mut sent = false;
 
-        if let Some(pipe) = pipes.get_mut(&token) {
-            if pipe.can_resume_send() {
-                match try!(pipe.send(msg.clone())) {
+        if let Some(endpoint) = endpoints.get_mut(&token) {
+            if endpoint.can_resume_send() {
+                match try!(endpoint.send(msg.clone())) {
                     SendStatus::Completed  => sent = true,
                     _ => {}
                 }
             }
         }
 
-        Ok(self.is_finished_or_keep(sent, pipes))
+        Ok(self.is_finished_or_keep(sent, endpoints))
      }
 }
 
@@ -290,38 +290,38 @@ impl ReturnSender {
         msg: Message,
         cancel_timeout: EventLoopAction,
         token: mio::Token,
-        pipes: &mut PipeHashMap) {
+        endpoints: &mut EndpointHashMap) {
 
         self.cancel_timeout = Some(cancel_timeout);
 
         let msg = Rc::new(msg);
-        let (finished, keep) = self.send_to(msg.clone(), token, pipes);
+        let (finished, keep) = self.send_to(msg.clone(), token, endpoints);
 
         if finished {
-            self.on_msg_send_finished_ok(event_loop, pipes);
+            self.on_msg_send_finished_ok(event_loop, endpoints);
         } else if keep {
             self.pending_send = Some(msg);
         }
     }
 
-    fn send_to(&self, msg: Rc<Message>, token: mio::Token, pipes: &mut PipeHashMap) -> (bool, bool) {
+    fn send_to(&self, msg: Rc<Message>, token: mio::Token, endpoints: &mut EndpointHashMap) -> (bool, bool) {
         let mut sent = false;
         let mut sending = None;
 
-        if let Some(pipe) = pipes.get_mut(&token) {
-            match pipe.send(msg) {
+        if let Some(endpoint) = endpoints.get_mut(&token) {
+            match endpoint.send(msg) {
                 Ok(SendStatus::Completed)  => sent = true,
-                Ok(SendStatus::InProgress) => sending = Some(pipe.token()),
+                Ok(SendStatus::InProgress) => sending = Some(endpoint.token()),
                 _ => {}
             }
         }
 
-        self.is_finished_or_keep(sent, sending, pipes)
+        self.is_finished_or_keep(sent, sending, endpoints)
     }
 
-    fn is_finished_or_keep(&self, sent: bool, sending: Option<mio::Token>, pipes: &mut PipeHashMap) -> (bool, bool) {
+    fn is_finished_or_keep(&self, sent: bool, sending: Option<mio::Token>, endpoints: &mut EndpointHashMap) -> (bool, bool) {
         if let Some(token) = sending {
-            self.on_msg_send_started(token, pipes);
+            self.on_msg_send_started(token, endpoints);
 
             (false, false)
         } else {
@@ -329,37 +329,37 @@ impl ReturnSender {
         }
     }
 
-    fn on_msg_send_started(&self, token: mio::Token, pipes: &mut PipeHashMap) {
-        let filter_other = |p: &&mut Pipe| p.token() != token;
-        let mut other_pipes = pipes.iter_mut().map(|(_, p)| p).filter(filter_other);
+    fn on_msg_send_started(&self, token: mio::Token, endpoints: &mut EndpointHashMap) {
+        let filter_other = |p: &&mut Endpoint| p.token() != token;
+        let mut other_endpoints = endpoints.iter_mut().map(|(_, p)| p).filter(filter_other);
 
-        while let Some(pipe) = other_pipes.next() {
-            pipe.discard_send(); 
+        while let Some(endpoint) = other_endpoints.next() {
+            endpoint.discard_send(); 
         }
     }
 
     pub fn sent_by(&mut self,
         event_loop: &mut EventLoop, 
         _: mio::Token,
-        pipes: &mut PipeHashMap) {
+        endpoints: &mut EndpointHashMap) {
 
-        self.on_msg_send_finished_ok(event_loop, pipes);
+        self.on_msg_send_finished_ok(event_loop, endpoints);
     }
 
     pub fn resume_send(&mut self,
         event_loop: &mut EventLoop,
         token: mio::Token,
-        pipes: &mut PipeHashMap) -> io::Result<()> {
+        endpoints: &mut EndpointHashMap) -> io::Result<()> {
 
         if self.pending_send.is_none() {
             return Ok(());
         }
 
         let msg = self.pending_send.take().unwrap();
-        let (finished, keep) = try!(self.resume_send_to(&msg, token, pipes));
+        let (finished, keep) = try!(self.resume_send_to(&msg, token, endpoints));
 
         if finished {
-            self.on_msg_send_finished_ok(event_loop, pipes);
+            self.on_msg_send_finished_ok(event_loop, endpoints);
         } else if keep {
             self.pending_send = Some(msg);
         }
@@ -367,13 +367,13 @@ impl ReturnSender {
         Ok(())
     }
 
-    fn resume_send_to(&self, msg: &Rc<Message>, token: mio::Token, pipes: &mut PipeHashMap) -> io::Result<(bool, bool)> {
+    fn resume_send_to(&self, msg: &Rc<Message>, token: mio::Token, endpoints: &mut EndpointHashMap) -> io::Result<(bool, bool)> {
         let mut sent = false;
         let mut sending = None;
 
-        if let Some(pipe) = pipes.get_mut(&token) {
-            if pipe.can_resume_send() {
-                match try!(pipe.send(msg.clone())) {
+        if let Some(endpoint) = endpoints.get_mut(&token) {
+            if endpoint.can_resume_send() {
+                match try!(endpoint.send(msg.clone())) {
                     SendStatus::Completed  => sent = true,
                     SendStatus::InProgress => sending = Some(token),
                     _ => {}
@@ -381,30 +381,30 @@ impl ReturnSender {
             }
         }
 
-        Ok(self.is_finished_or_keep(sent, sending, pipes))
+        Ok(self.is_finished_or_keep(sent, sending, endpoints))
     }
 
-    pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop, pipes: &mut HashMap<mio::Token, Pipe>) {
+    pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop, endpoints: &mut HashMap<mio::Token, Endpoint>) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
 
-        self.on_msg_send_finished_err(event_loop, err, pipes);
+        self.on_msg_send_finished_err(event_loop, err, endpoints);
     }
 
-    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut PipeHashMap) {
-        self.on_msg_send_finished_err(event_loop, err, pipes);
+    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, endpoints: &mut EndpointHashMap) {
+        self.on_msg_send_finished_err(event_loop, err, endpoints);
     }
 
-    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, pipes: &mut PipeHashMap) {
+    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, endpoints: &mut EndpointHashMap) {
         self.on_msg_send_finished(event_loop, SocketEvt::MsgSent);
-        for (_, pipe) in pipes.iter_mut() {
-            pipe.finish_send(); 
+        for (_, endpoint) in endpoints.iter_mut() {
+            endpoint.finish_send(); 
         }
     }
 
-    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipes: &mut PipeHashMap) {
+    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, endpoints: &mut EndpointHashMap) {
         self.on_msg_send_finished(event_loop, SocketEvt::MsgNotSent(err));
-        for (_, pipe) in pipes.iter_mut() {
-            pipe.cancel_send();
+        for (_, endpoint) in endpoints.iter_mut() {
+            endpoint.cancel_send();
         }
     }
 
@@ -438,59 +438,59 @@ impl UnaryMsgSender {
         event_loop: &mut EventLoop,
         msg: Message,
         cancel_timeout: EventLoopAction,
-        pipe_cell: Option<&mut Pipe>) {
+        endpoint_cell: Option<&mut Endpoint>) {
 
         self.cancel_timeout = Some(cancel_timeout);
 
-        if pipe_cell.is_none() {
+        if endpoint_cell.is_none() {
             return self.pending_send = Some(Rc::new(msg));
         }
 
-        let mut pipe = pipe_cell.unwrap();
+        let mut endpoint = endpoint_cell.unwrap();
         let mut sent = false;
         let mut sending = false;
         let msg = Rc::new(msg);
 
-        match pipe.send(msg.clone()) {
+        match endpoint.send(msg.clone()) {
             Ok(SendStatus::Completed)  => sent = true,
             Ok(SendStatus::InProgress) => sending = true,
             _ => {}
         }
 
         self.pending_send = Some(msg);
-        self.process_send_result(event_loop, sent, sending, Some(pipe));
+        self.process_send_result(event_loop, sent, sending, Some(endpoint));
     }
 
-    pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop, pipe_cell: Option<&mut Pipe>) {
+    pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop, endpoint_cell: Option<&mut Endpoint>) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
 
-        self.on_msg_send_finished_err(event_loop, err, pipe_cell);
+        self.on_msg_send_finished_err(event_loop, err, endpoint_cell);
     }
 
     pub fn sent_by(&mut self,
         event_loop: &mut EventLoop, 
         _: mio::Token,
-        pipe_cell: Option<&mut Pipe>) {
+        endpoint_cell: Option<&mut Endpoint>) {
 
-        self.on_msg_send_finished_ok(event_loop, pipe_cell);
+        self.on_msg_send_finished_ok(event_loop, endpoint_cell);
     }
 
     pub fn resume_send(&mut self,
         event_loop: &mut EventLoop,
         _: mio::Token,
-        pipe_cell: Option<&mut Pipe>) -> io::Result<()> {
+        endpoint_cell: Option<&mut Endpoint>) -> io::Result<()> {
 
         if self.pending_send.is_none() {
             return Ok(());
         }
 
-        let mut pipe = pipe_cell.unwrap();
+        let mut endpoint = endpoint_cell.unwrap();
         let mut sent = false;
         let mut sending = false;
         let msg = self.pending_send.take().unwrap();
 
-        if pipe.can_resume_send() {
-            match pipe.send(msg.clone()) {
+        if endpoint.can_resume_send() {
+            match endpoint.send(msg.clone()) {
                 Ok(SendStatus::Completed)  => sent = true,
                 Ok(SendStatus::InProgress) => sending = true,
                 _ => {}
@@ -498,18 +498,18 @@ impl UnaryMsgSender {
         }
 
         self.pending_send = Some(msg);
-        self.process_send_result(event_loop, sent, sending, Some(pipe));
+        self.process_send_result(event_loop, sent, sending, Some(endpoint));
 
         Ok(())
     }
 
-    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipe_cell: Option<&mut Pipe>) {
-        self.on_msg_send_finished_err(event_loop, err, pipe_cell);
+    pub fn on_send_err(&mut self, event_loop: &mut EventLoop, err: io::Error, endpoint_cell: Option<&mut Endpoint>) {
+        self.on_msg_send_finished_err(event_loop, err, endpoint_cell);
     }
 
-    fn process_send_result(&mut self, event_loop: &mut EventLoop, sent: bool, sending: bool, pipe_cell: Option<&mut Pipe>) {
+    fn process_send_result(&mut self, event_loop: &mut EventLoop, sent: bool, sending: bool, endpoint_cell: Option<&mut Endpoint>) {
         if sent {
-            self.on_msg_send_finished_ok(event_loop, pipe_cell);
+            self.on_msg_send_finished_ok(event_loop, endpoint_cell);
         } else if sending {
             self.on_msg_send_started();
         }
@@ -519,19 +519,19 @@ impl UnaryMsgSender {
         self.pending_send = None;
     }
 
-    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, pipe_cell: Option<&mut Pipe>) {
+    fn on_msg_send_finished_ok(&mut self, event_loop: &mut EventLoop, endpoint_cell: Option<&mut Endpoint>) {
         self.on_msg_send_finished(event_loop, SocketEvt::MsgSent);
 
-        if let Some(pipe) = pipe_cell {
-            pipe.finish_send(); 
+        if let Some(endpoint) = endpoint_cell {
+            endpoint.finish_send(); 
         }
     }
 
-    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, pipe_cell: Option<&mut Pipe>) {
+    fn on_msg_send_finished_err(&mut self, event_loop: &mut EventLoop, err: io::Error, endpoint_cell: Option<&mut Endpoint>) {
         self.on_msg_send_finished(event_loop, SocketEvt::MsgNotSent(err));
 
-        if let Some(pipe) = pipe_cell {
-            pipe.cancel_send(); 
+        if let Some(endpoint) = endpoint_cell {
+            endpoint.cancel_send(); 
         }
     }
 

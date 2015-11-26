@@ -8,8 +8,6 @@
 #![feature(drain)]
 #![feature(fnbox)]
 #![feature(unboxed_closures)]
-#![feature(split_off)]
-#![feature(vec_push_all)]
 
 #[macro_use] extern crate log;
 extern crate byteorder;
