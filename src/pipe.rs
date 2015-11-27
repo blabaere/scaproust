@@ -14,6 +14,7 @@ use EventLoop;
 use Message;
 use transport::Connection;
 use global;
+use event_loop_msg::*;
 
 // A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
 // That means send/receive size prefix and then message payload
@@ -66,6 +67,10 @@ impl Pipe {
         self.on_state_transition(&mut |s: Box<PipeState>| s.ready(event_loop, events));
     }
 
+    pub fn recv(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(&mut |s: Box<PipeState>| s.recv(event_loop));
+    }
+
     pub fn addr(self) -> Option<String> {
         self.addr
     }
@@ -78,6 +83,10 @@ trait PipeState {
 
     fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
         // TODO test hup and error, then call readable or writable, or maybe both ?
+        Box::new(Dead)
+    }
+
+    fn recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
 
@@ -156,6 +165,10 @@ impl PipeState for Initial {
 
         transition_if_ok::<Initial, HandshakeTx>(self, registered, event_loop)
     }
+
+    fn recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        self
+    }
 }
 
 struct HandshakeTx {
@@ -218,6 +231,10 @@ impl PipeState for HandshakeTx {
 
             no_transition_if_ok::<HandshakeTx>(self, res, event_loop)
         }
+    }
+
+    fn recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        self
     }
 }
 
@@ -285,12 +302,14 @@ impl PipeState for HandshakeRx {
             no_transition_if_ok::<HandshakeRx>(self, res, event_loop)
         }
     }
+
+    fn recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        self
+    }
 }
 
 struct Idle {
     token: mio::Token,
-    protocol_id: u16,
-    protocol_peer_id: u16,
     connection: Box<Connection>,
 }
 
@@ -298,14 +317,48 @@ impl From<HandshakeRx> for Idle {
     fn from(state: HandshakeRx) -> Idle {
         Idle {
             token: state.token,
-            protocol_id: state.protocol_id,
-            protocol_peer_id: state.protocol_peer_id,
             connection: state.connection
         }
     }
 }
 
+impl Idle {
+    fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+        register_for_read(event_loop, &*self.connection, self.token)
+    }
+}
+
 impl PipeState for Idle {
+
+    fn ready(self: Box<Self>, _: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
+        debug!("Idle::ready leave me alone");
+        self
+    }
+
+    fn recv(mut self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        let mut operation = RecvOperation::new();
+
+        match operation.recv(&mut *self.connection) {
+            Ok(Some(msg)) => {
+                // send evt signal and return do idleness
+                debug!("amergawd received a MESSAGE !");
+                event_loop.channel().send(EventLoopSignal::Evt(EvtSignal::Pipe(self.token, PipeEvtSignal::MsgRcv(msg))));
+                self
+            },
+            Ok(None) => {
+                // register for read
+                // switch to receiving state
+                debug!("not this time, check later !");
+                self
+            },
+            Err(_) => {
+                // seppuku
+                debug!("catastrov !");
+                self.on_error(event_loop)
+            }
+        }
+    }
+
 }
 
 struct Dead;
@@ -331,4 +384,95 @@ fn register_for_event(
     let poll = mio::PollOpt::edge() | mio::PollOpt::oneshot();
 
     event_loop.reregister(conn.as_evented(), tok, interest, poll)
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum RecvOperationStep {
+    Prefix,
+    Payload,
+    Done
+}
+
+impl RecvOperationStep {
+    fn next(&self) -> RecvOperationStep {
+        match *self {
+            RecvOperationStep::Prefix  => RecvOperationStep::Payload,
+            RecvOperationStep::Payload => RecvOperationStep::Done,
+            RecvOperationStep::Done    => RecvOperationStep::Done
+        }
+    }
+}
+
+struct RecvOperation {
+    step: RecvOperationStep,
+    read: usize,
+    prefix: [u8; 8],
+    msg_len: u64,
+    buffer: Option<Vec<u8>>
+}
+
+impl RecvOperation {
+
+    fn new() -> RecvOperation {
+        RecvOperation {
+            step: RecvOperationStep::Prefix,
+            read: 0,
+            prefix: [0u8; 8],
+            msg_len: 0,
+            buffer: None
+        }
+    }
+
+    fn step_forward(&mut self) {
+        self.step = self.step.next();
+        self.read = 0;
+    }
+
+    fn recv(&mut self, connection: &mut Connection) -> io::Result<Option<Message>> {
+        if self.step == RecvOperationStep::Prefix {
+            self.read += try!(RecvOperation::recv_buffer(connection, &mut self.prefix[self.read..]));
+
+            if self.read == 0 {
+                return Ok(None);
+            } else if self.read == self.prefix.len() {
+                self.step_forward();
+                let mut bytes: &[u8] = &mut self.prefix;
+                self.msg_len = try!(bytes.read_u64::<BigEndian>());
+                self.buffer = Some(vec![0u8; self.msg_len as usize]);
+            } else {
+                return Ok(None);
+            }
+        }
+
+        if self.step == RecvOperationStep::Payload {
+            let mut buffer = self.buffer.take().unwrap();
+
+            self.read += try!(RecvOperation::recv_buffer(connection, &mut buffer[self.read..]));
+
+            if self.read as u64 == self.msg_len {
+                self.step_forward();
+
+                return Ok(Some(Message::with_body(buffer)));
+            } else {
+                self.buffer = Some(buffer);
+
+                return Ok(None);
+            }
+        }
+
+        Err(global::other_io_error("recv operation already completed"))
+    }
+
+    fn recv_buffer(connection: &mut Connection, buffer: &mut [u8]) -> io::Result<usize> {
+        if buffer.len() > 0 {
+            let read = match try!(connection.try_read(buffer)) {
+                Some(x) => x,
+                None => 0
+            };
+
+            Ok(read)
+        } else {
+            Ok(0)
+        }
+    }
 }

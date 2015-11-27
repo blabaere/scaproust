@@ -30,7 +30,6 @@ impl Pair {
     }
 
     fn on_pipe_connected(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        debug!("on_pipe_connected");
         if let Some(endpoint) = self.endpoint.as_mut() {
             if endpoint.token() == tok {
                 endpoint.on_pipe_connected(event_loop);
@@ -82,7 +81,10 @@ impl Protocol for Pair {
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
     }
 
-    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
+    fn recv(&mut self, event_loop: &mut EventLoop, _: EventLoopAction) {
+        if let Some(endpoint) = self.endpoint.as_mut() {
+            endpoint.recv(event_loop);
+        }
     }
     
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {

@@ -65,15 +65,18 @@ impl Socket {
         let send_res = self.evt_sender.send(evt);
 
         if send_res.is_err() {
-            error!("[{:?}] failed to notify event to session: '{:?}'", self.id, send_res.err());
+            error!("[{:?}] failed to send notify to the facade: '{:?}'", self.id, send_res.err());
         } 
     }
 
     fn send_event(&self, evt: SocketEvtSignal) {
         let evt_sig = EvtSignal::Socket(self.id, evt);
         let loop_sig = EventLoopSignal::Evt(evt_sig);
+        let send_res = self.sig_sender.send(loop_sig);
 
-        self.sig_sender.send(loop_sig);
+        if send_res.is_err() {
+            error!("[{:?}] failed to send event to the session: '{:?}'", self.id, send_res.err());
+        } 
     }
 
     pub fn handle_cmd(&mut self, event_loop: &mut EventLoop, cmd: SocketCmdSignal) {
@@ -81,9 +84,9 @@ impl Socket {
 
         match cmd {
             SocketCmdSignal::Connect(addr)  => self.connect(event_loop, addr),
-            //SocketSignal::Connected(tok) => self.on_connected(event_loop),
+            //SocketCmdSignal::SendMsg(msg)   => self.send(event_loop, msg),
+            SocketCmdSignal::RecvMsg        => self.recv(event_loop),
             /*SocketSignal::Bind(addr)     => self.bind(event_loop, addr),
-            SocketSignal::SendMsg(msg)   => self.send(event_loop, msg),
             SocketSignal::RecvMsg        => self.recv(event_loop),
             SocketSignal::SetOption(opt) => self.set_option(event_loop, opt)*/
             x @ _ => {
@@ -96,45 +99,24 @@ impl Socket {
         self.protocol.handle_evt(event_loop, evt)
     }
 
+    pub fn on_msg_recv(&mut self, event_loop: &mut EventLoop, msg: Message) {
+        // this is not consistent with handling of the connected event
+        // anyway, this should be moved to the protocol
+        // he probably has a state too
+        // and a pipe local operation done
+        // does not mean the socket global operation is done
+        // for example send to many 
+        debug!("[{:?}] on_msg_recv", self.id);
+        self.send_notify(SocketNotify::MsgRecv(msg));
+    }
+
     fn connect(&mut self, event_loop: &mut EventLoop, addr: String) {
         debug!("[{:?}] connect: '{}'", self.id, addr);
-
-        /*{
-            debug!("[{:?}] connect: 'get new token'", self.id);
-            let token = self.next_token();
-            //debug!("[{:?}] connect: 'raise connected signal' '{:?}'", self.id, token);
-            //self.send_event(SocketSignal::Connected(token));
-            debug!("[{:?}] connect: 'raise connected event'", self.id);
-            self.send_notify(SocketNotify::Connected);
-            debug!("[{:?}] connect: 'create connection'", self.id);
-            let conn = self.create_connection(&addr).unwrap();
-            debug!("[{:?}] connect: 'register connection'", self.id);
-            let registered = event_loop.register(
-                conn.as_evented(),
-                token,
-                mio::EventSet::all(),
-                mio::PollOpt::level());
-
-            debug!("[{:?}] connect: 'check registration result'", self.id);
-            registered.unwrap();
-        }*/
 
         self.
             create_connection(&addr).
             map(|conn| self.on_connection_created(Some(addr), conn)).
             map_err(|err| self.on_connection_not_created(err));
-
-
-        /*let connect_result = self.
-            create_connection(&addr).
-            and_then(|conn| self.on_connected(Some(addr), event_loop, token, conn));
-        let evt = match connect_result {
-            Ok(_) => SocketNotify::Connected,
-            Err(e) => SocketNotify::NotConnected(e)
-        };
-
-        event_loop.
-        self.send_notify(evt);*/
     }
 
     pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {
