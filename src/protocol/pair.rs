@@ -13,28 +13,36 @@ use super::Protocol;
 use pipe::*;
 use endpoint::*;
 use global::*;
-use event_loop_msg::{ SocketEvt, SocketOption };
+use event_loop_msg::{ SocketNotify, SocketOption, SocketEvtSignal };
 use EventLoop;
 use EventLoopAction;
 use Message;
 
-use super::sender::*;
-use super::receiver::*;
-
 pub struct Pair {
-    endpoint: Option<Endpoint>,
-    msg_sender: UnaryMsgSender,
-    msg_receiver: UnaryMsgReceiver,
-    codec: NoopMsgDecoder
+    endpoint: Option<Endpoint>
 }
 
 impl Pair {
-    pub fn new(evt_tx: Rc<Sender<SocketEvt>>) -> Pair {
+    pub fn new(evt_tx: Rc<Sender<SocketNotify>>) -> Pair {
         Pair { 
-            endpoint: None,
-            msg_sender: UnaryMsgSender::new(evt_tx.clone()),
-            msg_receiver: UnaryMsgReceiver::new(evt_tx.clone()),
-            codec: NoopMsgDecoder
+            endpoint: None
+        }
+    }
+
+    fn on_pipe_connected(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        debug!("on_pipe_connected");
+        if let Some(endpoint) = self.endpoint.as_mut() {
+            if endpoint.token() == tok {
+                endpoint.on_pipe_connected(event_loop);
+            }
+        }
+    }
+
+    fn on_pipe_ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+        if let Some(endpoint) = self.endpoint.as_mut() {
+            if endpoint.token() == tok {
+                endpoint.on_pipe_ready(event_loop, events);
+            }
         }
     }
 }
@@ -61,42 +69,28 @@ impl Protocol for Pair {
         }
     }
 
+    fn handle_evt(&mut self, event_loop: &mut EventLoop, signal: SocketEvtSignal) {
+        debug!("handle_signal");
+        match signal {
+            SocketEvtSignal::Connected(tok) => self.on_pipe_connected(event_loop, tok)
+        }
+    }
+
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
-        self.msg_sender.send(event_loop, msg, cancel_timeout, self.endpoint.as_mut())
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.msg_sender.on_send_timeout(event_loop, self.endpoint.as_mut())
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
-        self.msg_receiver.recv(event_loop, &mut self.codec, cancel_timeout, self.endpoint.as_mut())
     }
     
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.msg_receiver.on_recv_timeout(event_loop, self.endpoint.as_mut())
     }
 
-    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
-        /*let mut sent = false;
-        let mut received = None;*/
-
-        if let Some(endpoint) = self.endpoint.as_mut() {
-            endpoint.ready(event_loop, events);
-        }
-
-        /*let send_result = match sent {
-            true  => Ok(self.msg_sender.sent_by(event_loop, token, self.endpoint.as_mut())),
-            false => self.msg_sender.resume_send(event_loop, token, self.endpoint.as_mut())
-        };
-
-        let recv_result = match received {
-            Some(msg) => Ok(self.msg_receiver.received_by(event_loop, &mut self.codec, msg, token, self.endpoint.as_mut())),
-            None => self.msg_receiver.resume_recv(event_loop, &mut self.codec, token, self.endpoint.as_mut())
-        };
-
-        send_result.and(recv_result)*/
-        // todo, in case of io failure, send a notify msg on the event loop
+    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+        debug!("[{:?}] ready", tok);
+        self.on_pipe_ready(event_loop, tok, events);
     }
 
     fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {

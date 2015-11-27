@@ -12,19 +12,24 @@ use mio;
 use global::*;
 use Message;
 
+/// information sent through the event loop channel so components can communicate with each others.
 pub enum EventLoopSignal {
-    Session(SessionSignal),
-    Socket(SocketId, SocketSignal)
+    Cmd(CmdSignal),
+    Evt(EvtSignal)
 }
 
-pub enum SessionSignal {
+pub enum CmdSignal {
+    Session(SessionCmdSignal),
+    Socket(SocketId, SocketCmdSignal)
+}
+
+pub enum SessionCmdSignal {
     CreateSocket(SocketType),
     Shutdown
 }
 
-pub enum SocketSignal {
+pub enum SocketCmdSignal {
     Connect(String),
-    Connected(mio::Token),
     Bind(String),
     SendMsg(Message),
     RecvMsg,
@@ -40,6 +45,14 @@ pub enum SocketOption {
     ResendInterval(time::Duration)
 }
 
+pub enum EvtSignal {
+    Socket(SocketId, SocketEvtSignal)
+}
+
+pub enum SocketEvtSignal {
+    Connected(mio::Token)
+}
+
 pub enum EventLoopTimeout {
     Reconnect(mio::Token, String),
     Rebind(mio::Token, String),
@@ -49,11 +62,11 @@ pub enum EventLoopTimeout {
     CancelResend(SocketId)
 }
 
-pub enum SessionEvt {
-    SocketCreated(SocketId, mpsc::Receiver<SocketEvt>)
+pub enum SessionNotify {
+    SocketCreated(SocketId, mpsc::Receiver<SocketNotify>)
 }
 
-pub enum SocketEvt {
+pub enum SocketNotify {
     Connected,
     NotConnected(io::Error),
     Bound,

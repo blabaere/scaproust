@@ -1,4 +1,4 @@
-// Copyright 2015 Copyright (c) 2015 Benoît Labaere (benoit.labaere@gmail.com)
+// Copyright 015 Copyright (c) 015 Benoît Labaere (benoit.labaere@gmail.com)
 //
 // Licensed under the MIT license LICENSE or <http://opensource.org/licenses/MIT>
 // This file may not be copied, modified, or distributed except according to those terms.
@@ -19,12 +19,10 @@ use global;
 // That means send/receive size prefix and then message payload
 // according to the connection readiness and the requested operation progress if any
 pub struct Pipe {
-    token: mio::Token, 
     addr: Option<String>,
-    handshake_state: Option<HandshakeEndpointState>,
-    connected_state: Option<ConnectedEndpointState>
+    state: Option<Box<PipeState>>
 }
-
+/*
 pub enum SendStatus {
     Postponed(Rc<Message>), // Message can't be sent at the moment : Handshake in progress or would block
     Completed,              // Message has been successfully sent
@@ -36,162 +34,219 @@ pub enum RecvStatus {
     Completed(Message),     // Message has been successfully read
     InProgress              // Message has been partially read, will finish later
 }
-
+*/
 impl Pipe {
 
     pub fn new(
         token: mio::Token,
         addr: Option<String>,
-        proto_ids: (u16, u16),
-        connection: Box<Connection>) -> Pipe {
+        ids: (u16, u16),
+        conn: Box<Connection>) -> Pipe {
 
-        let handshake = HandshakeEndpointState::new(token, proto_ids, connection);
+        let (protocol_id, protocol_peer_id) = ids;
+        let state = Initial::new(token, protocol_id, protocol_peer_id, conn);
 
         Pipe {
-            token: token,
             addr: addr,
-            handshake_state: Some(handshake),
-            connected_state: None
+            state: Some(Box::new(state))
         }
     }
 
-    pub fn open(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.handshake_state.as_ref().map_or_else(
-            || Err(global::other_io_error("cannot open pipe after handshake step !")),
-            |hs| hs.open(event_loop))
+    fn on_state_transition<F>(&mut self, transition: &mut F) where F : FnMut(Box<PipeState>) -> Box<PipeState> {
+        if let Some(state) = self.state.take() {
+            self.state = Some(transition(state));
+        }
     }
 
-    pub fn close(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        if self.handshake_state.is_some() {
-            self.handshake_state.as_ref().unwrap().close(event_loop)
-        } else if self.connected_state.is_some() {
-            self.connected_state.as_ref().unwrap().close(event_loop)
-        } else {
-            Ok(())
-        }
+    pub fn open(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(&mut |s: Box<PipeState>| s.open(event_loop));
+    }
+
+    pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) {
+        self.on_state_transition(&mut |s: Box<PipeState>| s.ready(event_loop, events));
     }
 
     pub fn addr(self) -> Option<String> {
         self.addr
     }
+}
 
-    pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) {
-
-        if events.is_hup() {
-            //return Err(io::Error::new(io::ErrorKind::ConnectionReset, "event: hup"));
-            return;
-        }
-
-        if events.is_error() {
-            //return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "event: error"));
-            return;
-        }
-
-        /*if self.handshake_state.is_some() {
-            let mut handshake = self.handshake_state.take().unwrap();
-            if try!(handshake.ready(event_loop, events)) {
-                let connection = handshake.connection();
-                let connected = ConnectedEndpointState::new(self.token, connection);
-
-                try!(connected.open(event_loop));
-                self.connected_state = Some(connected)
-            } else {
-                try!(handshake.reopen(event_loop));
-                self.handshake_state = Some(handshake);
-            }
-
-            return Ok((false, None));
-        } 
-
-        self.connected_state.as_mut().map_or_else(
-            || Err(global::other_io_error("ready notification while pipe is dead")),
-            |mut connected| connected.ready(event_loop, events))*/
-
+trait PipeState {
+    fn open(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        Box::new(Dead)
     }
 
-    pub fn send(&mut self, msg: Rc<Message>) -> io::Result<SendStatus> {
-        if self.handshake_state.is_some() {
-            return Ok(SendStatus::Postponed(msg));
-        }
-
-        self.connected_state.as_mut().map_or_else(
-            || Err(global::other_io_error("cannot send when pipe is dead")),
-            |mut connected| connected.send(msg))        
+    fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
+        // TODO test hup and error, then call readable or writable, or maybe both ?
+        Box::new(Dead)
     }
 
-    pub fn cancel_sending(&mut self) {
-        self.connected_state.as_mut().map(|mut connected| connected.cancel_sending());
-    }
-
-    pub fn recv(&mut self) -> io::Result<RecvStatus> {
-        if self.handshake_state.is_some() {
-            return Ok(RecvStatus::Postponed);
-        }
-
-        self.connected_state.as_mut().map_or_else(
-            || Err(global::other_io_error("cannot receive when pipe is dead")),
-            |mut connected| connected.recv())       
-    }
-
-    pub fn cancel_receiving(&mut self) {
-        self.connected_state.as_mut().map(|mut connected| connected.cancel_receiving());
+    fn on_error(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        // TODO send a Disconnected signal
+        Box::new(Dead)
     }
 }
 
+fn transition<F, T>(f: Box<F>) -> Box<T> where
+    F : PipeState,
+    T : From<F>,
+    T : PipeState
+{
+    let t: T = From::from(*f);
 
-struct HandshakeEndpointState {
+    Box::new(t)
+}
+
+fn transition_if_ok<F, T : 'static>(f: Box<F>, res: io::Result<()>, event_loop: &mut EventLoop) -> Box<PipeState> where
+    F : PipeState,
+    T : From<F>,
+    T : PipeState
+{
+    match res {
+        Ok(_) => transition::<F, T>(f),
+        Err(_) => f.on_error(event_loop)
+    }
+}
+
+fn no_transition_if_ok<F : PipeState + 'static>(f: Box<F>, res: io::Result<()>, event_loop: &mut EventLoop) -> Box<PipeState> 
+{
+    match res {
+        Ok(_) => f,
+        Err(_) => f.on_error(event_loop)
+    }
+}
+
+struct Initial {
     token: mio::Token,
     protocol_id: u16,
     protocol_peer_id: u16,
     connection: Box<Connection>,
-    sent: bool,
-    received: bool
 }
 
-impl HandshakeEndpointState {
-
-    fn new(token: mio::Token, proto_ids: (u16, u16), connection: Box<Connection>) -> HandshakeEndpointState {
-        let (protocol_id, protocol_peer_id) = proto_ids;
-
-        HandshakeEndpointState { 
-            token: token,
-            protocol_id: protocol_id,
-            protocol_peer_id: protocol_peer_id,
-            connection: connection,
-            sent: false, 
-            received: false }
+impl Initial {
+    fn new(
+        tok: mio::Token, 
+        p_id: u16,
+        peer_p_id: u16,
+        conn: Box<Connection>) -> Initial {
+        Initial { 
+            token: tok,
+            protocol_id: p_id,
+            protocol_peer_id: peer_p_id,
+            connection: conn
+        }
     }
 
-    fn open(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+    fn register_for_write(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+        let interest = mio::EventSet::error() | mio::EventSet::hup() | mio::EventSet::writable();
+        let poll = mio::PollOpt::edge() | mio::PollOpt::oneshot();
+
         event_loop.register(
             self.connection.as_evented(), 
             self.token, 
-            mio::EventSet::all(), 
-            mio::PollOpt::edge())
-    }
+            interest, 
+            poll)
 
-    fn reopen(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        event_loop.reregister(
-            self.connection.as_evented(), 
-            self.token, 
-            mio::EventSet::all(), 
-            mio::PollOpt::edge())
     }
+}
 
-    fn close(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        event_loop.deregister(self.connection.as_evented())
+impl PipeState for Initial {
+    fn open(mut self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        let registered = self.register_for_write(event_loop);
+
+        transition_if_ok::<Initial, HandshakeTx>(self, registered, event_loop)
     }
+}
 
-    fn ready(&mut self, _: &mut EventLoop, events: mio::EventSet)-> io::Result<bool> {
-        if !self.received && events.is_readable() {
-            try!(self.read_handshake());
+struct HandshakeTx {
+    token: mio::Token,
+    protocol_id: u16,
+    protocol_peer_id: u16,
+    connection: Box<Connection>,
+}
+
+impl From<Initial> for HandshakeTx {
+    fn from(state: Initial) -> HandshakeTx {
+        HandshakeTx {
+            token: state.token,
+            protocol_id: state.protocol_id,
+            protocol_peer_id: state.protocol_peer_id,
+            connection: state.connection
         }
+    }
+}
 
-        if !self.sent && events.is_writable() {
-            try!(self.write_handshake());
+impl HandshakeTx {
+
+    fn write_handshake(&mut self) -> io::Result<()> {
+        // handshake is Zero, 'S', 'P', Version, Proto, Rsvd
+        let mut handshake = vec!(0, 83, 80, 0);
+        try!(handshake.write_u16::<BigEndian>(self.protocol_id));
+        try!(handshake.write_u16::<BigEndian>(0));
+        try!(
+            self.connection.try_write(&handshake).
+            and_then(|w| self.check_sent_handshake(w)));
+        debug!("[{:?}] handshake sent.", self.token);
+        Ok(())
+    }
+
+    fn check_sent_handshake(&self, written: Option<usize>) -> io::Result<()> {
+        match written {
+            Some(8) => Ok(()),
+            Some(_) => Err(io::Error::new(io::ErrorKind::WouldBlock, "failed to send full handshake")),
+            _       => Err(io::Error::new(io::ErrorKind::WouldBlock, "failed to send handshake"))
         }
+    }
 
-        Ok(self.received && self.sent)
+    fn register_for_write(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+        register_for_write(event_loop, &*self.connection, self.token)
+    }
+
+    fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+        register_for_read(event_loop, &*self.connection, self.token)
+    }
+}
+
+impl PipeState for HandshakeTx {
+    fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
+        if events.is_writable() {
+            let res = self.write_handshake().and_then(|_| self.register_for_read(event_loop));
+
+            transition_if_ok::<HandshakeTx, HandshakeRx>(self, res, event_loop)
+        } else {
+            let res = self.register_for_write(event_loop);
+
+            no_transition_if_ok::<HandshakeTx>(self, res, event_loop)
+        }
+    }
+}
+
+struct HandshakeRx {
+    token: mio::Token,
+    protocol_id: u16,
+    protocol_peer_id: u16,
+    connection: Box<Connection>,
+}
+
+impl From<HandshakeTx> for HandshakeRx {
+    fn from(state: HandshakeTx) -> HandshakeRx {
+        HandshakeRx {
+            token: state.token,
+            protocol_id: state.protocol_id,
+            protocol_peer_id: state.protocol_peer_id,
+            connection: state.connection
+        }
+    }
+}
+
+impl HandshakeRx {
+
+    fn register_for_none(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+        register_for_event(event_loop, &*self.connection, self.token, mio::EventSet::none())
+    }
+
+    fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+        register_for_read(event_loop, &*self.connection, self.token)
     }
 
     fn read_handshake(&mut self) -> io::Result<()> {
@@ -200,7 +255,6 @@ impl HandshakeEndpointState {
             self.connection.try_read(&mut handshake).
             and_then(|_| self.check_received_handshake(&handshake)));
         debug!("[{:?}] handshake received.", self.token);
-        self.received = true;
         Ok(())
     }
 
@@ -217,338 +271,64 @@ impl HandshakeEndpointState {
             Err(io::Error::new(io::ErrorKind::InvalidData, "received bad handshake"))
         }
     }
-
-    fn write_handshake(&mut self) -> io::Result<()> {
-        // handshake is Zero, 'S', 'P', Version, Proto, Rsvd
-        let mut handshake = vec!(0, 83, 80, 0);
-        try!(handshake.write_u16::<BigEndian>(self.protocol_id));
-        try!(handshake.write_u16::<BigEndian>(0));
-        try!(
-            self.connection.try_write(&handshake).
-            and_then(|w| self.check_sent_handshake(w)));
-        debug!("[{:?}] handshake sent.", self.token);
-        self.sent = true;
-        Ok(())
-    }
-
-    fn check_sent_handshake(&self, written: Option<usize>) -> io::Result<()> {
-        match written {
-            Some(8) => Ok(()),
-            Some(_) => Err(io::Error::new(io::ErrorKind::WouldBlock, "failed to send full handshake")),
-            _       => Err(io::Error::new(io::ErrorKind::WouldBlock, "failed to send handshake"))
-        }
-    }
-
-    fn connection(self) -> Box<Connection> {
-        self.connection
-    }
-
 }
 
-struct ConnectedEndpointState {
+impl PipeState for HandshakeRx {
+    fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
+        if events.is_readable() {
+            let res = self.read_handshake().and_then(|_| self.register_for_none(event_loop));
+
+            transition_if_ok::<HandshakeRx, Idle>(self, res, event_loop)
+        } else {
+            let res = self.register_for_read(event_loop);
+
+            no_transition_if_ok::<HandshakeRx>(self, res, event_loop)
+        }
+    }
+}
+
+struct Idle {
     token: mio::Token,
+    protocol_id: u16,
+    protocol_peer_id: u16,
     connection: Box<Connection>,
-    pending_send: Option<SendOperation>,
-    pending_recv: Option<RecvOperation>
 }
 
-impl ConnectedEndpointState {
-
-    fn new(token: mio::Token, connection: Box<Connection>) -> ConnectedEndpointState {
-        ConnectedEndpointState { 
-            token: token,
-            connection: connection,
-            pending_send: None,
-            pending_recv: None
-        }
-    }
-
-    fn open(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        debug!("[{:?}] enter connected state", self.token);
-
-        event_loop.reregister(
-            self.connection.as_evented(),
-            self.token,
-            mio::EventSet::all(),
-            mio::PollOpt::edge())
-    }
-
-    fn close(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        event_loop.deregister(self.connection.as_evented())
-    }
-
-    fn ready(&mut self, _: &mut EventLoop, events: mio::EventSet)-> io::Result<(bool, Option<Message>)> {
-        let mut sent = false;
-        let mut recv = None;
-
-        if self.pending_send.is_some() && events.is_writable() {
-            sent = match try!(self.resume_sending()) {
-                SendStatus::Completed => true,
-                _                     => false
-            }
-        }
-
-        if self.pending_recv.is_some() && events.is_readable() {
-            recv = match try!(self.resume_receiving()) {
-                RecvStatus::Completed(msg) => Some(msg),
-                _ => None
-            }
-        }
-
-        Ok((sent, recv))
-    }
-
-    fn resume_sending(&mut self) -> io::Result<SendStatus> {
-        let mut operation = self.pending_send.take().unwrap();
-        let progress = match try!(operation.send(&mut *self.connection)) {
-            SendStatus::Postponed(msg) => SendStatus::Postponed(msg),
-            SendStatus::Completed      => SendStatus::Completed,
-            SendStatus::InProgress     => {
-                self.pending_send = Some(operation);
-
-                SendStatus::InProgress
-            }
-        };
-
-        Ok(progress)
-    }
-
-    fn resume_receiving(&mut self) -> io::Result<RecvStatus> {
-        let mut operation = self.pending_recv.take().unwrap();
-        let progress = match try!(operation.recv(&mut *self.connection)) {
-            RecvStatus::Postponed      => RecvStatus::Postponed,
-            RecvStatus::Completed(msg) => RecvStatus::Completed(msg),
-            RecvStatus::InProgress     => {
-                self.pending_recv = Some(operation);
-
-                RecvStatus::InProgress
-            }
-        };
-
-        Ok(progress)
-    }
-
-    fn send(&mut self, msg: Rc<Message>) -> io::Result<SendStatus> {
-        let operation = try!(SendOperation::new(msg));
-
-        self.pending_send = Some(operation);
-        self.resume_sending()
-    }
-
-    fn cancel_sending(&mut self) {
-        self.pending_send = None;
-    }
-
-    fn recv(&mut self) -> io::Result<RecvStatus> {
-        let operation = RecvOperation::new();
-
-        self.pending_recv = Some(operation);
-        self.resume_receiving()
-    }
-
-    fn cancel_receiving(&mut self) {
-        self.pending_recv = None;
-    }
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum SendOperationStep {
-    Prefix,
-    Header,
-    Body,
-    Done
-}
-
-impl SendOperationStep {
-    fn next(&self) -> SendOperationStep {
-        match *self {
-            SendOperationStep::Prefix => SendOperationStep::Header,
-            SendOperationStep::Header => SendOperationStep::Body,
-            SendOperationStep::Body   => SendOperationStep::Done,
-            SendOperationStep::Done   => SendOperationStep::Done
+impl From<HandshakeRx> for Idle {
+    fn from(state: HandshakeRx) -> Idle {
+        Idle {
+            token: state.token,
+            protocol_id: state.protocol_id,
+            protocol_peer_id: state.protocol_peer_id,
+            connection: state.connection
         }
     }
 }
 
-struct SendOperation {
-    prefix: Vec<u8>,
-    msg: Rc<Message>,
-    step: SendOperationStep,
-    written: usize
+impl PipeState for Idle {
 }
 
-impl SendOperation {
-    fn new(msg: Rc<Message>) -> io::Result<SendOperation> {
-        let mut prefix = Vec::with_capacity(8);
-        let msg_len = msg.len() as u64;
+struct Dead;
 
-        try!(prefix.write_u64::<BigEndian>(msg_len));
-
-        Ok(SendOperation {
-            prefix: prefix,
-            msg: msg,
-            step: SendOperationStep::Prefix,
-            written: 0
-        })
-    }
-
-    fn step_forward(&mut self) {
-        self.step = self.step.next();
-        self.written = 0;
-    }
-
-    fn send(&mut self, connection: &mut Connection) -> io::Result<SendStatus> {
-        // try send size prefix
-        if self.step == SendOperationStep::Prefix {
-            if try!(self.send_buffer_and_check(connection)) {
-                self.step_forward();
-            } else {
-                if self.written == 0 {
-                    return Ok(SendStatus::Postponed(self.msg.clone()));
-                } else {
-                    return Ok(SendStatus::InProgress);
-                }
-            }
-        }
-
-        // try send msg header
-        if self.step == SendOperationStep::Header {
-            if try!(self.send_buffer_and_check(connection)) {
-                self.step_forward();
-            } else {
-                return Ok(SendStatus::InProgress);
-            }
-        }
-
-        // try send msg body
-        if self.step == SendOperationStep::Body {
-            if try!(self.send_buffer_and_check(connection)) {
-                self.step_forward();
-            } else {
-                return Ok(SendStatus::InProgress);
-            }
-        }
-
-        Ok(SendStatus::Completed)
-    }
-
-    fn send_buffer_and_check(&mut self, connection: &mut Connection) -> io::Result<bool> {
-        let buffer: &[u8] = match self.step {
-            SendOperationStep::Prefix => &self.prefix,
-            SendOperationStep::Header => self.msg.get_header(),
-            SendOperationStep::Body => self.msg.get_body(),
-            _ => return Ok(true)
-        };
-
-        self.written += try!(self.send_buffer(connection, buffer));
-
-        Ok(self.written == buffer.len())
-    }
-
-    fn send_buffer(&self, connection: &mut Connection, buffer: &[u8]) -> io::Result<usize> {
-        let remaining = buffer.len() - self.written;
-
-        if remaining > 0 {
-            let fragment = &buffer[self.written..];
-            let written = match try!(connection.try_write(fragment)) {
-                Some(x) => x,
-                None => 0
-            };
-
-            Ok(written)
-        } else {
-            Ok(0)
-        }
-    }
+impl PipeState for Dead {
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum RecvOperationStep {
-    Prefix,
-    Payload,
-    Done
+fn register_for_write(event_loop: &mut EventLoop, conn: &Connection, tok: mio::Token) -> io::Result<()> {
+    register_for_event(event_loop, conn, tok, mio::EventSet::writable())
 }
 
-impl RecvOperationStep {
-    fn next(&self) -> RecvOperationStep {
-        match *self {
-            RecvOperationStep::Prefix  => RecvOperationStep::Payload,
-            RecvOperationStep::Payload => RecvOperationStep::Done,
-            RecvOperationStep::Done    => RecvOperationStep::Done
-        }
-    }
+fn register_for_read(event_loop: &mut EventLoop, conn: &Connection, tok: mio::Token) -> io::Result<()> {
+    register_for_event(event_loop, conn, tok, mio::EventSet::readable())
 }
 
-struct RecvOperation {
-    step: RecvOperationStep,
-    read: usize,
-    prefix: [u8; 8],
-    msg_len: u64,
-    buffer: Option<Vec<u8>>
-}
+fn register_for_event(
+    event_loop: &mut EventLoop,
+    conn: &Connection,
+    tok: mio::Token,
+    event: mio::EventSet) -> io::Result<()> {
 
-impl RecvOperation {
+    let interest = mio::EventSet::error() | mio::EventSet::hup() | event;
+    let poll = mio::PollOpt::edge() | mio::PollOpt::oneshot();
 
-    fn new() -> RecvOperation {
-        RecvOperation {
-            step: RecvOperationStep::Prefix,
-            read: 0,
-            prefix: [0u8; 8],
-            msg_len: 0,
-            buffer: None
-        }
-    }
-
-    fn step_forward(&mut self) {
-        self.step = self.step.next();
-        self.read = 0;
-    }
-
-    fn recv(&mut self, connection: &mut Connection) -> io::Result<RecvStatus> {
-        if self.step == RecvOperationStep::Prefix {
-            self.read += try!(RecvOperation::recv_buffer(connection, &mut self.prefix[self.read..]));
-
-            if self.read == 0 {
-                return Ok(RecvStatus::Postponed);
-            } else if self.read == self.prefix.len() {
-                self.step_forward();
-                let mut bytes: &[u8] = &mut self.prefix;
-                self.msg_len = try!(bytes.read_u64::<BigEndian>());
-                self.buffer = Some( vec![0u8; self.msg_len as usize]);
-            } else {
-                return Ok(RecvStatus::InProgress);
-            }
-        }       
-
-        if self.step == RecvOperationStep::Payload {
-            let mut buffer = self.buffer.take().unwrap();
-
-            self.read += try!(RecvOperation::recv_buffer(connection, &mut buffer[self.read..]));
-
-            if self.read as u64 == self.msg_len {
-                self.step_forward();
-
-                return Ok(RecvStatus::Completed(Message::with_body(buffer)));
-            } else {
-                self.buffer = Some(buffer);
-
-                return Ok(RecvStatus::InProgress);
-            }
-        }
-
-        Err(global::other_io_error("recv operation already completed"))
-    }
-
-    fn recv_buffer(connection: &mut Connection, buffer: &mut [u8]) -> io::Result<usize> {
-        if buffer.len() > 0 {
-            let read = match try!(connection.try_read(buffer)) {
-                Some(x) => x,
-                None => 0
-            };
-
-            Ok(read)
-        } else {
-            Ok(0)
-        }
-    }
+    event_loop.reregister(conn.as_evented(), tok, interest, poll)
 }

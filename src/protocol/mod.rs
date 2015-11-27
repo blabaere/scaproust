@@ -10,7 +10,7 @@ use std::io;
 use mio;
 
 use global::{ SocketType, SocketId, other_io_error };
-use event_loop_msg::{ SocketEvt, SocketOption };
+use event_loop_msg::{ SocketNotify, SocketEvtSignal, SocketOption };
 use pipe::Pipe;
 use EventLoop;
 use EventLoopAction;
@@ -29,14 +29,14 @@ pub mod pair;
 //pub mod surv;
 //pub mod resp;
 
-pub mod sender;
-pub mod receiver;
+//pub mod sender;
+//pub mod receiver;
 
-pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Box<Protocol> {
+pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketNotify>>) -> Box<Protocol> {
     match socket_type {
         SocketType::Push       => Box::new(NullProtocol),
         SocketType::Pull       => Box::new(NullProtocol),
-        SocketType::Pair       => Box::new(NullProtocol),
+        SocketType::Pair       => Box::new(pair::Pair::new(evt_tx)),
         SocketType::Req        => Box::new(NullProtocol),
         SocketType::Rep        => Box::new(NullProtocol),
         SocketType::Pub        => Box::new(NullProtocol),
@@ -53,6 +53,8 @@ pub trait Protocol {
 
     fn add_pipe(&mut self, token: mio::Token, pipe: Pipe);
     fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
+
+    fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: SocketEvtSignal);
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet);
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction);
@@ -79,6 +81,9 @@ impl Protocol for NullProtocol {
     fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {}
     fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
         None
+    }
+
+    fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: SocketEvtSignal) {
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {

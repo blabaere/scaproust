@@ -20,7 +20,7 @@ use EventLoop;
 use Message;
 
 pub struct Session {
-    event_sender: mpsc::Sender<SessionEvt>,
+    event_sender: mpsc::Sender<SessionNotify>,
     sockets: HashMap<SocketId, Socket>,
     socket_ids: HashMap<mio::Token, SocketId>,
     id_seq: IdSequence
@@ -28,7 +28,7 @@ pub struct Session {
 
 impl Session {
 
-    pub fn new(event_tx: mpsc::Sender<SessionEvt>) -> Session {
+    pub fn new(event_tx: mpsc::Sender<SessionNotify>) -> Session {
         Session {
             event_sender: event_tx,
             sockets: HashMap::new(),
@@ -37,7 +37,45 @@ impl Session {
         }
     }
 
-    fn handle_session_signal(&mut self, event_loop: &mut EventLoop, signal: SessionSignal) {
+    fn handle_cmd(&mut self, event_loop: &mut EventLoop, cmd: CmdSignal) {
+        match cmd {
+            CmdSignal::Session(c)    => self.handle_session_cmd(event_loop, c),
+            CmdSignal::Socket(id, c) => self.handle_socket_cmd(event_loop, id, c)
+        }
+    }
+
+    fn handle_session_cmd(&mut self, event_loop: &mut EventLoop, cmd: SessionCmdSignal) {
+        match cmd {
+            SessionCmdSignal::CreateSocket(t) => self.create_socket(event_loop, t),
+            SessionCmdSignal::Shutdown        => event_loop.shutdown(),
+        }
+    }
+
+    fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: SocketId, cmd: SocketCmdSignal) {
+        if let Some(socket) = self.sockets.get_mut(&id) {
+            socket.handle_cmd(event_loop, cmd);
+        }
+    }
+
+    fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: EvtSignal) {
+        match evt {
+            EvtSignal::Socket(id, e) => self.handle_socket_evt(event_loop, id, e)
+        }
+    }
+
+    fn handle_socket_evt(&mut self, event_loop: &mut EventLoop, id: SocketId, evt: SocketEvtSignal) {
+        match evt {
+            SocketEvtSignal::Connected(tok) => {
+                self.socket_ids.insert(tok, id);
+
+                if let Some(socket) = self.sockets.get_mut(&id) {
+                    socket.handle_evt(event_loop, SocketEvtSignal::Connected(tok));
+                }
+           }
+        }
+    }
+
+    /*fn handle_session_signal(&mut self, event_loop: &mut EventLoop, signal: SessionSignal) {
         match signal {
             SessionSignal::CreateSocket(t) => self.create_socket(event_loop, t),
             SessionSignal::Shutdown                  => event_loop.shutdown()
@@ -45,19 +83,30 @@ impl Session {
     }
 
     fn handle_socket_signal(&mut self, event_loop: &mut EventLoop, id: SocketId, signal: SocketSignal) {
-        if let Some(socket) = self.sockets.get_mut(&id) {
-            socket.handle_signal(event_loop, signal);
+        debug!("session backend received a socket signal");
+
+        match signal {
+            SocketSignal::Usr(cmd) => self.handle_socket_usr_signal(event_loop, id, cmd),
+            SocketSignal::Evt(evt) => self.handle_socket_evt_signal(event_loop, id, evt)
         }
-        /*match signal {
-            SocketSignal::Connect(addr)  => self.connect(event_loop, id, addr),
-            SocketSignal::Bind(addr)     => self.bind(event_loop, id, addr),
-            SocketSignal::SendMsg(msg)   => self.send(event_loop, id, msg),
-            SocketSignal::RecvMsg        => self.recv(event_loop, id),
-            SocketSignal::SetOption(opt) => self.set_option(event_loop, id, opt)
-        }*/
     }
 
-    fn send_evt(&self, evt: SessionEvt) {
+    fn handle_socket_usr_signal(&mut self, event_loop: &mut EventLoop, id: SocketId, signal: SocketUsrSignal) {
+        debug!("session backend received a socket usr signal");
+        if let Some(socket) = self.sockets.get_mut(&id) {
+            socket.handle_cmd(event_loop, signal);
+        }
+    }
+
+    fn handle_socket_evt_signal(&mut self, event_loop: &mut EventLoop, id: SocketId, signal: SocketEvtSignal) {
+        debug!("session backend received a socket evt signal");
+        match signal {
+            SocketEvtSignal::Connected(token) => {
+            }
+        }
+    }*/
+
+    fn send_evt(&self, evt: SessionNotify) {
         let send_res = self.event_sender.send(evt);
 
         if send_res.is_err() {
@@ -75,7 +124,7 @@ impl Session {
 
         self.sockets.insert(id, socket);
 
-        self.send_evt(SessionEvt::SocketCreated(id, rx));
+        self.send_evt(SessionNotify::SocketCreated(id, rx));
     }
 
     fn do_on_socket<F>(&mut self, socket_id: SocketId, action: &mut F) where F : FnMut(&mut Socket) {
@@ -167,15 +216,16 @@ impl mio::Handler for Session {
     type Message = EventLoopSignal;
 
     fn notify(&mut self, event_loop: &mut EventLoop, signal: Self::Message) {
-        debug!("session backend received a command");
+        debug!("session received a signal");
 
         match signal {
-            EventLoopSignal::Session(signal)    => self.handle_session_signal(event_loop, signal),
-            EventLoopSignal::Socket(id, signal) => self.handle_socket_signal(event_loop, id, signal)
+            EventLoopSignal::Cmd(cmd) => self.handle_cmd(event_loop, cmd),
+            EventLoopSignal::Evt(evt) => self.handle_evt(event_loop, evt)
         }
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
+        debug!("ready: '{:?}' '{:?}'", token, events);
         let mut target_socket_id = None;
         let mut added_tokens = None;
 
