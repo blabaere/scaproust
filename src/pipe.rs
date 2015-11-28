@@ -39,13 +39,22 @@ pub enum RecvStatus {
 impl Pipe {
 
     pub fn new(
-        token: mio::Token,
+        tok: mio::Token,
         addr: Option<String>,
         ids: (u16, u16),
-        conn: Box<Connection>) -> Pipe {
+        conn: Box<Connection>,
+        sig_tx: mio::Sender<EventLoopSignal>) -> Pipe {
 
-        let (protocol_id, protocol_peer_id) = ids;
-        let state = Initial::new(token, protocol_id, protocol_peer_id, conn);
+        let (p_id, p_peer_id) = ids;
+        let state = Initial {
+            body : PipeBody {
+                token: tok,
+                connection: conn,
+                sig_sender: sig_tx
+            },
+            protocol_id: p_id,
+            protocol_peer_id: p_peer_id
+        };
 
         Pipe {
             addr: addr,
@@ -73,6 +82,58 @@ impl Pipe {
 
     pub fn addr(self) -> Option<String> {
         self.addr
+    }
+}
+
+struct PipeBody {
+    token: mio::Token,
+    connection: Box<Connection>,
+    sig_sender: mio::Sender<EventLoopSignal>
+}
+
+impl PipeBody {
+    fn token(&self) -> mio::Token {
+        self.token
+    }
+
+    fn connection(&mut self) -> &mut Connection {
+        &mut *self.connection
+    }
+
+    fn register(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        let interest = mio::EventSet::error() | mio::EventSet::hup();
+        let poll = mio::PollOpt::edge() | mio::PollOpt::oneshot();
+        let io = self.connection.as_evented();
+
+        event_loop.register(io, self.token, interest, poll)
+    }
+
+    fn register_for_none(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.register_for_event(event_loop, mio::EventSet::none())
+    }
+
+    fn register_for_write(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.register_for_event(event_loop, mio::EventSet::writable())
+    }
+
+    fn register_for_read(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.register_for_event(event_loop, mio::EventSet::readable())
+    }
+
+    fn register_for_event(&self, event_loop: &mut EventLoop, event: mio::EventSet) -> io::Result<()> {
+        let interest = mio::EventSet::error() | mio::EventSet::hup() | event;
+        let poll = mio::PollOpt::edge() | mio::PollOpt::oneshot();
+        let io = self.connection.as_evented();
+
+        event_loop.reregister(io, self.token, interest, poll)
+    }
+
+    fn send_sig(&self, sig: PipeEvtSignal) -> io::Result<()> {
+        let evt_sig = EvtSignal::Pipe(self.token, sig);
+        let loop_sig = EventLoopSignal::Evt(evt_sig);
+        let send_res = self.sig_sender.send(loop_sig);
+
+        send_res.map_err(|e| global::convert_notify_err(e))
     }
 }
 
@@ -126,36 +187,15 @@ fn no_transition_if_ok<F : PipeState + 'static>(f: Box<F>, res: io::Result<()>, 
 }
 
 struct Initial {
-    token: mio::Token,
+    body: PipeBody, 
     protocol_id: u16,
-    protocol_peer_id: u16,
-    connection: Box<Connection>,
+    protocol_peer_id: u16
 }
 
 impl Initial {
-    fn new(
-        tok: mio::Token, 
-        p_id: u16,
-        peer_p_id: u16,
-        conn: Box<Connection>) -> Initial {
-        Initial { 
-            token: tok,
-            protocol_id: p_id,
-            protocol_peer_id: peer_p_id,
-            connection: conn
-        }
-    }
 
     fn register_for_write(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        let interest = mio::EventSet::error() | mio::EventSet::hup() | mio::EventSet::writable();
-        let poll = mio::PollOpt::edge() | mio::PollOpt::oneshot();
-
-        event_loop.register(
-            self.connection.as_evented(), 
-            self.token, 
-            interest, 
-            poll)
-
+        self.body.register(event_loop).and_then(|_| self.body.register_for_write(event_loop))
     }
 }
 
@@ -172,19 +212,17 @@ impl PipeState for Initial {
 }
 
 struct HandshakeTx {
-    token: mio::Token,
+    body: PipeBody, 
     protocol_id: u16,
-    protocol_peer_id: u16,
-    connection: Box<Connection>,
+    protocol_peer_id: u16
 }
 
 impl From<Initial> for HandshakeTx {
     fn from(state: Initial) -> HandshakeTx {
         HandshakeTx {
-            token: state.token,
+            body: state.body,
             protocol_id: state.protocol_id,
-            protocol_peer_id: state.protocol_peer_id,
-            connection: state.connection
+            protocol_peer_id: state.protocol_peer_id
         }
     }
 }
@@ -197,9 +235,9 @@ impl HandshakeTx {
         try!(handshake.write_u16::<BigEndian>(self.protocol_id));
         try!(handshake.write_u16::<BigEndian>(0));
         try!(
-            self.connection.try_write(&handshake).
+            self.body.connection().try_write(&handshake).
             and_then(|w| self.check_sent_handshake(w)));
-        debug!("[{:?}] handshake sent.", self.token);
+        debug!("[{:?}] handshake sent.", self.body.token());
         Ok(())
     }
 
@@ -212,11 +250,11 @@ impl HandshakeTx {
     }
 
     fn register_for_write(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        register_for_write(event_loop, &*self.connection, self.token)
+        self.body.register_for_write(event_loop)
     }
 
     fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        register_for_read(event_loop, &*self.connection, self.token)
+        self.body.register_for_read(event_loop)
     }
 }
 
@@ -239,19 +277,15 @@ impl PipeState for HandshakeTx {
 }
 
 struct HandshakeRx {
-    token: mio::Token,
-    protocol_id: u16,
-    protocol_peer_id: u16,
-    connection: Box<Connection>,
+    body: PipeBody, 
+    protocol_peer_id: u16
 }
 
 impl From<HandshakeTx> for HandshakeRx {
     fn from(state: HandshakeTx) -> HandshakeRx {
         HandshakeRx {
-            token: state.token,
-            protocol_id: state.protocol_id,
-            protocol_peer_id: state.protocol_peer_id,
-            connection: state.connection
+            body: state.body,
+            protocol_peer_id: state.protocol_peer_id
         }
     }
 }
@@ -259,19 +293,19 @@ impl From<HandshakeTx> for HandshakeRx {
 impl HandshakeRx {
 
     fn register_for_none(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        register_for_event(event_loop, &*self.connection, self.token, mio::EventSet::none())
+        self.body.register_for_none(event_loop)
     }
 
     fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        register_for_read(event_loop, &*self.connection, self.token)
+        self.body.register_for_read(event_loop)
     }
 
     fn read_handshake(&mut self) -> io::Result<()> {
         let mut handshake = [0u8; 8];
         try!(
-            self.connection.try_read(&mut handshake).
+            self.body.connection().try_read(&mut handshake).
             and_then(|_| self.check_received_handshake(&handshake)));
-        debug!("[{:?}] handshake received.", self.token);
+        debug!("[{:?}] handshake received.", self.body.token());
         Ok(())
     }
 
@@ -309,28 +343,57 @@ impl PipeState for HandshakeRx {
 }
 
 struct Idle {
-    token: mio::Token,
-    connection: Box<Connection>,
+    body: PipeBody
 }
 
 impl From<HandshakeRx> for Idle {
     fn from(state: HandshakeRx) -> Idle {
         Idle {
-            token: state.token,
-            connection: state.connection
+            body: state.body
+        }
+    }
+}
+
+impl From<Receiving> for Idle {
+    fn from(state: Receiving) -> Idle {
+        Idle {
+            body: state.body
         }
     }
 }
 
 impl Idle {
     fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        register_for_read(event_loop, &*self.connection, self.token)
+        self.body.register_for_read(event_loop)
+    }
+
+    fn received_message(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
+        let res = self.body.send_sig(PipeEvtSignal::MsgRcv(msg));
+
+        no_transition_if_ok(self, res, event_loop)
+    }
+
+    fn receiving_message(mut self: Box<Self>, event_loop: &mut EventLoop, op: RecvOperation) -> Box<PipeState> {
+        debug!("not this time, check later !");
+
+        let res = self.register_for_read(event_loop);
+
+        if res.is_ok() {
+            let receiving = Receiving {
+                body: self.body,
+                operation: Some(op)
+            };
+
+            Box::new(receiving)
+        } else {
+            self.on_error(event_loop)
+        }
     }
 }
 
 impl PipeState for Idle {
 
-    fn ready(self: Box<Self>, _: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
+    fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
         debug!("Idle::ready leave me alone");
         self
     }
@@ -338,52 +401,58 @@ impl PipeState for Idle {
     fn recv(mut self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         let mut operation = RecvOperation::new();
 
-        match operation.recv(&mut *self.connection) {
-            Ok(Some(msg)) => {
-                // send evt signal and return do idleness
-                debug!("amergawd received a MESSAGE !");
-                event_loop.channel().send(EventLoopSignal::Evt(EvtSignal::Pipe(self.token, PipeEvtSignal::MsgRcv(msg))));
-                self
-            },
-            Ok(None) => {
-                // register for read
-                // switch to receiving state
-                debug!("not this time, check later !");
-                self
-            },
-            Err(_) => {
-                // seppuku
-                debug!("catastrov !");
-                self.on_error(event_loop)
-            }
+        match operation.recv(self.body.connection()) {
+            Ok(Some(msg)) => self.received_message(event_loop, msg),
+            Ok(None)      => self.receiving_message(event_loop, operation),
+            Err(_)        => self.on_error(event_loop)
         }
     }
 
 }
 
+struct Receiving {
+    body: PipeBody,
+    operation: Option<RecvOperation>
+}
+
+impl Receiving {
+    fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body.register_for_read(event_loop)
+    }
+
+    fn received_message(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
+        let res = self.body.send_sig(PipeEvtSignal::MsgRcv(msg));
+
+        transition_if_ok::<Receiving, Idle>(self, res, event_loop)
+    }
+
+    fn receiving_message(mut self: Box<Self>, event_loop: &mut EventLoop, op: RecvOperation) -> Box<PipeState> {
+        let res = self.register_for_read(event_loop);
+
+        self.operation = Some(op);
+
+        no_transition_if_ok(self, res, event_loop)
+    }
+}
+
+impl PipeState for Receiving {
+
+    fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
+        debug!("Receiving::ready maybe I should work here");
+
+        let mut operation = self.operation.take().unwrap_or_else(|| RecvOperation::new());
+
+        match operation.recv(self.body.connection()) {
+            Ok(Some(msg)) => self.received_message(event_loop, msg),
+            Ok(None)      => self.receiving_message(event_loop, operation),
+            Err(_)        => self.on_error(event_loop)
+        }
+    }
+}
+
 struct Dead;
 
 impl PipeState for Dead {
-}
-
-fn register_for_write(event_loop: &mut EventLoop, conn: &Connection, tok: mio::Token) -> io::Result<()> {
-    register_for_event(event_loop, conn, tok, mio::EventSet::writable())
-}
-
-fn register_for_read(event_loop: &mut EventLoop, conn: &Connection, tok: mio::Token) -> io::Result<()> {
-    register_for_event(event_loop, conn, tok, mio::EventSet::readable())
-}
-
-fn register_for_event(
-    event_loop: &mut EventLoop,
-    conn: &Connection,
-    tok: mio::Token,
-    event: mio::EventSet) -> io::Result<()> {
-
-    let interest = mio::EventSet::error() | mio::EventSet::hup() | event;
-    let poll = mio::PollOpt::edge() | mio::PollOpt::oneshot();
-
-    event_loop.reregister(conn.as_evented(), tok, interest, poll)
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

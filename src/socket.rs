@@ -84,7 +84,7 @@ impl Socket {
 
         match cmd {
             SocketCmdSignal::Connect(addr)  => self.connect(event_loop, addr),
-            //SocketCmdSignal::SendMsg(msg)   => self.send(event_loop, msg),
+            SocketCmdSignal::SendMsg(msg)   => self.send(event_loop, msg),
             SocketCmdSignal::RecvMsg        => self.recv(event_loop),
             /*SocketSignal::Bind(addr)     => self.bind(event_loop, addr),
             SocketSignal::RecvMsg        => self.recv(event_loop),
@@ -106,6 +106,8 @@ impl Socket {
         // and a pipe local operation done
         // does not mean the socket global operation is done
         // for example send to many 
+
+        // and don't forget to cancel the timeout
         debug!("[{:?}] on_msg_recv", self.id);
         self.send_notify(SocketNotify::MsgRecv(msg));
     }
@@ -145,7 +147,8 @@ impl Socket {
         debug!("[{:?}] on_connection_created: '{:?}'", self.id, addr);
         let token = self.next_token();
         let protocol_ids = (self.protocol.id(), self.protocol.peer_id());
-        let pipe = Pipe::new(token, addr, protocol_ids, conn);
+        let sig_sender = self.sig_sender.clone();
+        let pipe = Pipe::new(token, addr, protocol_ids, conn, sig_sender);
 
         self.protocol.add_pipe(token, pipe);
 
