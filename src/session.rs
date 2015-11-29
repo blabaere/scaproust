@@ -86,6 +86,14 @@ impl Session {
                     }
                 }
 
+            },
+
+            PipeEvtSignal::MsgSnd => {
+                if let Some(socket_id) = self.socket_ids.get(&tok) {
+                    if let Some(socket) = self.sockets.get_mut(&socket_id) {
+                        socket.on_msg_send(event_loop);
+                    }
+                }
             }
         }
     }

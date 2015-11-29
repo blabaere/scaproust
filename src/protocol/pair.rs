@@ -76,6 +76,9 @@ impl Protocol for Pair {
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
+        if let Some(endpoint) = self.endpoint.as_mut() {
+            endpoint.send(event_loop, Rc::new(msg));
+        }
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {

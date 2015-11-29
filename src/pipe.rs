@@ -15,6 +15,7 @@ use Message;
 use transport::Connection;
 use global;
 use event_loop_msg::*;
+use send;
 
 // A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
 // That means send/receive size prefix and then message payload
@@ -23,19 +24,7 @@ pub struct Pipe {
     addr: Option<String>,
     state: Option<Box<PipeState>>
 }
-/*
-pub enum SendStatus {
-    Postponed(Rc<Message>), // Message can't be sent at the moment : Handshake in progress or would block
-    Completed,              // Message has been successfully sent
-    InProgress              // Message has been partially sent, will finish later
-}
 
-pub enum RecvStatus {
-    Postponed,              // Message can't be read at the moment : Handshake in progress or would block
-    Completed(Message),     // Message has been successfully read
-    InProgress              // Message has been partially read, will finish later
-}
-*/
 impl Pipe {
 
     pub fn new(
@@ -62,22 +51,26 @@ impl Pipe {
         }
     }
 
-    fn on_state_transition<F>(&mut self, transition: &mut F) where F : FnMut(Box<PipeState>) -> Box<PipeState> {
+    fn on_state_transition<F>(&mut self, transition: F) where F : FnOnce(Box<PipeState>) -> Box<PipeState> {
         if let Some(state) = self.state.take() {
             self.state = Some(transition(state));
         }
     }
 
     pub fn open(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(&mut |s: Box<PipeState>| s.open(event_loop));
+        self.on_state_transition(|s: Box<PipeState>| s.open(event_loop));
     }
 
     pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) {
-        self.on_state_transition(&mut |s: Box<PipeState>| s.ready(event_loop, events));
+        self.on_state_transition(|s: Box<PipeState>| s.ready(event_loop, events));
     }
 
     pub fn recv(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(&mut |s: Box<PipeState>| s.recv(event_loop));
+        self.on_state_transition(|s: Box<PipeState>| s.recv(event_loop));
+    }
+
+    pub fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
+        self.on_state_transition(|s: Box<PipeState>| s.send(event_loop, msg));
     }
 
     pub fn addr(self) -> Option<String> {
@@ -151,6 +144,10 @@ trait PipeState {
         Box::new(Dead)
     }
 
+    fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
+        Box::new(Dead)
+    }
+
     fn on_error(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         // TODO send a Disconnected signal
         Box::new(Dead)
@@ -193,7 +190,6 @@ struct Initial {
 }
 
 impl Initial {
-
     fn register_for_write(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
         self.body.register(event_loop).and_then(|_| self.body.register_for_write(event_loop))
     }
@@ -207,6 +203,10 @@ impl PipeState for Initial {
     }
 
     fn recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        self
+    }
+
+    fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
         self
     }
 }
@@ -272,6 +272,10 @@ impl PipeState for HandshakeTx {
     }
 
     fn recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        self
+    }
+
+    fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
         self
     }
 }
@@ -340,6 +344,10 @@ impl PipeState for HandshakeRx {
     fn recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         self
     }
+
+    fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
+        self
+    }
 }
 
 struct Idle {
@@ -362,31 +370,49 @@ impl From<Receiving> for Idle {
     }
 }
 
+impl From<Sending> for Idle {
+    fn from(state: Sending) -> Idle {
+        Idle {
+            body: state.body
+        }
+    }
+}
+
 impl Idle {
     fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
         self.body.register_for_read(event_loop)
     }
 
-    fn received_message(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
+    fn register_for_write(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body.register_for_write(event_loop)
+    }
+
+    fn received_msg(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
         let res = self.body.send_sig(PipeEvtSignal::MsgRcv(msg));
 
         no_transition_if_ok(self, res, event_loop)
     }
 
-    fn receiving_message(mut self: Box<Self>, event_loop: &mut EventLoop, op: RecvOperation) -> Box<PipeState> {
-        debug!("not this time, check later !");
-
+    fn receiving_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: RecvOperation) -> Box<PipeState> {
         let res = self.register_for_read(event_loop);
 
         if res.is_ok() {
-            let receiving = Receiving {
-                body: self.body,
-                operation: Some(op)
-            };
-
-            Box::new(receiving)
+            Box::new(Receiving::from(*self, op))
         } else {
             self.on_error(event_loop)
+        }
+    }
+
+    fn sent_msg(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        let res = self.body.send_sig(PipeEvtSignal::MsgSnd);
+
+        no_transition_if_ok(self, res, event_loop)
+    }
+
+    fn sending_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
+        match self.register_for_write(event_loop) {
+            Ok(..) => Box::new(Sending::from(*self, op)),
+            Err(_) => self.on_error(event_loop),
         }
     }
 }
@@ -394,7 +420,6 @@ impl Idle {
 impl PipeState for Idle {
 
     fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
-        debug!("Idle::ready leave me alone");
         self
     }
 
@@ -402,12 +427,24 @@ impl PipeState for Idle {
         let mut operation = RecvOperation::new();
 
         match operation.recv(self.body.connection()) {
-            Ok(Some(msg)) => self.received_message(event_loop, msg),
-            Ok(None)      => self.receiving_message(event_loop, operation),
+            Ok(Some(msg)) => self.received_msg(event_loop, msg),
+            Ok(None)      => self.receiving_msg(event_loop, operation),
             Err(_)        => self.on_error(event_loop)
         }
     }
 
+    fn send(mut self: Box<Self>, event_loop: &mut EventLoop, msg: Rc<Message>) -> Box<PipeState> {
+        match send::SendOperation::new(msg) {
+            Ok(mut operation) => {
+                match operation.send(self.body.connection()) {
+                    Ok(true)  => self.sent_msg(event_loop),
+                    Ok(false) => self.sending_msg(event_loop, operation),
+                    Err(_)    => self.on_error(event_loop)
+                }
+            },
+            Err(_) => self.on_error(event_loop),
+        }
+    }
 }
 
 struct Receiving {
@@ -416,17 +453,24 @@ struct Receiving {
 }
 
 impl Receiving {
+    fn from(state: Idle, op: RecvOperation) -> Receiving {
+        Receiving {
+            body: state.body,
+            operation: Some(op)
+        }
+    }
+
     fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
         self.body.register_for_read(event_loop)
     }
 
-    fn received_message(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
+    fn received_msg(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
         let res = self.body.send_sig(PipeEvtSignal::MsgRcv(msg));
 
         transition_if_ok::<Receiving, Idle>(self, res, event_loop)
     }
 
-    fn receiving_message(mut self: Box<Self>, event_loop: &mut EventLoop, op: RecvOperation) -> Box<PipeState> {
+    fn receiving_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: RecvOperation) -> Box<PipeState> {
         let res = self.register_for_read(event_loop);
 
         self.operation = Some(op);
@@ -437,15 +481,74 @@ impl Receiving {
 
 impl PipeState for Receiving {
 
-    fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
-        debug!("Receiving::ready maybe I should work here");
+    fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
 
-        let mut operation = self.operation.take().unwrap_or_else(|| RecvOperation::new());
+        if self.operation.is_none() {
+            return Box::new(Idle { body: self.body });
+        }
 
+        if events.is_readable() == false {
+            return self;
+        }
+
+        let mut operation = self.operation.take().unwrap();
         match operation.recv(self.body.connection()) {
-            Ok(Some(msg)) => self.received_message(event_loop, msg),
-            Ok(None)      => self.receiving_message(event_loop, operation),
+            Ok(Some(msg)) => self.received_msg(event_loop, msg),
+            Ok(None)      => self.receiving_msg(event_loop, operation),
             Err(_)        => self.on_error(event_loop)
+        }
+    }
+}
+
+struct Sending {
+    body: PipeBody,
+    operation: Option<send::SendOperation>
+}
+
+impl Sending {
+    fn from(state: Idle, op: send::SendOperation) -> Sending {
+        Sending {
+            body: state.body,
+            operation: Some(op)
+        }
+    }
+
+    fn register_for_write(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body.register_for_write(event_loop)
+    }
+
+    fn sent_msg(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        let res = self.body.send_sig(PipeEvtSignal::MsgSnd);
+
+        transition_if_ok::<Sending, Idle>(self, res, event_loop)
+    }
+
+    fn sending_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
+        let res = self.register_for_write(event_loop);
+
+        self.operation = Some(op);
+
+        no_transition_if_ok(self, res, event_loop)
+    }
+}
+
+impl PipeState for Sending {
+
+    fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
+
+        if self.operation.is_none() {
+            return Box::new(Idle { body: self.body });
+        }
+
+        if events.is_writable() == false {
+            return self;
+        }
+
+        let mut operation = self.operation.take().unwrap();
+        match operation.send(self.body.connection()) {
+                Ok(true)  => self.sent_msg(event_loop),
+                Ok(false) => self.sending_msg(event_loop, operation),
+                Err(_)    => self.on_error(event_loop)
         }
     }
 }

@@ -112,6 +112,11 @@ impl Socket {
         self.send_notify(SocketNotify::MsgRecv(msg));
     }
 
+    pub fn on_msg_send(&mut self, event_loop: &mut EventLoop) {
+        debug!("[{:?}] on_msg_send", self.id);
+        self.send_notify(SocketNotify::MsgSent);
+    }
+
     fn connect(&mut self, event_loop: &mut EventLoop, addr: String) {
         debug!("[{:?}] connect: '{}'", self.id, addr);
 

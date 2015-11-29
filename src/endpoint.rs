@@ -43,6 +43,10 @@ impl Endpoint {
         self.pipe.recv(event_loop);
     }
 
+    pub fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
+        self.pipe.send(event_loop, msg);
+    }
+
     pub fn remove(self) -> Pipe {
         self.pipe
     }

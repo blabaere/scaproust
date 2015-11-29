@@ -45,7 +45,7 @@ pub enum SocketOption {
     ResendInterval(time::Duration)
 }
 
-// below it is kind of ugly
+// it is kind of ugly
 // both events are related to a pipe
 // maybe the socket id and the pipe token
 // should be exposed in the same way ?
@@ -59,7 +59,8 @@ pub enum SocketEvtSignal {
     Connected(mio::Token)
 }
 pub enum PipeEvtSignal {
-    MsgRcv(Message)
+    MsgRcv(Message),
+    MsgSnd
 }
 
 pub enum EventLoopTimeout {

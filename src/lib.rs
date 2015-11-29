@@ -23,6 +23,7 @@ mod protocol;
 mod transport;
 mod endpoint;
 mod pipe;
+mod send;
 mod acceptor;
 
 use std::boxed::FnBox;
