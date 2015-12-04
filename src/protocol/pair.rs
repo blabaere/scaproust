@@ -68,11 +68,8 @@ impl Protocol for Pair {
         }
     }
 
-    fn handle_evt(&mut self, event_loop: &mut EventLoop, signal: SocketEvtSignal) {
-        debug!("handle_signal");
-        match signal {
-            SocketEvtSignal::Connected(tok) => self.on_pipe_connected(event_loop, tok)
-        }
+    fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.on_pipe_connected(event_loop, tok);
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {

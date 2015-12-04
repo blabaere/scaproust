@@ -54,7 +54,7 @@ pub trait Protocol {
     fn add_pipe(&mut self, token: mio::Token, pipe: Pipe);
     fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
 
-    fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: SocketEvtSignal);
+    fn open_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token);
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet);
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction);
@@ -83,8 +83,7 @@ impl Protocol for NullProtocol {
         None
     }
 
-    fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: SocketEvtSignal) {
-    }
+    fn open_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token) {}
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
     }

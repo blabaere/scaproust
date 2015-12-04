@@ -1,4 +1,4 @@
-// Copyright 015 Copyright (c) 015 Benoît Labaere (benoit.labaere@gmail.com)
+// Copyright 2015 Copyright (c) 2015 Benoît Labaere (benoit.labaere@gmail.com)
 //
 // Licensed under the MIT license LICENSE or <http://opensource.org/licenses/MIT>
 // This file may not be copied, modified, or distributed except according to those terms.
@@ -12,20 +12,20 @@ use Message;
 use transport::Connection;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum SendOperationStep {
+enum Step {
     Prefix,
     Header,
     Body,
     Done
 }
 
-impl SendOperationStep {
-    fn next(&self) -> SendOperationStep {
+impl Step {
+    fn next(&self) -> Step {
         match *self {
-            SendOperationStep::Prefix => SendOperationStep::Header,
-            SendOperationStep::Header => SendOperationStep::Body,
-            SendOperationStep::Body   => SendOperationStep::Done,
-            SendOperationStep::Done   => SendOperationStep::Done
+            Step::Prefix => Step::Header,
+            Step::Header => Step::Body,
+            Step::Body   => Step::Done,
+            Step::Done   => Step::Done
         }
     }
 }
@@ -33,7 +33,7 @@ impl SendOperationStep {
 pub struct SendOperation {
     prefix: Vec<u8>,
     msg: Rc<Message>,
-    step: SendOperationStep,
+    step: Step,
     written: usize
 }
 
@@ -47,7 +47,7 @@ impl SendOperation {
         Ok(SendOperation {
             prefix: prefix,
             msg: msg,
-            step: SendOperationStep::Prefix,
+            step: Step::Prefix,
             written: 0
         })
     }
@@ -59,7 +59,7 @@ impl SendOperation {
 
     pub fn send(&mut self, connection: &mut Connection) -> io::Result<bool> {
         // try send size prefix
-        if self.step == SendOperationStep::Prefix {
+        if self.step == Step::Prefix {
             if try!(self.send_buffer_and_check(connection)) {
                 self.step_forward();
             } else {
@@ -68,7 +68,7 @@ impl SendOperation {
         }
 
         // try send msg header
-        if self.step == SendOperationStep::Header {
+        if self.step == Step::Header {
             if try!(self.send_buffer_and_check(connection)) {
                 self.step_forward();
             } else {
@@ -77,7 +77,7 @@ impl SendOperation {
         }
 
         // try send msg body
-        if self.step == SendOperationStep::Body {
+        if self.step == Step::Body {
             if try!(self.send_buffer_and_check(connection)) {
                 self.step_forward();
             } else {
@@ -90,9 +90,9 @@ impl SendOperation {
 
     fn send_buffer_and_check(&mut self, connection: &mut Connection) -> io::Result<bool> {
         let buffer: &[u8] = match self.step {
-            SendOperationStep::Prefix => &self.prefix,
-            SendOperationStep::Header => self.msg.get_header(),
-            SendOperationStep::Body => self.msg.get_body(),
+            Step::Prefix => &self.prefix,
+            Step::Header => self.msg.get_header(),
+            Step::Body => self.msg.get_body(),
             _ => return Ok(true)
         };
 

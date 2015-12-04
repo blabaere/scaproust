@@ -1,4 +1,4 @@
-// Copyright 015 Copyright (c) 015 Benoît Labaere (benoit.labaere@gmail.com)
+// Copyright 2015 Copyright (c) 2015 Benoît Labaere (benoit.labaere@gmail.com)
 //
 // Licensed under the MIT license LICENSE or <http://opensource.org/licenses/MIT>
 // This file may not be copied, modified, or distributed except according to those terms.
@@ -6,7 +6,7 @@
 use std::rc::Rc;
 use std::io;
 
-use byteorder::{ BigEndian, WriteBytesExt, ReadBytesExt };
+use byteorder::{ BigEndian, WriteBytesExt };
 
 use mio;
 
@@ -16,6 +16,7 @@ use transport::Connection;
 use global;
 use event_loop_msg::*;
 use send;
+use recv;
 
 // A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
 // That means send/receive size prefix and then message payload
@@ -393,7 +394,7 @@ impl Idle {
         no_transition_if_ok(self, res, event_loop)
     }
 
-    fn receiving_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: RecvOperation) -> Box<PipeState> {
+    fn receiving_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
         let res = self.register_for_read(event_loop);
 
         if res.is_ok() {
@@ -424,7 +425,7 @@ impl PipeState for Idle {
     }
 
     fn recv(mut self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let mut operation = RecvOperation::new();
+        let mut operation = recv::RecvOperation::new();
 
         match operation.recv(self.body.connection()) {
             Ok(Some(msg)) => self.received_msg(event_loop, msg),
@@ -449,11 +450,11 @@ impl PipeState for Idle {
 
 struct Receiving {
     body: PipeBody,
-    operation: Option<RecvOperation>
+    operation: Option<recv::RecvOperation>
 }
 
 impl Receiving {
-    fn from(state: Idle, op: RecvOperation) -> Receiving {
+    fn from(state: Idle, op: recv::RecvOperation) -> Receiving {
         Receiving {
             body: state.body,
             operation: Some(op)
@@ -470,7 +471,7 @@ impl Receiving {
         transition_if_ok::<Receiving, Idle>(self, res, event_loop)
     }
 
-    fn receiving_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: RecvOperation) -> Box<PipeState> {
+    fn receiving_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
         let res = self.register_for_read(event_loop);
 
         self.operation = Some(op);
@@ -556,95 +557,4 @@ impl PipeState for Sending {
 struct Dead;
 
 impl PipeState for Dead {
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum RecvOperationStep {
-    Prefix,
-    Payload,
-    Done
-}
-
-impl RecvOperationStep {
-    fn next(&self) -> RecvOperationStep {
-        match *self {
-            RecvOperationStep::Prefix  => RecvOperationStep::Payload,
-            RecvOperationStep::Payload => RecvOperationStep::Done,
-            RecvOperationStep::Done    => RecvOperationStep::Done
-        }
-    }
-}
-
-struct RecvOperation {
-    step: RecvOperationStep,
-    read: usize,
-    prefix: [u8; 8],
-    msg_len: u64,
-    buffer: Option<Vec<u8>>
-}
-
-impl RecvOperation {
-
-    fn new() -> RecvOperation {
-        RecvOperation {
-            step: RecvOperationStep::Prefix,
-            read: 0,
-            prefix: [0u8; 8],
-            msg_len: 0,
-            buffer: None
-        }
-    }
-
-    fn step_forward(&mut self) {
-        self.step = self.step.next();
-        self.read = 0;
-    }
-
-    fn recv(&mut self, connection: &mut Connection) -> io::Result<Option<Message>> {
-        if self.step == RecvOperationStep::Prefix {
-            self.read += try!(RecvOperation::recv_buffer(connection, &mut self.prefix[self.read..]));
-
-            if self.read == 0 {
-                return Ok(None);
-            } else if self.read == self.prefix.len() {
-                self.step_forward();
-                let mut bytes: &[u8] = &mut self.prefix;
-                self.msg_len = try!(bytes.read_u64::<BigEndian>());
-                self.buffer = Some(vec![0u8; self.msg_len as usize]);
-            } else {
-                return Ok(None);
-            }
-        }
-
-        if self.step == RecvOperationStep::Payload {
-            let mut buffer = self.buffer.take().unwrap();
-
-            self.read += try!(RecvOperation::recv_buffer(connection, &mut buffer[self.read..]));
-
-            if self.read as u64 == self.msg_len {
-                self.step_forward();
-
-                return Ok(Some(Message::with_body(buffer)));
-            } else {
-                self.buffer = Some(buffer);
-
-                return Ok(None);
-            }
-        }
-
-        Err(global::other_io_error("recv operation already completed"))
-    }
-
-    fn recv_buffer(connection: &mut Connection, buffer: &mut [u8]) -> io::Result<usize> {
-        if buffer.len() > 0 {
-            let read = match try!(connection.try_read(buffer)) {
-                Some(x) => x,
-                None => 0
-            };
-
-            Ok(read)
-        } else {
-            Ok(0)
-        }
-    }
 }

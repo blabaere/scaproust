@@ -24,6 +24,7 @@ mod transport;
 mod endpoint;
 mod pipe;
 mod send;
+mod recv;
 mod acceptor;
 
 use std::boxed::FnBox;
