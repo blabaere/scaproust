@@ -47,7 +47,12 @@ impl Session {
     fn handle_session_cmd(&mut self, event_loop: &mut EventLoop, cmd: SessionCmdSignal) {
         match cmd {
             SessionCmdSignal::CreateSocket(t) => self.create_socket(event_loop, t),
-            SessionCmdSignal::Shutdown        => event_loop.shutdown(),
+            SessionCmdSignal::Shutdown        => {
+                // TODO clean up all the things !
+                // have each socket send a shutdown notify ?
+                // clear all sockets and token to id mapping
+                event_loop.shutdown();
+            },
         }
     }
 
@@ -70,37 +75,19 @@ impl Session {
                 if let Some(socket) = self.sockets.get_mut(&id) {
                     socket.handle_evt(event_loop, SocketEvtSignal::Connected(tok));
                 }
-           },
+            },
             SocketEvtSignal::Bound(tok) => {
                 self.socket_ids.insert(tok, id);
 
                 if let Some(socket) = self.sockets.get_mut(&id) {
                     socket.handle_evt(event_loop, SocketEvtSignal::Bound(tok));
                 }
-           },
+            },
         }
     }
 
     fn handle_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
-        match evt {
-            PipeEvtSignal::MsgRcv(msg) => {
-
-                if let Some(socket_id) = self.socket_ids.get(&tok) {
-                    if let Some(socket) = self.sockets.get_mut(&socket_id) {
-                        socket.on_msg_recv(event_loop, msg);
-                    }
-                }
-
-            },
-
-            PipeEvtSignal::MsgSnd => {
-                if let Some(socket_id) = self.socket_ids.get(&tok) {
-                    if let Some(socket) = self.sockets.get_mut(&socket_id) {
-                        socket.on_msg_send(event_loop);
-                    }
-                }
-            }
-        }
+        self.on_socket_by_token(&tok, |s| s.on_pipe_evt(event_loop, tok, evt));
     }
 
     fn send_evt(&self, evt: SessionNotify) {
@@ -142,24 +129,12 @@ impl Session {
         self.on_socket_by_token(&tok, |s| s.reconnect(addr, event_loop, tok));
     }
 
-    fn bind(&mut self, event_loop: &mut EventLoop, id: SocketId, addr: String) {
-        self.on_socket_by_id(&id, |s| s.bind(event_loop, addr));
-    }
-
     fn rebind(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
         self.on_socket_by_token(&tok, |s| s.rebind(addr, event_loop, tok));
     }
 
-    fn send(&mut self, event_loop: &mut EventLoop, id: SocketId, msg: Message) {
-        self.on_socket_by_id(&id, |s| s.send(event_loop, msg));
-    }
-
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop, id: SocketId) {
         self.on_socket_by_id(&id, |s| s.on_send_timeout(event_loop));
-    }
-
-    fn recv(&mut self, event_loop: &mut EventLoop, id: SocketId) {
-        self.on_socket_by_id(&id, |s| s.recv(event_loop));
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, id: SocketId) {

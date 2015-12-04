@@ -53,19 +53,28 @@ pub trait Protocol {
 
     fn add_pipe(&mut self, token: mio::Token, pipe: Pipe);
     fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
-
     fn open_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token);
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet);
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction);
-    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction);
 
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout_handle: Option<mio::Timeout>);
+    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token);
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop);
+
+    fn recv(&mut self, event_loop: &mut EventLoop, timeout_handle: Option<mio::Timeout>);
+    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message);
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop);
-    
+
     fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) -> io::Result<()>;
     fn on_survey_timeout(&mut self, event_loop: &mut EventLoop);
     fn on_request_timeout(&mut self, event_loop: &mut EventLoop);
+
+}
+
+fn clear_timeout(event_loop: &mut EventLoop, handle: Option<mio::Timeout>) {
+    if let Some(timeout) = handle {
+        event_loop.clear_timeout(timeout);
+    }
 }
 
 struct NullProtocol;
@@ -88,10 +97,12 @@ impl Protocol for NullProtocol {
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
     }
 
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {}
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout_handle: Option<mio::Timeout>) {}
+    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token) {}
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {}
 
-    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {}
+    fn recv(&mut self, event_loop: &mut EventLoop, timeout_handle: Option<mio::Timeout>) {}
+    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) {}
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {}
 
     fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) -> io::Result<()> {

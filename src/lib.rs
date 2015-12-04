@@ -27,8 +27,6 @@ mod send;
 mod recv;
 mod acceptor;
 
-use std::boxed::FnBox;
-
 pub use facade::{
     SessionFacade as Session,
     SocketFacade as Socket
@@ -38,7 +36,7 @@ pub use global::SocketType;
 pub use event_loop_msg::SocketOption;
 
 type EventLoop = mio::EventLoop<session::Session>;
-type EventLoopAction = Box<FnBox(&mut EventLoop) -> bool>;
+type EventLoopAction = Box<Fn(&mut EventLoop) -> bool>;
 
 pub struct Message {
     pub header: Vec<u8>,

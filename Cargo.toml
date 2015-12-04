@@ -24,6 +24,6 @@ git = "https://github.com/carllerche/mio"
 [dev-dependencies]
 env_logger = "0.3.2"
 
-#[[test]]
-#name = "test"
-#path = "test/test.rs"
+[[test]]
+name = "test"
+path = "test/test.rs"

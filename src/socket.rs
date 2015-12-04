@@ -29,8 +29,6 @@ pub struct Socket {
     sig_sender: mio::Sender<EventLoopSignal>,
     acceptors: HashMap<mio::Token, Acceptor>,
     id_seq: IdSequence,
-    added_tokens: Option<Vec<mio::Token>>, // replace that by a user signal
-    removed_tokens: Option<Vec<mio::Token>>, // replace that by a user signal
     options: SocketImplOptions
 }
 
@@ -49,8 +47,6 @@ impl Socket {
             sig_sender: sig_tx,
             acceptors: HashMap::new(),
             id_seq: id_seq,
-            added_tokens: None,
-            removed_tokens: None,
             options: SocketImplOptions::new()
         }
     }
@@ -83,22 +79,25 @@ impl Socket {
         debug!("[{:?}] handle_cmd", self.id);
 
         match cmd {
-            SocketCmdSignal::Connect(addr) => self.connect(event_loop, addr),
-            SocketCmdSignal::SendMsg(msg)  => self.send(event_loop, msg),
-            SocketCmdSignal::RecvMsg       => self.recv(event_loop),
-            SocketCmdSignal::Bind(addr)    => self.bind(event_loop, addr),
-            /*SocketSignal::RecvMsg        => self.recv(event_loop),
-            SocketSignal::SetOption(opt) => self.set_option(event_loop, opt)*/
-            x @ _ => {
-                error!("[{:?}] handle_cmd: unexpected cmd !", self.id);
-            }
+            SocketCmdSignal::Connect(addr)  => self.connect(addr),
+            SocketCmdSignal::Bind(addr)     => self.bind(addr),
+            SocketCmdSignal::SendMsg(msg)   => self.send(event_loop, msg),
+            SocketCmdSignal::RecvMsg        => self.recv(event_loop),
+            SocketCmdSignal::SetOption(opt) => self.set_option(event_loop, opt)
         }
     }
 
     pub fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: SocketEvtSignal) {
         match evt {
             SocketEvtSignal::Connected(tok) => self.protocol.open_pipe(event_loop, tok),
-            SocketEvtSignal::Bound(tok) => self.open_acceptor(event_loop, tok)
+            SocketEvtSignal::Bound(tok)     => self.open_acceptor(event_loop, tok)
+        }
+    }
+
+    pub fn on_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
+        match evt {
+            PipeEvtSignal::MsgRcv(msg) => self.protocol.on_recv_by_pipe(event_loop, tok, msg),
+            PipeEvtSignal::MsgSnd      => self.protocol.on_send_by_pipe(event_loop, tok)
         }
     }
 
@@ -109,29 +108,11 @@ impl Socket {
         }
     }
 
-    pub fn on_msg_recv(&mut self, event_loop: &mut EventLoop, msg: Message) {
-        // this is not consistent with handling of the connected event
-        // anyway, this should be moved to the protocol
-        // he probably has a state too
-        // and a pipe local operation done
-        // does not mean the socket global operation is done
-        // for example send to many 
-
-        // and don't forget to cancel the timeout
-        debug!("[{:?}] on_msg_recv", self.id);
-        self.send_notify(SocketNotify::MsgRecv(msg));
-    }
-
-    pub fn on_msg_send(&mut self, event_loop: &mut EventLoop) {
-        debug!("[{:?}] on_msg_send", self.id);
-        self.send_notify(SocketNotify::MsgSent);
-    }
-
-    fn connect(&mut self, event_loop: &mut EventLoop, addr: String) {
+    fn connect(&mut self, addr: String) {
         debug!("[{:?}] connect: '{}'", self.id, addr);
 
         self.create_connection(&addr).
-            map(|conn| self.on_connection_created(Some(addr), conn)).
+            map(|conn| self.on_connection_created(Some(addr), conn, None)).
             map(|()| self.send_notify(SocketNotify::Connected)).
             unwrap_or_else(|err| self.send_notify(SocketNotify::NotConnected(err)));
     }
@@ -139,12 +120,12 @@ impl Socket {
     pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {
         debug!("[{:?}] pipe [{:?}] reconnect: '{}'", self.id, token, addr);
 
-        /*let conn_addr = addr.clone();
+        let conn_addr = addr.clone();
         let reconn_addr = addr.clone();
 
         self.create_connection(&addr).
-            and_then(|c| self.on_connected(Some(conn_addr), event_loop, token, c)).
-            unwrap_or_else(|_| self.schedule_reconnect(event_loop, token, reconn_addr));*/
+            map(|conn| self.on_connection_created(Some(conn_addr), conn, Some(token))).
+            unwrap_or_else(|_| self.schedule_reconnect(event_loop, token, reconn_addr));
     }
 
     fn create_connection(&self, addr: &str) -> io::Result<Box<Connection>> {
@@ -158,9 +139,9 @@ impl Socket {
         transport.connect(specific_addr)
     }
 
-    fn on_connection_created(&mut self, addr: Option<String>, conn: Box<Connection>) {
+    fn on_connection_created(&mut self, addr: Option<String>, conn: Box<Connection>, token: Option<mio::Token>) {
         debug!("[{:?}] on_connection_created: '{:?}'", self.id, addr);
-        let token = self.next_token();
+        let token = token.unwrap_or_else(|| self.next_token());
         let protocol_ids = (self.protocol.id(), self.protocol.peer_id());
         let sig_sender = self.sig_sender.clone();
         let pipe = Pipe::new(token, addr, protocol_ids, conn, sig_sender);
@@ -170,7 +151,7 @@ impl Socket {
         self.send_event(SocketEvtSignal::Connected(token));
     }
 
-    pub fn bind(&mut self, event_loop: &mut EventLoop, addr: String) {
+    pub fn bind(&mut self, addr: String) {
         debug!("[{:?}] bind: '{}'", self.id, addr);
 
         self.create_listener(&addr).
@@ -243,12 +224,12 @@ impl Socket {
     }
 
     fn remove_pipe_and_schedule_reconnect(&mut self, event_loop: &mut EventLoop, token: mio::Token) {
-        /*if let Some(pipe) = self.protocol.remove_pipe(token) {
+        if let Some(mut pipe) = self.protocol.remove_pipe(token) {
             let _ = pipe.close(event_loop);
             if let Some(addr) = pipe.addr() {
                 self.schedule_reconnect(event_loop, token, addr);
             }
-        }*/
+        }
     }
 
     fn schedule_reconnect(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
@@ -259,7 +240,7 @@ impl Socket {
 
     fn on_connections_accepted(&mut self, event_loop: &mut EventLoop, mut conns: Vec<Box<Connection>>) {
         for conn in conns {
-            self.on_connection_created(None, conn);
+            self.on_connection_created(None, conn, None);
         }
     }
 
@@ -281,11 +262,12 @@ impl Socket {
         debug!("[{:?}] send", self.id);
 
         if let Some(timeout) = self.options.send_timeout_ms {
-            let _ = event_loop.timeout_ms(EventLoopTimeout::CancelSend(self.id), timeout).
-                map(|timeout| self.protocol.send(event_loop, msg, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
-                map_err(|err| error!("[{:?}] failed to set timeout on send: '{:?}'", self.id, err));
+            event_loop.
+                timeout_ms(EventLoopTimeout::CancelSend(self.id), timeout).
+                map(|handle| self.protocol.send(event_loop, msg, Some(handle))).
+                unwrap_or_else(|err| error!("[{:?}] failed to set timeout on send: '{:?}'", self.id, err));
         } else {
-            self.protocol.send(event_loop, msg, Box::new(move |_: &mut EventLoop| {true}));
+            self.protocol.send(event_loop, msg, None);
         }
     }
 
@@ -298,11 +280,12 @@ impl Socket {
         debug!("[{:?}] recv", self.id);
 
         if let Some(timeout) = self.options.recv_timeout_ms {
-            let _ = event_loop.timeout_ms(EventLoopTimeout::CancelRecv(self.id), timeout).
-                map(|timeout| self.protocol.recv(event_loop, Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
-                map_err(|err| error!("[{:?}] failed to set timeout on recv: '{:?}'", self.id, err));
+            event_loop.
+                timeout_ms(EventLoopTimeout::CancelRecv(self.id), timeout).
+                map(|handle| self.protocol.recv(event_loop, Some(handle))).
+                unwrap_or_else(|err| error!("[{:?}] failed to set timeout on recv: '{:?}'", self.id, err));
         } else {
-            self.protocol.recv(event_loop, Box::new(move |_: &mut EventLoop| {true}));
+            self.protocol.recv(event_loop, None);
         }
     }
 

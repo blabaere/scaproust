@@ -74,6 +74,10 @@ impl Pipe {
         self.on_state_transition(|s: Box<PipeState>| s.send(event_loop, msg));
     }
 
+    pub fn close(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s: Box<PipeState>| s.close(event_loop));
+    }
+
     pub fn addr(self) -> Option<String> {
         self.addr
     }
@@ -129,6 +133,11 @@ impl PipeBody {
 
         send_res.map_err(|e| global::convert_notify_err(e))
     }
+
+    fn close(&self, event_loop: &mut EventLoop) -> Box<PipeState> {
+        event_loop.deregister(self.connection.as_evented());
+        Box::new(Dead)
+    }
 }
 
 trait PipeState {
@@ -146,6 +155,10 @@ trait PipeState {
     }
 
     fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
+        Box::new(Dead)
+    }
+
+    fn close(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
 
@@ -209,6 +222,10 @@ impl PipeState for Initial {
 
     fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
         self
+    }
+
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.body.close(event_loop)
     }
 }
 
@@ -279,6 +296,10 @@ impl PipeState for HandshakeTx {
     fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
         self
     }
+
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.body.close(event_loop)
+    }
 }
 
 struct HandshakeRx {
@@ -348,6 +369,10 @@ impl PipeState for HandshakeRx {
 
     fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
         self
+    }
+
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.body.close(event_loop)
     }
 }
 
@@ -446,6 +471,10 @@ impl PipeState for Idle {
             Err(_) => self.on_error(event_loop),
         }
     }
+
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.body.close(event_loop)
+    }
 }
 
 struct Receiving {
@@ -499,6 +528,10 @@ impl PipeState for Receiving {
             Err(_)        => self.on_error(event_loop)
         }
     }
+
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.body.close(event_loop)
+    }
 }
 
 struct Sending {
@@ -551,6 +584,10 @@ impl PipeState for Sending {
                 Ok(false) => self.sending_msg(event_loop, operation),
                 Err(_)    => self.on_error(event_loop)
         }
+    }
+
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.body.close(event_loop)
     }
 }
 
