@@ -30,7 +30,6 @@ impl SessionFacade {
         let mut config = mio::EventLoopConfig::new();
 
         config.
-            io_poll_timeout_ms(250).
             notify_capacity(4_096).
             messages_per_tick(256).
             timer_tick_ms(15).

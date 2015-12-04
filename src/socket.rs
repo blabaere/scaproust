@@ -213,15 +213,12 @@ impl Socket {
         self.acceptors.remove(&token)
     }
 
-    pub fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> Option<Vec<mio::Token>> {
-
+    pub fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
         if self.acceptors.contains_key(&token) {
             self.acceptor_ready(event_loop, token, events)
         } else {
             self.pipe_ready(event_loop, token, events)
         }
-
-        self.added_tokens.take()
     }
 
     fn acceptor_ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
