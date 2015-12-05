@@ -29,13 +29,15 @@ impl Endpoint {
         self.token
     }
 
-    pub fn on_pipe_connected(&mut self, event_loop: &mut EventLoop) {
-        debug!("on_pipe_connected");
+    pub fn open_pipe(&mut self, event_loop: &mut EventLoop) {
         self.pipe.open(event_loop);
     }
 
+    pub fn activate_pipe(&mut self, event_loop: &mut EventLoop) {
+        self.pipe.activate(event_loop);
+    }
+
     pub fn on_pipe_ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) {
-        debug!("on_pipe_ready");
         self.pipe.ready(event_loop, events);
     }
 

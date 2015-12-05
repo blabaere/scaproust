@@ -62,6 +62,10 @@ impl Pipe {
         self.on_state_transition(|s: Box<PipeState>| s.open(event_loop));
     }
 
+    pub fn activate(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s: Box<PipeState>| s.activate(event_loop));
+    }
+
     pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) {
         self.on_state_transition(|s: Box<PipeState>| s.ready(event_loop, events));
     }
@@ -106,8 +110,8 @@ impl PipeBody {
         event_loop.register(io, self.token, interest, poll)
     }
 
-    fn register_for_none(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.register_for_event(event_loop, mio::EventSet::none())
+    fn register_for_all(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.register_for_event(event_loop, mio::EventSet::all())
     }
 
     fn register_for_write(&self, event_loop: &mut EventLoop) -> io::Result<()> {
@@ -142,6 +146,10 @@ impl PipeBody {
 
 trait PipeState {
     fn open(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        Box::new(Dead)
+    }
+
+    fn activate(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
 
@@ -318,10 +326,6 @@ impl From<HandshakeTx> for HandshakeRx {
 
 impl HandshakeRx {
 
-    fn register_for_none(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.register_for_none(event_loop)
-    }
-
     fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
         self.body.register_for_read(event_loop)
     }
@@ -348,14 +352,18 @@ impl HandshakeRx {
             Err(io::Error::new(io::ErrorKind::InvalidData, "received bad handshake"))
         }
     }
+
+    fn send_sig(&self, sig: PipeEvtSignal) -> io::Result<()> {
+        self.body.send_sig(sig)
+    }
 }
 
 impl PipeState for HandshakeRx {
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
         if events.is_readable() {
-            let res = self.read_handshake().and_then(|_| self.register_for_none(event_loop));
+            let res = self.read_handshake().and_then(|_| self.send_sig(PipeEvtSignal::Opened));
 
-            transition_if_ok::<HandshakeRx, Idle>(self, res, event_loop)
+            transition_if_ok::<HandshakeRx, Activable>(self, res, event_loop)
         } else {
             let res = self.register_for_read(event_loop);
 
@@ -376,12 +384,42 @@ impl PipeState for HandshakeRx {
     }
 }
 
+struct Activable {
+    body: PipeBody
+}
+
+impl Activable {
+    fn register_for_all(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body.register_for_all(event_loop)
+    }
+}
+
+impl PipeState for Activable {
+    fn activate(mut self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        let res = self.register_for_all(event_loop);
+
+        transition_if_ok::<Activable, Idle>(self, res, event_loop)
+    }
+
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.body.close(event_loop)
+    }
+}
+
+impl From<HandshakeRx> for Activable {
+    fn from(state: HandshakeRx) -> Activable {
+        Activable {
+            body: state.body
+        }
+    }
+}
+
 struct Idle {
     body: PipeBody
 }
 
-impl From<HandshakeRx> for Idle {
-    fn from(state: HandshakeRx) -> Idle {
+impl From<Activable> for Idle {
+    fn from(state: Activable) -> Idle {
         Idle {
             body: state.body
         }

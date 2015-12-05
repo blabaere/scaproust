@@ -53,7 +53,9 @@ pub trait Protocol {
 
     fn add_pipe(&mut self, token: mio::Token, pipe: Pipe);
     fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
+
     fn open_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token);
+    fn on_pipe_open(&mut self, event_loop: &mut EventLoop, token: mio::Token);
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet);
 
@@ -68,7 +70,6 @@ pub trait Protocol {
     fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) -> io::Result<()>;
     fn on_survey_timeout(&mut self, event_loop: &mut EventLoop);
     fn on_request_timeout(&mut self, event_loop: &mut EventLoop);
-
 }
 
 fn clear_timeout(event_loop: &mut EventLoop, handle: Option<mio::Timeout>) {
@@ -93,6 +94,7 @@ impl Protocol for NullProtocol {
     }
 
     fn open_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token) {}
+    fn on_pipe_open(&mut self, event_loop: &mut EventLoop, token: mio::Token) {}
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
     }

@@ -59,7 +59,9 @@ pub enum SocketEvtSignal {
     Connected(mio::Token),
     Bound(mio::Token)
 }
+
 pub enum PipeEvtSignal {
+    Opened,
     MsgRcv(Message),
     MsgSnd
 }

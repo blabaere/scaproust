@@ -95,7 +95,9 @@ impl Socket {
     }
 
     pub fn on_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
+        debug!("[{:?}] on_pipe_evt: '{:?}'", self.id, tok);
         match evt {
+            PipeEvtSignal::Opened      => self.protocol.on_pipe_open(event_loop, tok),
             PipeEvtSignal::MsgRcv(msg) => self.protocol.on_recv_by_pipe(event_loop, tok, msg),
             PipeEvtSignal::MsgSnd      => self.protocol.on_send_by_pipe(event_loop, tok)
         }
@@ -155,21 +157,20 @@ impl Socket {
         debug!("[{:?}] bind: '{}'", self.id, addr);
 
         self.create_listener(&addr).
-            map(|lst| self.on_listener_created(addr, lst)).
+            map(|lst| self.on_listener_created(addr, lst, None)).
             map(|()| self.send_notify(SocketNotify::Bound)).
             unwrap_or_else(|err| self.send_notify(SocketNotify::NotBound(err)));
     }
 
-    pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {
-        /*debug!("[{:?}] acceptor [{:?}] rebind: '{}'", self.id, token, addr);
+    pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
+        debug!("[{:?}] acceptor [{:?}] rebind: '{}'", self.id, tok, addr);
 
         self.create_listener(&addr).
-            and_then(|c| self.on_listener_created(addr, event_loop, token, c)).
-            unwrap_or_else(|e| self.on_acceptor_error(event_loop, token, e));*/
+            map(|lst| self.on_listener_created(addr.clone(), lst, Some(tok))).
+            unwrap_or_else(|_| self.schedule_rebind(event_loop, tok, addr.clone()));
     }
 
     fn create_listener(&self, addr: &str) -> io::Result<Box<Listener>> {
-
         let addr_parts: Vec<&str> = addr.split("://").collect();
         let scheme = addr_parts[0];
         let specific_addr = addr_parts[1];
@@ -178,12 +179,12 @@ impl Socket {
         transport.bind(specific_addr)
     }
 
-    fn on_listener_created(&mut self, addr: String, listener: Box<Listener>) {
-        let token = self.next_token();
-        let acceptor = Acceptor::new(token, addr, listener);
+    fn on_listener_created(&mut self, addr: String, listener: Box<Listener>, tok: Option<mio::Token>) {
+        let tok = tok.unwrap_or_else(|| self.next_token());
+        let acceptor = Acceptor::new(tok, addr, listener);
 
-        self.add_acceptor(token, acceptor);
-        self.send_event(SocketEvtSignal::Bound(token));
+        self.add_acceptor(tok, acceptor);
+        self.send_event(SocketEvtSignal::Bound(tok));
     }
 
     fn add_acceptor(&mut self, token: mio::Token, acceptor: Acceptor) {
@@ -207,7 +208,7 @@ impl Socket {
 
         self.acceptors.get_mut(&tok).unwrap().
             ready(event_loop, events).
-            map(|conns| self.on_connections_accepted(event_loop, conns)).
+            map(|conns| self.on_connections_accepted(conns)).
             unwrap_or_else(|e| self.on_acceptor_error(event_loop, tok, e));
     }
 
@@ -238,7 +239,13 @@ impl Socket {
             map_err(|err| error!("[{:?}] pipe [{:?}] reconnect timeout failed: '{:?}'", self.id, token, err));
     }
 
-    fn on_connections_accepted(&mut self, event_loop: &mut EventLoop, mut conns: Vec<Box<Connection>>) {
+    fn schedule_rebind(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
+        let _ = event_loop.
+            timeout_ms(EventLoopTimeout::Rebind(tok, addr), 200).
+            map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok, err));
+    }
+
+    fn on_connections_accepted(&mut self, conns: Vec<Box<Connection>>) {
         for conn in conns {
             self.on_connection_created(None, conn, None);
         }
