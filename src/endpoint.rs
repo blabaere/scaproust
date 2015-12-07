@@ -29,12 +29,12 @@ impl Endpoint {
         self.token
     }
 
-    pub fn open_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.pipe.open(event_loop);
+    pub fn register_pipe(&mut self, event_loop: &mut EventLoop) {
+        self.pipe.register(event_loop);
     }
 
-    pub fn activate_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.pipe.activate(event_loop);
+    pub fn on_pipe_register(&mut self, event_loop: &mut EventLoop) {
+        self.pipe.on_register(event_loop);
     }
 
     pub fn on_pipe_ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) {

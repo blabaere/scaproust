@@ -4,42 +4,49 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::rc::Rc;
-use std::sync::mpsc;
 use std::collections::HashMap;
+use std::sync::mpsc::Sender;
 use std::io;
 
 use mio;
 
 use super::Protocol;
+use super::clear_timeout;
+use super::priolist::*;
 use pipe::*;
-use endpoint::*;
 use global::*;
-use event_loop_msg::{ SocketEvt, SocketOption };
+use event_loop_msg::{ SocketNotify, SocketOption };
 use EventLoop;
-use EventLoopAction;
 use Message;
 
-use super::receiver::*;
-
 pub struct Pull {
+    notify_sender: Rc<Sender<SocketNotify>>,
+    recv_timeout: Option<mio::Timeout>,
     pipes: HashMap<mio::Token, Pipe>,
-    evt_sender: Rc<mpsc::Sender<SocketEvt>>,
-    msg_receiver: PolyadicMsgReceiver,
-    codec: NoopMsgDecoder
+    fq: PrioList
 }
 
-impl Pull {
-    pub fn new(evt_tx: Rc<mpsc::Sender<SocketEvt>>) -> Pull {
-        Pull { 
+impl Push {
+    pub fn new(notify_tx: Rc<Sender<SocketNotify>>) -> Push {
+        Push {
+            notify_sender: notify_tx,
+            recv_timeout: None,
             pipes: HashMap::new(),
-            evt_sender: evt_tx.clone(),
-            msg_receiver: PolyadicMsgReceiver::new(evt_tx),
-            codec: NoopMsgDecoder
+            fq: PrioList::new()
+        }
+    }
+
+    fn send_notify(&self, evt: SocketNotify) {
+        let send_res = self.notify_sender.send(evt);
+
+        if send_res.is_err() {
+            error!("Failed to send notify to the facade: '{:?}'", send_res.err());
         }
     }
 }
 
-impl Protocol for Pull {
+impl Protocol for Push {
+
     fn id(&self) -> u16 {
         SocketType::Pull.id()
     }
@@ -48,42 +55,79 @@ impl Protocol for Pull {
         SocketType::Push.id()
     }
 
-    fn add_endpoint(&mut self, token: mio::Token, endpoint: Endpoint) {
-        self.pipes.insert(token, Pipe::new(token, endpoint));
+    fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
+        match self.pipes.insert(tok, pipe) {
+            None    => Ok(()),
+            Some(_) => Err(invalid_data_io_error("option not supported by protocol"))
+        }
     }
 
-    fn remove_endpoint(&mut self, token: mio::Token) -> Option<Endpoint> {
-        self.pipes.remove(&token).map(|p| p.remove())
+    fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
+        self.fq.remove(&tok);
+        self.pipes.remove(&tok)
     }
 
-    fn send(&mut self, _: &mut EventLoop, _: Message, _: EventLoopAction) {
-        let err = other_io_error("send not supported by protocol");
-        let cmd = SocketEvt::MsgNotSent(err);
-        let _ = self.evt_sender.send(cmd);
+    fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.fq.insert(tok, 8);
+        self.pipes.get_mut(&tok).map(|p| p.register(event_loop));
+    }
+
+    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.pipes.get_mut(&tok).map(|p| p.on_register(event_loop));
+    }
+
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Option<mio::Timeout>) {
+        self.send_timeout = timeout;
+
+        if let Some(tok) = self.fq.get() {
+            self.pipes.get_mut(&tok).map(|p| p.send(event_loop, Rc::new(msg)));
+        }
+    }
+
+    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, _: mio::Token) {
+        self.send_notify(SocketNotify::MsgSent);
+        self.fq.advance();
+
+        clear_timeout(event_loop, self.send_timeout.take());
     }
 
     fn on_send_timeout(&mut self, _: &mut EventLoop) {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
+
+        self.send_timeout = None;
+        self.send_notify(SocketNotify::MsgNotSent(err));
     }
 
-    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
-        self.msg_receiver.recv(event_loop, &mut self.codec, cancel_timeout, &mut self.pipes);
+    fn recv(&mut self, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) {
+        self.recv_timeout = timeout;
+
+        if let Some(tok) = self.fq.get() {
+            self.pipes.get_mut(&tok).map(|p| p.recv(event_loop));
+        }
     }
 
-    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.msg_receiver.on_recv_timeout(event_loop, &mut self.pipes)
+    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, _: mio::Token, msg: Message) {
+        self.send_notify(SocketNotify::MsgRecv(msg));
+        self.fq.advance();
+
+        clear_timeout(event_loop, self.recv_timeout.take());
     }
 
-    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
-        let mut received = None;
+    fn on_recv_timeout(&mut self, _: &mut EventLoop) {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
 
-        if let Some(pipe) = self.pipes.get_mut(&token) {
-            received = try!(pipe.ready_rx(event_loop, events));
+        // TODO cancel any pending pipe operation
+
+        self.recv_timeout = None;
+        self.send_notify(SocketNotify::MsgNotRecv(err));
+    }
+
+    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+        if events.is_readable() {
+            self.fq.activate(tok);
         }
 
-        match received {
-            Some(msg) => Ok(self.msg_receiver.received_by(event_loop, &mut self.codec, msg, token, &mut self.pipes)),
-            None => self.msg_receiver.resume_recv(event_loop, &mut self.codec, token, &mut self.pipes)
-        }
+        self.pipes.get_mut(&tok).map(|p| p.ready(event_loop, events));
     }
 
     fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {

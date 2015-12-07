@@ -13,12 +13,11 @@ use global::{ SocketType, SocketId, other_io_error };
 use event_loop_msg::{ SocketNotify, SocketEvtSignal, SocketOption };
 use pipe::Pipe;
 use EventLoop;
-use EventLoopAction;
 use Message;
 
-mod priolist;
+pub mod priolist;
 
-//pub mod push;
+pub mod push;
 //pub mod pull;
 pub mod pair;
 //pub mod req;
@@ -34,7 +33,7 @@ pub mod pair;
 
 pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketNotify>>) -> Box<Protocol> {
     match socket_type {
-        SocketType::Push       => Box::new(NullProtocol),
+        SocketType::Push       => Box::new(push::Push::new(evt_tx)),
         SocketType::Pull       => Box::new(NullProtocol),
         SocketType::Pair       => Box::new(pair::Pair::new(evt_tx)),
         SocketType::Req        => Box::new(NullProtocol),
@@ -51,11 +50,11 @@ pub trait Protocol {
     fn id(&self) -> u16;
     fn peer_id(&self) -> u16;
 
-    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe);
+    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) -> io::Result<()>;
     fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
 
-    fn open_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token);
-    fn on_pipe_open(&mut self, event_loop: &mut EventLoop, token: mio::Token);
+    fn register_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token);
+    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, token: mio::Token);
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet);
 
@@ -88,13 +87,15 @@ impl Protocol for NullProtocol {
         0
     }
 
-    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {}
+    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) -> io::Result<()> {
+        Err(other_io_error("not implemented"))
+    }
     fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
         None
     }
 
-    fn open_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token) {}
-    fn on_pipe_open(&mut self, event_loop: &mut EventLoop, token: mio::Token) {}
+    fn register_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token) {}
+    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, token: mio::Token) {}
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
     }

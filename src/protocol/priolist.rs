@@ -33,6 +33,7 @@ lb & fq needs to support:
 use mio;
 
 pub struct PrioList {
+    pending: Vec<mio::Token>,
     tokens: Vec<mio::Token>,
     current: Option<mio::Token>
 }
@@ -40,6 +41,7 @@ pub struct PrioList {
 impl PrioList {
     pub fn new() -> PrioList {
         PrioList {
+            pending: Vec::new(),
             tokens: Vec::new(),
             current: None
         }
@@ -47,10 +49,16 @@ impl PrioList {
 
     pub fn insert(&mut self, token: mio::Token, _: usize) {
         // TODO blabaere 24/11/2015 deal with priorities ...
+        if let Err(index) = self.pending.binary_search(&token) {
+            self.pending.insert(index, token);
+        }
     }
 
     pub fn remove(&mut self, token: &mio::Token) {
-        if let Ok(index) = self.tokens.binary_search(&token) {
+        if let Ok(index) = self.pending.binary_search(&token) {
+            let token = self.pending.remove(index);
+        }
+        else if let Ok(index) = self.tokens.binary_search(&token) {
             let token = self.tokens.remove(index);
 
             if Some(token) == self.current {
@@ -68,11 +76,19 @@ impl PrioList {
     }
 
     pub fn activate(&mut self, token: mio::Token) {
-        if let Err(index) = self.tokens.binary_search(&token) {
-            self.tokens.insert(index, token);
-        }
+        let mut activated = false;
+        //WRONG, an item can be activated only once it has been inserted
+        if let Ok(index) = self.pending.binary_search(&token) {
+            let token = self.pending.remove(index);
 
-        if self.current.is_none() {
+            if let Err(index) = self.tokens.binary_search(&token) {
+                self.tokens.insert(index, token);
+                activated = true;
+            }
+        } else if let Ok(index) = self.tokens.binary_search(&token) {
+            activated = true;
+        }
+        if activated && self.current.is_none() {
             self.current = Some(token);
         }
     }
@@ -244,5 +260,15 @@ mod tests {
         list.remove(&item1);
         
         assert_eq!(Some(item2), list.get())
+    }
+
+    #[test]
+    fn activate_not_inserted_item_does_nothing() {
+        let mut list = PrioList::new();
+        let item1 = mio::Token(1);
+
+        list.activate(item1);
+        
+        assert_eq!(None, list.get())
     }
 }

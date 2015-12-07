@@ -204,7 +204,7 @@ mod tests {
     #[test]
     fn can_connect_socket() {
         let session = SessionFacade::new().unwrap();
-        let mut socket = session.create_socket(SocketType::Push).unwrap();
+        let mut socket = session.create_socket(SocketType::Pair).unwrap();
 
         socket.connect("tcp://127.0.0.1:5454").unwrap();
     }

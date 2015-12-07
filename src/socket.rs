@@ -89,7 +89,7 @@ impl Socket {
 
     pub fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: SocketEvtSignal) {
         match evt {
-            SocketEvtSignal::Connected(tok) => self.protocol.open_pipe(event_loop, tok),
+            SocketEvtSignal::Connected(tok) => self.protocol.register_pipe(event_loop, tok),
             SocketEvtSignal::Bound(tok)     => self.open_acceptor(event_loop, tok)
         }
     }
@@ -97,7 +97,7 @@ impl Socket {
     pub fn on_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
         debug!("[{:?}] on_pipe_evt: '{:?}'", self.id, tok);
         match evt {
-            PipeEvtSignal::Opened      => self.protocol.on_pipe_open(event_loop, tok),
+            PipeEvtSignal::Opened      => self.protocol.on_pipe_register(event_loop, tok),
             PipeEvtSignal::MsgRcv(msg) => self.protocol.on_recv_by_pipe(event_loop, tok, msg),
             PipeEvtSignal::MsgSnd      => self.protocol.on_send_by_pipe(event_loop, tok)
         }
@@ -114,7 +114,7 @@ impl Socket {
         debug!("[{:?}] connect: '{}'", self.id, addr);
 
         self.create_connection(&addr).
-            map(|conn| self.on_connection_created(Some(addr), conn, None)).
+            and_then(|conn| self.on_connection_created(Some(addr), conn, None)).
             map(|()| self.send_notify(SocketNotify::Connected)).
             unwrap_or_else(|err| self.send_notify(SocketNotify::NotConnected(err)));
     }
@@ -126,7 +126,7 @@ impl Socket {
         let reconn_addr = addr.clone();
 
         self.create_connection(&addr).
-            map(|conn| self.on_connection_created(Some(conn_addr), conn, Some(token))).
+            and_then(|conn| self.on_connection_created(Some(conn_addr), conn, Some(token))).
             unwrap_or_else(|_| self.schedule_reconnect(event_loop, token, reconn_addr));
     }
 
@@ -141,16 +141,14 @@ impl Socket {
         transport.connect(specific_addr)
     }
 
-    fn on_connection_created(&mut self, addr: Option<String>, conn: Box<Connection>, token: Option<mio::Token>) {
+    fn on_connection_created(&mut self, addr: Option<String>, conn: Box<Connection>, token: Option<mio::Token>) -> io::Result<()> {
         debug!("[{:?}] on_connection_created: '{:?}'", self.id, addr);
         let token = token.unwrap_or_else(|| self.next_token());
         let protocol_ids = (self.protocol.id(), self.protocol.peer_id());
         let sig_sender = self.sig_sender.clone();
         let pipe = Pipe::new(token, addr, protocol_ids, conn, sig_sender);
 
-        self.protocol.add_pipe(token, pipe);
-
-        self.send_event(SocketEvtSignal::Connected(token));
+        self.protocol.add_pipe(token, pipe).map(|_|self.send_event(SocketEvtSignal::Connected(token)))
     }
 
     pub fn bind(&mut self, addr: String) {
@@ -226,7 +224,7 @@ impl Socket {
 
     fn remove_pipe_and_schedule_reconnect(&mut self, event_loop: &mut EventLoop, token: mio::Token) {
         if let Some(mut pipe) = self.protocol.remove_pipe(token) {
-            let _ = pipe.close(event_loop);
+            let _ = pipe.unregister(event_loop);
             if let Some(addr) = pipe.addr() {
                 self.schedule_reconnect(event_loop, token, addr);
             }

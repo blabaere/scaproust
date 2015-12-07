@@ -58,12 +58,12 @@ impl Pipe {
         }
     }
 
-    pub fn open(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.open(event_loop));
+    pub fn register(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s: Box<PipeState>| s.register(event_loop));
     }
 
-    pub fn activate(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.activate(event_loop));
+    pub fn on_register(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s: Box<PipeState>| s.on_register(event_loop));
     }
 
     pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) {
@@ -78,8 +78,8 @@ impl Pipe {
         self.on_state_transition(|s: Box<PipeState>| s.send(event_loop, msg));
     }
 
-    pub fn close(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.close(event_loop));
+    pub fn unregister(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s: Box<PipeState>| s.unregister(event_loop));
     }
 
     pub fn addr(self) -> Option<String> {
@@ -104,27 +104,28 @@ impl PipeBody {
 
     fn register(&self, event_loop: &mut EventLoop) -> io::Result<()> {
         let interest = mio::EventSet::error() | mio::EventSet::hup();
-        let poll = mio::PollOpt::edge() | mio::PollOpt::oneshot();
+        let poll = mio::PollOpt::edge();
         let io = self.connection.as_evented();
 
         event_loop.register(io, self.token, interest, poll)
     }
 
-    fn register_for_all(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.register_for_event(event_loop, mio::EventSet::all())
+    fn subscribe_to_all(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        let all = mio::EventSet::readable() | mio::EventSet::writable();
+        self.subscribe_to_event(event_loop, all)
     }
 
-    fn register_for_write(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.register_for_event(event_loop, mio::EventSet::writable())
+    fn subscribe_to_writable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.subscribe_to_event(event_loop, mio::EventSet::writable())
     }
 
-    fn register_for_read(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.register_for_event(event_loop, mio::EventSet::readable())
+    fn subscribe_to_readable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.subscribe_to_event(event_loop, mio::EventSet::readable())
     }
 
-    fn register_for_event(&self, event_loop: &mut EventLoop, event: mio::EventSet) -> io::Result<()> {
+    fn subscribe_to_event(&self, event_loop: &mut EventLoop, event: mio::EventSet) -> io::Result<()> {
         let interest = mio::EventSet::error() | mio::EventSet::hup() | event;
-        let poll = mio::PollOpt::edge() | mio::PollOpt::oneshot();
+        let poll = mio::PollOpt::edge();
         let io = self.connection.as_evented();
 
         event_loop.reregister(io, self.token, interest, poll)
@@ -138,18 +139,22 @@ impl PipeBody {
         send_res.map_err(|e| global::convert_notify_err(e))
     }
 
-    fn close(&self, event_loop: &mut EventLoop) -> Box<PipeState> {
-        event_loop.deregister(self.connection.as_evented());
-        Box::new(Dead)
+    fn unregister(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        event_loop.deregister(self.connection.as_evented())
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// STATE DEFINITION                                                          //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 trait PipeState {
-    fn open(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+    fn register(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
 
-    fn activate(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+    fn on_register(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
 
@@ -166,7 +171,7 @@ trait PipeState {
         Box::new(Dead)
     }
 
-    fn close(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+    fn unregister(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
 
@@ -174,6 +179,31 @@ trait PipeState {
         // TODO send a Disconnected signal
         Box::new(Dead)
     }
+}
+
+trait LivePipeState {
+    fn body<'a>(&'a self) -> &'a PipeBody;
+
+    fn subscribe_to_all(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body().subscribe_to_all(event_loop)
+    }
+
+    fn subscribe_to_writable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body().subscribe_to_writable(event_loop)
+    }
+
+    fn subscribe_to_readable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body().subscribe_to_readable(event_loop)
+    }
+
+    fn unregister(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body().unregister(event_loop)
+    }
+}
+
+fn unregister_live(state: &LivePipeState, event_loop: &mut EventLoop) -> Box<PipeState> {
+    state.unregister(event_loop);
+    Box::new(Dead)
 }
 
 fn transition<F, T>(f: Box<F>) -> Box<T> where
@@ -205,38 +235,42 @@ fn no_transition_if_ok<F : PipeState + 'static>(f: Box<F>, res: io::Result<()>, 
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// INITIAL STATE                                                             //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 struct Initial {
     body: PipeBody, 
     protocol_id: u16,
     protocol_peer_id: u16
 }
 
-impl Initial {
-    fn register_for_write(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.register(event_loop).and_then(|_| self.body.register_for_write(event_loop))
-    }
-}
-
 impl PipeState for Initial {
-    fn open(mut self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let registered = self.register_for_write(event_loop);
+    fn register(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        let res = 
+            self.body.register(event_loop).
+            and_then(|_| self.subscribe_to_writable(event_loop));
 
-        transition_if_ok::<Initial, HandshakeTx>(self, registered, event_loop)
+        transition_if_ok::<Initial, HandshakeTx>(self, res, event_loop)
     }
 
-    fn recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        self
-    }
-
-    fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
-        self
-    }
-
-    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        self.body.close(event_loop)
+    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        unregister_live(self.as_ref(), event_loop)
     }
 }
 
+impl LivePipeState for Initial {
+    fn body<'a>(&'a self) -> &'a PipeBody {
+        &self.body
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// SEND HANDSHAKE STATE                                                      //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 struct HandshakeTx {
     body: PipeBody, 
     protocol_id: u16,
@@ -274,42 +308,37 @@ impl HandshakeTx {
             _       => Err(io::Error::new(io::ErrorKind::WouldBlock, "failed to send handshake"))
         }
     }
-
-    fn register_for_write(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.register_for_write(event_loop)
-    }
-
-    fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.register_for_read(event_loop)
-    }
 }
 
 impl PipeState for HandshakeTx {
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
         if events.is_writable() {
-            let res = self.write_handshake().and_then(|_| self.register_for_read(event_loop));
+            let res = self.write_handshake().and_then(|_| self.subscribe_to_readable(event_loop));
 
             transition_if_ok::<HandshakeTx, HandshakeRx>(self, res, event_loop)
         } else {
-            let res = self.register_for_write(event_loop);
+            let res = self.subscribe_to_writable(event_loop);
 
             no_transition_if_ok::<HandshakeTx>(self, res, event_loop)
         }
     }
 
-    fn recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        self
-    }
-
-    fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
-        self
-    }
-
-    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        self.body.close(event_loop)
+    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        unregister_live(self.as_ref(), event_loop)
     }
 }
 
+impl LivePipeState for HandshakeTx {
+    fn body<'a>(&'a self) -> &'a PipeBody {
+        &self.body
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// RECV PEER HANDSHAKE STATE                                                 //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 struct HandshakeRx {
     body: PipeBody, 
     protocol_peer_id: u16
@@ -325,10 +354,6 @@ impl From<HandshakeTx> for HandshakeRx {
 }
 
 impl HandshakeRx {
-
-    fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.register_for_read(event_loop)
-    }
 
     fn read_handshake(&mut self) -> io::Result<()> {
         let mut handshake = [0u8; 8];
@@ -365,45 +390,30 @@ impl PipeState for HandshakeRx {
 
             transition_if_ok::<HandshakeRx, Activable>(self, res, event_loop)
         } else {
-            let res = self.register_for_read(event_loop);
+            let res = self.subscribe_to_readable(event_loop);
 
             no_transition_if_ok::<HandshakeRx>(self, res, event_loop)
         }
     }
 
-    fn recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        self
-    }
-
-    fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
-        self
-    }
-
-    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        self.body.close(event_loop)
+    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        unregister_live(self.as_ref(), event_loop)
     }
 }
 
+impl LivePipeState for HandshakeRx {
+    fn body<'a>(&'a self) -> &'a PipeBody {
+        &self.body
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// HANDSHAKE ESTABLISHED STATE                                               //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 struct Activable {
     body: PipeBody
-}
-
-impl Activable {
-    fn register_for_all(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.register_for_all(event_loop)
-    }
-}
-
-impl PipeState for Activable {
-    fn activate(mut self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = self.register_for_all(event_loop);
-
-        transition_if_ok::<Activable, Idle>(self, res, event_loop)
-    }
-
-    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        self.body.close(event_loop)
-    }
 }
 
 impl From<HandshakeRx> for Activable {
@@ -414,6 +424,29 @@ impl From<HandshakeRx> for Activable {
     }
 }
 
+impl PipeState for Activable {
+    fn on_register(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        let res = self.subscribe_to_all(event_loop);
+
+        transition_if_ok::<Activable, Idle>(self, res, event_loop)
+    }
+
+    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        unregister_live(self.as_ref(), event_loop)
+    }
+}
+
+impl LivePipeState for Activable {
+    fn body<'a>(&'a self) -> &'a PipeBody {
+        &self.body
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// IDLE STATE                                                                //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 struct Idle {
     body: PipeBody
 }
@@ -443,38 +476,27 @@ impl From<Sending> for Idle {
 }
 
 impl Idle {
-    fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.register_for_read(event_loop)
-    }
-
-    fn register_for_write(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.register_for_write(event_loop)
-    }
-
     fn received_msg(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
-        let res = self.body.send_sig(PipeEvtSignal::MsgRcv(msg));
+        let res = self.body.send_sig(PipeEvtSignal::MsgRcv(msg)).and_then(|_| self.subscribe_to_all(event_loop));
 
         no_transition_if_ok(self, res, event_loop)
     }
 
-    fn receiving_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
-        let res = self.register_for_read(event_loop);
-
-        if res.is_ok() {
-            Box::new(Receiving::from(*self, op))
-        } else {
-            self.on_error(event_loop)
+    fn receiving_msg(self: Box<Self>, event_loop: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
+        match self.subscribe_to_readable(event_loop) {
+            Ok(..) => Box::new(Receiving::from(*self, op)),
+            Err(_) => self.on_error(event_loop),
         }
     }
 
     fn sent_msg(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = self.body.send_sig(PipeEvtSignal::MsgSnd);
+        let res = self.body.send_sig(PipeEvtSignal::MsgSnd).and_then(|_| self.subscribe_to_all(event_loop));
 
         no_transition_if_ok(self, res, event_loop)
     }
 
-    fn sending_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
-        match self.register_for_write(event_loop) {
+    fn sending_msg(self: Box<Self>, event_loop: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
+        match self.subscribe_to_writable(event_loop) {
             Ok(..) => Box::new(Sending::from(*self, op)),
             Err(_) => self.on_error(event_loop),
         }
@@ -510,11 +532,22 @@ impl PipeState for Idle {
         }
     }
 
-    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        self.body.close(event_loop)
+    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        unregister_live(self.as_ref(), event_loop)
     }
 }
 
+impl LivePipeState for Idle {
+    fn body<'a>(&'a self) -> &'a PipeBody {
+        &self.body
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// RECV IN PROGRESS STATE                                                    //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 struct Receiving {
     body: PipeBody,
     operation: Option<recv::RecvOperation>
@@ -528,18 +561,14 @@ impl Receiving {
         }
     }
 
-    fn register_for_read(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.register_for_read(event_loop)
-    }
-
     fn received_msg(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
-        let res = self.body.send_sig(PipeEvtSignal::MsgRcv(msg));
+        let res = self.body.send_sig(PipeEvtSignal::MsgRcv(msg)).and_then(|_| self.subscribe_to_all(event_loop));
 
         transition_if_ok::<Receiving, Idle>(self, res, event_loop)
     }
 
     fn receiving_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
-        let res = self.register_for_read(event_loop);
+        let res = self.subscribe_to_readable(event_loop);
 
         self.operation = Some(op);
 
@@ -567,11 +596,22 @@ impl PipeState for Receiving {
         }
     }
 
-    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        self.body.close(event_loop)
+    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        unregister_live(self.as_ref(), event_loop)
     }
 }
 
+impl LivePipeState for Receiving {
+    fn body<'a>(&'a self) -> &'a PipeBody {
+        &self.body
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// SEND IN PROGRESS STATE                                                    //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 struct Sending {
     body: PipeBody,
     operation: Option<send::SendOperation>
@@ -585,18 +625,14 @@ impl Sending {
         }
     }
 
-    fn register_for_write(&mut self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.register_for_write(event_loop)
-    }
-
     fn sent_msg(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = self.body.send_sig(PipeEvtSignal::MsgSnd);
+        let res = self.body.send_sig(PipeEvtSignal::MsgSnd).and_then(|_| self.subscribe_to_all(event_loop));
 
         transition_if_ok::<Sending, Idle>(self, res, event_loop)
     }
 
     fn sending_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
-        let res = self.register_for_write(event_loop);
+        let res = self.subscribe_to_writable(event_loop);
 
         self.operation = Some(op);
 
@@ -624,11 +660,22 @@ impl PipeState for Sending {
         }
     }
 
-    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        self.body.close(event_loop)
+    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        unregister_live(self.as_ref(), event_loop)
     }
 }
 
+impl LivePipeState for Sending {
+    fn body<'a>(&'a self) -> &'a PipeBody {
+        &self.body
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// DEAD STATE                                                                //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 struct Dead;
 
 impl PipeState for Dead {

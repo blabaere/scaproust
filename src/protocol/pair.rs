@@ -42,30 +42,6 @@ impl Pair {
             error!("Failed to send notify to the facade: '{:?}'", send_res.err());
         }
     }
-
-    fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        if let Some(endpoint) = self.endpoint.as_mut() {
-            if endpoint.token() == tok {
-                endpoint.open_pipe(event_loop);
-            }
-        }
-    }
-
-    fn activate_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        if let Some(endpoint) = self.endpoint.as_mut() {
-            if endpoint.token() == tok {
-                endpoint.activate_pipe(event_loop);
-            }
-        }
-    }
-
-    fn on_pipe_ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        if let Some(endpoint) = self.endpoint.as_mut() {
-            if endpoint.token() == tok {
-                endpoint.on_pipe_ready(event_loop, events);
-            }
-        }
-    }
 }
 
 impl Protocol for Pair {
@@ -78,8 +54,9 @@ impl Protocol for Pair {
         SocketType::Pair.id()
     }
 
-    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) {
+    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) -> io::Result<()> {
         self.endpoint = Some(Endpoint::new(token, pipe));
+        Ok(())
     }
 
     fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
@@ -90,12 +67,20 @@ impl Protocol for Pair {
         }
     }
 
-    fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.open_pipe(event_loop, tok);
+    fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        if let Some(endpoint) = self.endpoint.as_mut() {
+            if endpoint.token() == tok {
+                endpoint.register_pipe(event_loop);
+            }
+        }
     }
 
-    fn on_pipe_open(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.activate_pipe(event_loop, tok);
+    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        if let Some(endpoint) = self.endpoint.as_mut() {
+            if endpoint.token() == tok {
+                endpoint.on_pipe_register(event_loop);
+            }
+        }
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Option<mio::Timeout>) {
@@ -114,6 +99,8 @@ impl Protocol for Pair {
 
     fn on_send_timeout(&mut self, _: &mut EventLoop) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
+
+        // TODO cancel any pending pipe operation
 
         self.send_timeout = None;
         self.send_notify(SocketNotify::MsgNotSent(err));
@@ -136,12 +123,18 @@ impl Protocol for Pair {
     fn on_recv_timeout(&mut self, _: &mut EventLoop) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
 
+        // TODO cancel any pending pipe operation
+
         self.recv_timeout = None;
         self.send_notify(SocketNotify::MsgNotRecv(err));
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        self.on_pipe_ready(event_loop, tok, events);
+        if let Some(endpoint) = self.endpoint.as_mut() {
+            if endpoint.token() == tok {
+                endpoint.on_pipe_ready(event_loop, events);
+            }
+        }
     }
 
     fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
