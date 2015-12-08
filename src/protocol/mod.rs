@@ -15,6 +15,7 @@ use pipe::Pipe;
 use EventLoop;
 use Message;
 
+pub mod excl;
 pub mod priolist;
 
 pub mod push;

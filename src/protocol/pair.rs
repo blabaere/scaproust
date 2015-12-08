@@ -11,8 +11,8 @@ use mio;
 
 use super::Protocol;
 use super::clear_timeout;
+use super::excl::*;
 use pipe::*;
-use endpoint::*;
 use global::*;
 use event_loop_msg::{ SocketNotify, SocketOption };
 use EventLoop;
@@ -22,7 +22,9 @@ pub struct Pair {
     notify_sender: Rc<Sender<SocketNotify>>,
     send_timeout: Option<mio::Timeout>,
     recv_timeout: Option<mio::Timeout>,
-    endpoint: Option<Endpoint>
+    excl: Excl,
+    pending_send: Option<Message>,
+    pending_recv: bool
 }
 
 impl Pair {
@@ -31,7 +33,9 @@ impl Pair {
             notify_sender: notify_tx,
             send_timeout: None,
             recv_timeout: None,
-            endpoint: None
+            excl: Excl::new(),
+            pending_send: None,
+            pending_recv: false
         }
     }
 
@@ -54,40 +58,45 @@ impl Protocol for Pair {
         SocketType::Pair.id()
     }
 
-    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) -> io::Result<()> {
-        self.endpoint = Some(Endpoint::new(token, pipe));
-        Ok(())
+    fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
+         if self.excl.add(tok, pipe) {
+            Ok(())
+         } else {
+            Err(other_io_error("supports only one item"))
+         }
     }
 
-    fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
-        if Some(token) == self.endpoint.as_ref().map(|e| e.token()) {
-            self.endpoint.take().map(|e| e.remove())
-        } else {
-            None
-        }
+    fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
+        self.excl.remove(tok)
     }
 
     fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        if let Some(endpoint) = self.endpoint.as_mut() {
-            if endpoint.token() == tok {
-                endpoint.register_pipe(event_loop);
-            }
-        }
+        debug!("register_pipe: {:?}", tok);
+        self.excl.get(tok).map(|p| p.register(event_loop));
     }
 
     fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        if let Some(endpoint) = self.endpoint.as_mut() {
-            if endpoint.token() == tok {
-                endpoint.on_pipe_register(event_loop);
-            }
+        debug!("on_pipe_register: {:?}", tok);
+        self.excl.activate(tok);
+        self.excl.get(tok).map(|p| p.on_register(event_loop));
+
+        if let Some(msg) = self.pending_send.take() {
+            self.excl.get_active().map(|p| p.send(event_loop, Rc::new(msg)));
+        }
+        else if self.pending_recv {
+            self.excl.get_active().map(|p| p.recv(event_loop));
+            self.pending_recv = false;
         }
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Option<mio::Timeout>) {
         self.send_timeout = timeout;
 
-        if let Some(endpoint) = self.endpoint.as_mut() {
-            endpoint.send(event_loop, Rc::new(msg));
+        if let Some(pipe) = self.excl.get_active() {
+            pipe.send(event_loop, Rc::new(msg));
+            self.pending_send = None;
+        } else {
+            self.pending_send = Some(msg);
         }
     }
 
@@ -102,6 +111,7 @@ impl Protocol for Pair {
 
         // TODO cancel any pending pipe operation
 
+        self.pending_send = None;
         self.send_timeout = None;
         self.send_notify(SocketNotify::MsgNotSent(err));
     }
@@ -109,8 +119,11 @@ impl Protocol for Pair {
     fn recv(&mut self, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) {
         self.recv_timeout = timeout;
 
-        if let Some(endpoint) = self.endpoint.as_mut() {
-            endpoint.recv(event_loop);
+        if let Some(pipe) = self.excl.get_active() {
+            pipe.recv(event_loop);
+            self.pending_recv = false;
+        } else {
+            self.pending_recv = true;
         }
     }
 
@@ -125,16 +138,13 @@ impl Protocol for Pair {
 
         // TODO cancel any pending pipe operation
 
+        self.pending_recv = false;
         self.recv_timeout = None;
         self.send_notify(SocketNotify::MsgNotRecv(err));
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        if let Some(endpoint) = self.endpoint.as_mut() {
-            if endpoint.token() == tok {
-                endpoint.on_pipe_ready(event_loop, events);
-            }
-        }
+        self.excl.get(tok).map(|p| p.ready(event_loop, events));
     }
 
     fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
@@ -144,3 +154,4 @@ impl Protocol for Pair {
     fn on_survey_timeout(&mut self, _: &mut EventLoop) {}
     fn on_request_timeout(&mut self, _: &mut EventLoop) {}
 }
+

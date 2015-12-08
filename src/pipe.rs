@@ -22,6 +22,7 @@ use recv;
 // That means send/receive size prefix and then message payload
 // according to the connection readiness and the requested operation progress if any
 pub struct Pipe {
+    token: mio::Token,
     addr: Option<String>,
     state: Option<Box<PipeState>>
 }
@@ -47,14 +48,21 @@ impl Pipe {
         };
 
         Pipe {
+            token: tok,
             addr: addr,
             state: Some(Box::new(state))
         }
     }
 
     fn on_state_transition<F>(&mut self, transition: F) where F : FnOnce(Box<PipeState>) -> Box<PipeState> {
-        if let Some(state) = self.state.take() {
-            self.state = Some(transition(state));
+        if let Some(old_state) = self.state.take() {
+            let old_name = old_state.name();
+            let new_state = transition(old_state);
+            let new_name = new_state.name();
+
+            self.state = Some(new_state);
+
+            debug!("[{:?}] switch from '{}' to '{}.'", self.token, old_name, new_name);
         }
     }
 
@@ -125,7 +133,7 @@ impl PipeBody {
 
     fn subscribe_to_event(&self, event_loop: &mut EventLoop, event: mio::EventSet) -> io::Result<()> {
         let interest = mio::EventSet::error() | mio::EventSet::hup() | event;
-        let poll = mio::PollOpt::edge();
+        let poll = mio::PollOpt::edge() | mio::PollOpt::oneshot();
         let io = self.connection.as_evented();
 
         event_loop.reregister(io, self.token, interest, poll)
@@ -150,6 +158,8 @@ impl PipeBody {
 //                                                                           //
 ///////////////////////////////////////////////////////////////////////////////
 trait PipeState {
+    fn name(&self) -> &'static str;
+
     fn register(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
@@ -247,6 +257,10 @@ struct Initial {
 }
 
 impl PipeState for Initial {
+    fn name(&self) -> &'static str {
+        "Initial"
+    }
+
     fn register(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         let res = 
             self.body.register(event_loop).
@@ -311,6 +325,10 @@ impl HandshakeTx {
 }
 
 impl PipeState for HandshakeTx {
+    fn name(&self) -> &'static str {
+        "Send handshake"
+    }
+
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
         if events.is_writable() {
             let res = self.write_handshake().and_then(|_| self.subscribe_to_readable(event_loop));
@@ -384,6 +402,10 @@ impl HandshakeRx {
 }
 
 impl PipeState for HandshakeRx {
+    fn name(&self) -> &'static str {
+        "Recv handshake"
+    }
+
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
         if events.is_readable() {
             let res = self.read_handshake().and_then(|_| self.send_sig(PipeEvtSignal::Opened));
@@ -425,10 +447,18 @@ impl From<HandshakeRx> for Activable {
 }
 
 impl PipeState for Activable {
+    fn name(&self) -> &'static str {
+        "Handshaked"
+    }
+
     fn on_register(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         let res = self.subscribe_to_all(event_loop);
 
         transition_if_ok::<Activable, Idle>(self, res, event_loop)
+    }
+
+    fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
+        self
     }
 
     fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
@@ -504,6 +534,9 @@ impl Idle {
 }
 
 impl PipeState for Idle {
+    fn name(&self) -> &'static str {
+        "Idle"
+    }
 
     fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
         self
@@ -577,6 +610,9 @@ impl Receiving {
 }
 
 impl PipeState for Receiving {
+    fn name(&self) -> &'static str {
+        "Recv"
+    }
 
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
 
@@ -641,6 +677,9 @@ impl Sending {
 }
 
 impl PipeState for Sending {
+    fn name(&self) -> &'static str {
+        "Send"
+    }
 
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
 
@@ -679,4 +718,7 @@ impl LivePipeState for Sending {
 struct Dead;
 
 impl PipeState for Dead {
+    fn name(&self) -> &'static str {
+        "Dead"
+    }
 }

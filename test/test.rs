@@ -122,16 +122,12 @@ fn test_pair_connected_to_bound() {
     let mut bound = session.create_socket(SocketType::Pair).unwrap();
     let mut connected = session.create_socket(SocketType::Pair).unwrap();
 
+    bound.set_recv_timeout(time::Duration::from_millis(250)).unwrap();
     bound.bind("tcp://127.0.0.1:5460").unwrap();
+    connected.set_send_timeout(time::Duration::from_millis(250)).unwrap();
     connected.connect("tcp://127.0.0.1:5460").unwrap();
-    ::std::thread::sleep_ms(200); 
-    // TODO fix the workflow bug and remove this sleep
-    // It does not work currently because the pipe have not handshaked yet
-    // So it should not be considered as an active pipe
-    // The pipe lacks a way to tell the protocol when it is usable
-    // Adding a event signal will fix this.
-    // And of course a state machine for the protocol
-
+    //::std::thread::sleep_ms(200); 
+    
     let sent = vec![65, 66, 67];
     connected.send(sent).unwrap();
     let received = bound.recv().unwrap();
@@ -145,9 +141,12 @@ fn test_pair_bound_to_connected() {
     let mut bound = session.create_socket(SocketType::Pair).unwrap();
     let mut connected = session.create_socket(SocketType::Pair).unwrap();
 
+    bound.set_send_timeout(time::Duration::from_millis(250)).unwrap();
     bound.bind("tcp://127.0.0.1:5461").unwrap();
+
+    connected.set_recv_timeout(time::Duration::from_millis(250)).unwrap();
     connected.connect("tcp://127.0.0.1:5461").unwrap();
-    ::std::thread::sleep_ms(200);
+    //::std::thread::sleep_ms(200);
 
     let sent = vec![65, 66, 67];
     bound.send(sent).unwrap();

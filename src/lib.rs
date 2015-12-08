@@ -19,7 +19,6 @@ mod session;
 mod socket;
 mod protocol;
 mod transport;
-mod endpoint;
 mod pipe;
 mod send;
 mod recv;

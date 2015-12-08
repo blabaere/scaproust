@@ -56,7 +56,7 @@ impl PrioList {
 
     pub fn remove(&mut self, token: &mio::Token) {
         if let Ok(index) = self.pending.binary_search(&token) {
-            let token = self.pending.remove(index);
+            self.pending.remove(index);
         }
         else if let Ok(index) = self.tokens.binary_search(&token) {
             let token = self.tokens.remove(index);
@@ -77,7 +77,6 @@ impl PrioList {
 
     pub fn activate(&mut self, token: mio::Token) {
         let mut activated = false;
-        //WRONG, an item can be activated only once it has been inserted
         if let Ok(index) = self.pending.binary_search(&token) {
             let token = self.pending.remove(index);
 
@@ -85,7 +84,7 @@ impl PrioList {
                 self.tokens.insert(index, token);
                 activated = true;
             }
-        } else if let Ok(index) = self.tokens.binary_search(&token) {
+        } else if let Ok(_) = self.tokens.binary_search(&token) {
             activated = true;
         }
         if activated && self.current.is_none() {
