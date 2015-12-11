@@ -206,7 +206,7 @@ impl Socket {
 
         self.acceptors.get_mut(&tok).unwrap().
             ready(event_loop, events).
-            map(|conns| self.on_connections_accepted(conns)).
+            and_then(|conns| self.on_connections_accepted(conns)).
             unwrap_or_else(|e| self.on_acceptor_error(event_loop, tok, e));
     }
 
@@ -233,20 +233,21 @@ impl Socket {
 
     fn schedule_reconnect(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
         let _ = event_loop.
-            timeout_ms(EventLoopTimeout::Reconnect(token, addr), 200).
+            timeout_ms(EventLoopTimeout::Reconnect(token, addr), 500).
             map_err(|err| error!("[{:?}] pipe [{:?}] reconnect timeout failed: '{:?}'", self.id, token, err));
     }
 
     fn schedule_rebind(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
         let _ = event_loop.
-            timeout_ms(EventLoopTimeout::Rebind(tok, addr), 200).
+            timeout_ms(EventLoopTimeout::Rebind(tok, addr), 500).
             map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok, err));
     }
 
-    fn on_connections_accepted(&mut self, conns: Vec<Box<Connection>>) {
+    fn on_connections_accepted(&mut self, conns: Vec<Box<Connection>>) -> io::Result<()> {
         for conn in conns {
-            self.on_connection_created(None, conn, None);
+            try!(self.on_connection_created(None, conn, None));
         }
+        Ok(())
     }
 
     fn on_acceptor_error(&mut self, event_loop: &mut EventLoop, token: mio::Token, err: io::Error) {

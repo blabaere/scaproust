@@ -3,6 +3,8 @@
 // Licensed under the MIT license LICENSE or <http://opensource.org/licenses/MIT>
 // This file may not be copied, modified, or distributed except according to those terms.
 
+#[macro_use] extern crate log;
+extern crate env_logger;
 extern crate scaproust;
 
 use std::io;
@@ -118,16 +120,17 @@ fn test_recv_timeout() {
 
 #[test]
 fn test_pair_connected_to_bound() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut bound = session.create_socket(SocketType::Pair).unwrap();
     let mut connected = session.create_socket(SocketType::Pair).unwrap();
 
     bound.set_recv_timeout(time::Duration::from_millis(250)).unwrap();
     bound.bind("tcp://127.0.0.1:5460").unwrap();
+
     connected.set_send_timeout(time::Duration::from_millis(250)).unwrap();
     connected.connect("tcp://127.0.0.1:5460").unwrap();
-    //::std::thread::sleep_ms(200); 
-    
+
     let sent = vec![65, 66, 67];
     connected.send(sent).unwrap();
     let received = bound.recv().unwrap();
@@ -137,6 +140,8 @@ fn test_pair_connected_to_bound() {
 
 #[test]
 fn test_pair_bound_to_connected() {
+    let _ = env_logger::init();
+    info!("test_pair_bound_to_connected");
     let session = Session::new().unwrap();
     let mut bound = session.create_socket(SocketType::Pair).unwrap();
     let mut connected = session.create_socket(SocketType::Pair).unwrap();
@@ -146,7 +151,6 @@ fn test_pair_bound_to_connected() {
 
     connected.set_recv_timeout(time::Duration::from_millis(250)).unwrap();
     connected.connect("tcp://127.0.0.1:5461").unwrap();
-    //::std::thread::sleep_ms(200);
 
     let sent = vec![65, 66, 67];
     bound.send(sent).unwrap();

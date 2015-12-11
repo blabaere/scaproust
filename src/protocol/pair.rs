@@ -23,7 +23,7 @@ pub struct Pair {
     send_timeout: Option<mio::Timeout>,
     recv_timeout: Option<mio::Timeout>,
     excl: Excl,
-    pending_send: Option<Message>,
+    pending_send: Option<Rc<Message>>,
     pending_recv: bool
 }
 
@@ -71,17 +71,15 @@ impl Protocol for Pair {
     }
 
     fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        debug!("register_pipe: {:?}", tok);
         self.excl.get(tok).map(|p| p.register(event_loop));
     }
 
     fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        debug!("on_pipe_register: {:?}", tok);
         self.excl.activate(tok);
         self.excl.get(tok).map(|p| p.on_register(event_loop));
 
         if let Some(msg) = self.pending_send.take() {
-            self.excl.get_active().map(|p| p.send(event_loop, Rc::new(msg)));
+            self.excl.get_active().map(|p| p.send(event_loop, msg));
         }
         else if self.pending_recv {
             self.excl.get_active().map(|p| p.recv(event_loop));
@@ -92,24 +90,25 @@ impl Protocol for Pair {
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Option<mio::Timeout>) {
         self.send_timeout = timeout;
 
+        let msg = Rc::new(msg);
         if let Some(pipe) = self.excl.get_active() {
-            pipe.send(event_loop, Rc::new(msg));
-            self.pending_send = None;
-        } else {
-            self.pending_send = Some(msg);
+            pipe.send(event_loop, msg.clone());
         }
+        
+        self.pending_send = Some(msg);
     }
 
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, _: mio::Token) {
         self.send_notify(SocketNotify::MsgSent);
+        self.pending_send = None;
 
         clear_timeout(event_loop, self.send_timeout.take());
     }
 
-    fn on_send_timeout(&mut self, _: &mut EventLoop) {
+    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
 
-        // TODO cancel any pending pipe operation
+        self.excl.get_active().map(|p| p.cancel_send(event_loop));
 
         self.pending_send = None;
         self.send_timeout = None;
@@ -121,22 +120,21 @@ impl Protocol for Pair {
 
         if let Some(pipe) = self.excl.get_active() {
             pipe.recv(event_loop);
-            self.pending_recv = false;
-        } else {
-            self.pending_recv = true;
         }
+        self.pending_recv = true;
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, _: mio::Token, msg: Message) {
         self.send_notify(SocketNotify::MsgRecv(msg));
+        self.pending_recv = false;
 
         clear_timeout(event_loop, self.recv_timeout.take());
     }
 
-    fn on_recv_timeout(&mut self, _: &mut EventLoop) {
+    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
 
-        // TODO cancel any pending pipe operation
+        self.excl.get_active().map(|p| p.cancel_recv(event_loop));
 
         self.pending_recv = false;
         self.recv_timeout = None;

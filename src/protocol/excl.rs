@@ -6,14 +6,11 @@
 use mio;
 
 use pipe::*;
-use global;
 
 pub struct Excl {
     token: Option<mio::Token>,
     pipe: Option<Pipe>,
-    active: bool,
-    readable: bool,
-    writable: bool
+    active: bool
 }
 
 impl Excl {
@@ -22,9 +19,7 @@ impl Excl {
         Excl {
             token: None,
             pipe: None,
-            active: false,
-            readable: false,
-            writable: false
+            active: false
         }
     }
 
@@ -49,8 +44,6 @@ impl Excl {
 
         self.token = None;
         self.active = false;
-        self.readable = false;
-        self.writable = false;
 
         self.pipe.take()
     }

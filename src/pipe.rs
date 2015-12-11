@@ -82,8 +82,16 @@ impl Pipe {
         self.on_state_transition(|s: Box<PipeState>| s.recv(event_loop));
     }
 
+    pub fn cancel_recv(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s: Box<PipeState>| s.cancel_recv(event_loop));
+    }
+
     pub fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
         self.on_state_transition(|s: Box<PipeState>| s.send(event_loop, msg));
+    }
+
+    pub fn cancel_send(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s: Box<PipeState>| s.cancel_send(event_loop));
     }
 
     pub fn unregister(&mut self, event_loop: &mut EventLoop) {
@@ -110,33 +118,22 @@ impl PipeBody {
         &mut *self.connection
     }
 
-    fn register(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        let interest = mio::EventSet::error() | mio::EventSet::hup();
-        let poll = mio::PollOpt::edge();
+    fn register(&self,
+        event_loop: &mut EventLoop, 
+        events: mio::EventSet,
+        opt: mio::PollOpt) -> io::Result<()> {
         let io = self.connection.as_evented();
 
-        event_loop.register(io, self.token, interest, poll)
+        event_loop.register(io, self.token, events, opt)
     }
 
-    fn subscribe_to_all(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        let all = mio::EventSet::readable() | mio::EventSet::writable();
-        self.subscribe_to_event(event_loop, all)
-    }
-
-    fn subscribe_to_writable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.subscribe_to_event(event_loop, mio::EventSet::writable())
-    }
-
-    fn subscribe_to_readable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.subscribe_to_event(event_loop, mio::EventSet::readable())
-    }
-
-    fn subscribe_to_event(&self, event_loop: &mut EventLoop, event: mio::EventSet) -> io::Result<()> {
-        let interest = mio::EventSet::error() | mio::EventSet::hup() | event;
-        let poll = mio::PollOpt::edge() | mio::PollOpt::oneshot();
+    fn reregister(&self,
+        event_loop: &mut EventLoop, 
+        events: mio::EventSet,
+        opt: mio::PollOpt) -> io::Result<()> {
         let io = self.connection.as_evented();
 
-        event_loop.reregister(io, self.token, interest, poll)
+        event_loop.reregister(io, self.token, mio::EventSet::hup() | mio::EventSet::error() | events, opt)
     }
 
     fn send_sig(&self, sig: PipeEvtSignal) -> io::Result<()> {
@@ -177,7 +174,15 @@ trait PipeState {
         Box::new(Dead)
     }
 
+    fn cancel_recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        Box::new(Dead)
+    }
+
     fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
+        Box::new(Dead)
+    }
+
+    fn cancel_send(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
 
@@ -185,7 +190,8 @@ trait PipeState {
         Box::new(Dead)
     }
 
-    fn on_error(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+    fn on_error(self: Box<Self>, _: &mut EventLoop, err: io::Error) -> Box<PipeState> {
+        debug!("State '{}' failed: {:?}", self.name(), err);
         // TODO send a Disconnected signal
         Box::new(Dead)
     }
@@ -194,20 +200,16 @@ trait PipeState {
 trait LivePipeState {
     fn body<'a>(&'a self) -> &'a PipeBody;
 
-    fn subscribe_to_all(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body().subscribe_to_all(event_loop)
-    }
-
-    fn subscribe_to_writable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body().subscribe_to_writable(event_loop)
-    }
-
-    fn subscribe_to_readable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body().subscribe_to_readable(event_loop)
-    }
-
     fn unregister(&self, event_loop: &mut EventLoop) -> io::Result<()> {
         self.body().unregister(event_loop)
+    }
+
+    fn debug(&self, log: &str) {
+        debug!("[{:?}] {}", self.body().token(), log)
+    }
+
+    fn send_sig(&self, sig: PipeEvtSignal) -> io::Result<()> {
+        self.body().send_sig(sig)
     }
 }
 
@@ -233,7 +235,7 @@ fn transition_if_ok<F, T : 'static>(f: Box<F>, res: io::Result<()>, event_loop: 
 {
     match res {
         Ok(_) => transition::<F, T>(f),
-        Err(_) => f.on_error(event_loop)
+        Err(e) => f.on_error(event_loop, e)
     }
 }
 
@@ -241,7 +243,7 @@ fn no_transition_if_ok<F : PipeState + 'static>(f: Box<F>, res: io::Result<()>, 
 {
     match res {
         Ok(_) => f,
-        Err(_) => f.on_error(event_loop)
+        Err(e) => f.on_error(event_loop, e)
     }
 }
 
@@ -262,9 +264,7 @@ impl PipeState for Initial {
     }
 
     fn register(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = 
-            self.body.register(event_loop).
-            and_then(|_| self.subscribe_to_writable(event_loop));
+        let res = self.body.register(event_loop, mio::EventSet::writable(), mio::PollOpt::level());
 
         transition_if_ok::<Initial, HandshakeTx>(self, res, event_loop)
     }
@@ -311,7 +311,7 @@ impl HandshakeTx {
         try!(
             self.body.connection().try_write(&handshake).
             and_then(|w| self.check_sent_handshake(w)));
-        debug!("[{:?}] handshake sent.", self.body.token());
+        self.debug("handshake sent.");
         Ok(())
     }
 
@@ -321,6 +321,14 @@ impl HandshakeTx {
             Some(_) => Err(io::Error::new(io::ErrorKind::WouldBlock, "failed to send full handshake")),
             _       => Err(io::Error::new(io::ErrorKind::WouldBlock, "failed to send handshake"))
         }
+    }
+
+    fn subscribe_to_readable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body.reregister(event_loop, mio::EventSet::readable(), mio::PollOpt::level())
+    }
+
+    fn subscribe_to_writable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body.reregister(event_loop, mio::EventSet::writable(), mio::PollOpt::level())
     }
 }
 
@@ -378,7 +386,7 @@ impl HandshakeRx {
         try!(
             self.body.connection().try_read(&mut handshake).
             and_then(|_| self.check_received_handshake(&handshake)));
-        debug!("[{:?}] handshake received.", self.body.token());
+        self.debug("handshake received.");
         Ok(())
     }
 
@@ -394,6 +402,10 @@ impl HandshakeRx {
             error!("expected '{:?}' but received '{:?}' !", expected_handshake, handshake);
             Err(io::Error::new(io::ErrorKind::InvalidData, "received bad handshake"))
         }
+    }
+
+    fn subscribe_to_readable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body.reregister(event_loop, mio::EventSet::readable(), mio::PollOpt::level())
     }
 
     fn send_sig(&self, sig: PipeEvtSignal) -> io::Result<()> {
@@ -436,6 +448,16 @@ impl LivePipeState for HandshakeRx {
 ///////////////////////////////////////////////////////////////////////////////
 struct Activable {
     body: PipeBody
+}
+
+impl Activable {
+    fn subscribe_to_all(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body.reregister(
+                event_loop, 
+                mio::EventSet::readable() | mio::EventSet::writable(), 
+                mio::PollOpt::edge())
+        
+    }
 }
 
 impl From<HandshakeRx> for Activable {
@@ -507,29 +529,23 @@ impl From<Sending> for Idle {
 
 impl Idle {
     fn received_msg(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
-        let res = self.body.send_sig(PipeEvtSignal::MsgRcv(msg)).and_then(|_| self.subscribe_to_all(event_loop));
+        let res = self.send_sig(PipeEvtSignal::MsgRcv(msg));
 
         no_transition_if_ok(self, res, event_loop)
     }
 
-    fn receiving_msg(self: Box<Self>, event_loop: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
-        match self.subscribe_to_readable(event_loop) {
-            Ok(..) => Box::new(Receiving::from(*self, op)),
-            Err(_) => self.on_error(event_loop),
-        }
+    fn receiving_msg(self: Box<Self>, _: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
+        Box::new(Receiving::from(*self, op))
     }
 
     fn sent_msg(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = self.body.send_sig(PipeEvtSignal::MsgSnd).and_then(|_| self.subscribe_to_all(event_loop));
+        let res = self.send_sig(PipeEvtSignal::MsgSnd);
 
         no_transition_if_ok(self, res, event_loop)
     }
 
-    fn sending_msg(self: Box<Self>, event_loop: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
-        match self.subscribe_to_writable(event_loop) {
-            Ok(..) => Box::new(Sending::from(*self, op)),
-            Err(_) => self.on_error(event_loop),
-        }
+    fn sending_msg(self: Box<Self>, _: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
+        Box::new(Sending::from(*self, op))
     }
 }
 
@@ -548,8 +564,12 @@ impl PipeState for Idle {
         match operation.recv(self.body.connection()) {
             Ok(Some(msg)) => self.received_msg(event_loop, msg),
             Ok(None)      => self.receiving_msg(event_loop, operation),
-            Err(_)        => self.on_error(event_loop)
+            Err(e)        => self.on_error(event_loop, e)
         }
+    }
+
+    fn cancel_recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        self
     }
 
     fn send(mut self: Box<Self>, event_loop: &mut EventLoop, msg: Rc<Message>) -> Box<PipeState> {
@@ -558,11 +578,15 @@ impl PipeState for Idle {
                 match operation.send(self.body.connection()) {
                     Ok(true)  => self.sent_msg(event_loop),
                     Ok(false) => self.sending_msg(event_loop, operation),
-                    Err(_)    => self.on_error(event_loop)
+                    Err(e)    => self.on_error(event_loop, e)
                 }
             },
-            Err(_) => self.on_error(event_loop),
+            Err(e) => self.on_error(event_loop, e)
         }
+    }
+
+    fn cancel_send(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        self
     }
 
     fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
@@ -595,17 +619,14 @@ impl Receiving {
     }
 
     fn received_msg(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
-        let res = self.body.send_sig(PipeEvtSignal::MsgRcv(msg)).and_then(|_| self.subscribe_to_all(event_loop));
+        let res = self.send_sig(PipeEvtSignal::MsgRcv(msg));
 
         transition_if_ok::<Receiving, Idle>(self, res, event_loop)
     }
 
-    fn receiving_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
-        let res = self.subscribe_to_readable(event_loop);
-
+    fn receiving_msg(mut self: Box<Self>, _: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
         self.operation = Some(op);
-
-        no_transition_if_ok(self, res, event_loop)
+        self
     }
 }
 
@@ -628,10 +649,13 @@ impl PipeState for Receiving {
         match operation.recv(self.body.connection()) {
             Ok(Some(msg)) => self.received_msg(event_loop, msg),
             Ok(None)      => self.receiving_msg(event_loop, operation),
-            Err(_)        => self.on_error(event_loop)
+            Err(e)        => self.on_error(event_loop, e)
         }
     }
 
+    fn cancel_recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        transition::<Receiving, Idle>(self)
+    }
     fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         unregister_live(self.as_ref(), event_loop)
     }
@@ -662,17 +686,14 @@ impl Sending {
     }
 
     fn sent_msg(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = self.body.send_sig(PipeEvtSignal::MsgSnd).and_then(|_| self.subscribe_to_all(event_loop));
+        let res = self.send_sig(PipeEvtSignal::MsgSnd);
 
         transition_if_ok::<Sending, Idle>(self, res, event_loop)
     }
 
-    fn sending_msg(mut self: Box<Self>, event_loop: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
-        let res = self.subscribe_to_writable(event_loop);
-
+    fn sending_msg(mut self: Box<Self>, _: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
         self.operation = Some(op);
-
-        no_transition_if_ok(self, res, event_loop)
+        self
     }
 }
 
@@ -695,8 +716,12 @@ impl PipeState for Sending {
         match operation.send(self.body.connection()) {
                 Ok(true)  => self.sent_msg(event_loop),
                 Ok(false) => self.sending_msg(event_loop, operation),
-                Err(_)    => self.on_error(event_loop)
+                Err(e)    => self.on_error(event_loop, e)
         }
+    }
+
+    fn cancel_send(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        transition::<Sending, Idle>(self)
     }
 
     fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
