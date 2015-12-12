@@ -140,14 +140,15 @@ impl State {
         }
     }
 
-    fn on_pipe_added(self, body: &mut Body, tok: mio::Token) -> State {
+    fn on_pipe_added(self, _: &mut Body, _: mio::Token) -> State {
         self
     }
 
-    fn on_pipe_removed(self, body: &mut Body, tok: mio::Token) -> State {
-        // if sending, do something about it
-
-        self
+    fn on_pipe_removed(self, _: &mut Body, _: mio::Token) -> State {
+        match self {
+            State::Sending(msg, t) => State::SendOnHold(msg, t),
+            other @ _              => other
+        }
     }
 
     fn register_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
