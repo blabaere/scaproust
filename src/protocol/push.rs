@@ -23,7 +23,9 @@ pub struct Push {
     notify_sender: Rc<Sender<SocketNotify>>,
     send_timeout: Option<mio::Timeout>,
     pipes: HashMap<mio::Token, Pipe>,
-    lb: PrioList
+    lb: PrioList,
+    pending_send: Option<Rc<Message>>,
+    pending_send_to: Option<mio::Token>
 }
 
 impl Push {
@@ -32,7 +34,9 @@ impl Push {
             notify_sender: notify_tx,
             send_timeout: None,
             pipes: HashMap::new(),
-            lb: PrioList::new()
+            lb: PrioList::new(),
+            pending_send: None,
+            pending_send_to: None
         }
     }
 
@@ -58,11 +62,12 @@ impl Protocol for Push {
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
         match self.pipes.insert(tok, pipe) {
             None    => Ok(()),
-            Some(_) => Err(invalid_data_io_error("option not supported by protocol"))
+            Some(_) => Err(invalid_data_io_error("A pipe has already been added with that token"))
         }
     }
 
     fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
+        // TODO check if we were not sending via this pipe
         self.lb.remove(&tok);
         self.pipes.remove(&tok)
     }
@@ -73,35 +78,56 @@ impl Protocol for Push {
     }
 
     fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.lb.activate(tok);
         self.pipes.get_mut(&tok).map(|p| p.on_register(event_loop));
+
+        /*if self.pending_send.is_some() && self.pending_send_to.is_none() {
+            let msg = self.pending_send.as_ref()
+        }*/
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Option<mio::Timeout>) {
+        let msg = Rc::new(msg);
+
         self.send_timeout = timeout;
 
         if let Some(tok) = self.lb.get() {
-            self.pipes.get_mut(&tok).map(|p| p.send(event_loop, Rc::new(msg)));
+            self.pending_send = Some(msg.clone());
+            self.pending_send_to = Some(tok);
+            self.pipes.get_mut(&tok).map(|p| p.send(event_loop, msg));
+        } else {
+            self.pending_send = Some(msg);
+            self.pending_send_to = None;
         }
     }
 
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, _: mio::Token) {
         self.send_notify(SocketNotify::MsgSent);
         self.lb.advance();
+        self.pending_send = None;
+        self.pending_send_to = None;
 
         clear_timeout(event_loop, self.send_timeout.take());
     }
 
-    fn on_send_timeout(&mut self, _: &mut EventLoop) {
+    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
 
-        // TODO cancel any pending pipe operation
+        if let Some(tok) = self.pending_send_to.take() {
+            self.pipes.get_mut(&tok).map(|p| p.cancel_send(event_loop));
+        }
 
         self.send_timeout = None;
+        self.pending_send = None;
+        self.pending_send_to = None;
         self.send_notify(SocketNotify::MsgNotSent(err));
     }
 
     fn recv(&mut self, _: &mut EventLoop, _: Option<mio::Timeout>) {
-        self.send_notify(SocketNotify::MsgNotSent(other_io_error("recv not supported by protocol")));
+        let err = other_io_error("recv not supported by protocol");
+        let ntf = SocketNotify::MsgNotRecv(err);
+
+        self.send_notify(ntf);
     }
 
     fn on_recv_by_pipe(&mut self, _: &mut EventLoop, _: mio::Token, _: Message) {
@@ -111,10 +137,6 @@ impl Protocol for Push {
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        if events.is_writable() {
-            self.lb.activate(tok);
-        }
-
         self.pipes.get_mut(&tok).map(|p| p.ready(event_loop, events));
     }
 

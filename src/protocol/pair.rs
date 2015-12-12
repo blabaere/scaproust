@@ -18,32 +18,50 @@ use event_loop_msg::{ SocketNotify, SocketOption };
 use EventLoop;
 use Message;
 
+type Timeout = Option<mio::Timeout>;
+
 pub struct Pair {
+    id: SocketId,
+    body: Body,
+    state: Option<State>
+}
+
+struct Body {
     notify_sender: Rc<Sender<SocketNotify>>,
-    send_timeout: Option<mio::Timeout>,
-    recv_timeout: Option<mio::Timeout>,
-    excl: Excl,
-    pending_send: Option<Rc<Message>>,
-    pending_recv: bool
+    excl: Excl
+}
+
+enum State {
+    Idle,
+    Sending(Rc<Message>, Timeout),
+    SendOnHold(Rc<Message>, Timeout),
+    Receiving(Timeout),
+    RecvOnHold(Timeout)
 }
 
 impl Pair {
-    pub fn new(notify_tx: Rc<Sender<SocketNotify>>) -> Pair {
-        Pair {
+    pub fn new(socket_id: SocketId, notify_tx: Rc<Sender<SocketNotify>>) -> Pair {
+        let body = Body {
             notify_sender: notify_tx,
-            send_timeout: None,
-            recv_timeout: None,
-            excl: Excl::new(),
-            pending_send: None,
-            pending_recv: false
+            excl: Excl::new()
+        };
+
+        Pair {
+            id: socket_id,
+            body: body,
+            state: Some(State::Idle)
         }
     }
 
-    fn send_notify(&self, evt: SocketNotify) {
-        let send_res = self.notify_sender.send(evt);
+    fn on_state_transition<F>(&mut self, transition: F) where F : FnOnce(State, &mut Body) -> State {
+        if let Some(old_state) = self.state.take() {
+            let old_name = old_state.name();
+            let new_state = transition(old_state, &mut self.body);
+            let new_name = new_state.name();
 
-        if send_res.is_err() {
-            error!("Failed to send notify to the facade: '{:?}'", send_res.err());
+            self.state = Some(new_state);
+
+            debug!("[{:?}] switch from '{}' to '{}.'", self.id, old_name, new_name);
         }
     }
 }
@@ -58,6 +76,170 @@ impl Protocol for Pair {
         SocketType::Pair.id()
     }
 
+    fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
+        let res = self.body.add_pipe(tok, pipe);
+
+        self.on_state_transition(|s, body| s.on_pipe_added(body, tok));
+
+        res
+     }
+
+    fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
+        let pipe = self.body.remove_pipe(tok);
+
+        self.on_state_transition(|s, body| s.on_pipe_removed(body, tok));
+
+        pipe
+    }
+
+    fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.on_state_transition(|s, body| s.register_pipe(body, event_loop, tok));
+    }
+
+    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.on_state_transition(|s, body| s.on_pipe_register(body, event_loop, tok));
+    }
+
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
+        self.on_state_transition(|s, body| s.send(body, event_loop, Rc::new(msg), timeout));
+    }
+
+    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.on_state_transition(|s, body| s.on_send_by_pipe(body, event_loop, tok));
+    }
+
+    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s, body| s.on_send_timeout(body, event_loop));
+    }
+
+    fn recv(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
+        self.on_state_transition(|s, body| s.recv(body, event_loop, timeout));
+    }
+
+    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) {
+        self.on_state_transition(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
+    }
+
+    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s, body| s.on_recv_timeout(body, event_loop));
+    }
+
+    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+        self.on_state_transition(|s, body| s.ready(body, event_loop, tok, events));
+    }
+}
+
+impl State {
+    fn name(&self) -> &'static str {
+        match *self {
+            State::Idle             => "Idle",
+            State::Sending(_, _)    => "Sending",
+            State::SendOnHold(_, _) => "SendOnHold",
+            State::Receiving(_)     => "Receiving",
+            State::RecvOnHold(_)    => "RecvOnHold"
+        }
+    }
+
+    fn on_pipe_added(self, body: &mut Body, tok: mio::Token) -> State {
+        self
+    }
+
+    fn on_pipe_removed(self, body: &mut Body, tok: mio::Token) -> State {
+        // if sending, do something about it
+
+        self
+    }
+
+    fn register_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+        body.register_pipe(event_loop, tok);
+
+        self
+    }
+
+    fn on_pipe_register(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+        body.on_pipe_register(event_loop, tok);
+
+        match self {
+            State::SendOnHold(msg, t) => State::Idle.send(body, event_loop, msg, t),
+            State::RecvOnHold(t)      => State::Idle.recv(body, event_loop, t),
+            other @ _                 => other
+        }
+    }
+
+    fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, timeout: Option<mio::Timeout>) -> State {
+        if let Some(pipe) = body.get_active_pipe() {
+            pipe.send(event_loop, msg.clone());
+
+            return State::Sending(msg, timeout);
+        } else {
+            return State::SendOnHold(msg, timeout);
+        }
+    }
+
+    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token) -> State {
+        if let State::Sending(_, timeout) = self {
+            body.send_notify(SocketNotify::MsgSent);
+            clear_timeout(event_loop, timeout);
+        }
+
+        State::Idle
+    }
+
+    fn on_send_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
+
+        body.send_notify(SocketNotify::MsgNotSent(err));
+        body.get_active_pipe().map(|p| p.cancel_send(event_loop));
+
+        State::Idle
+    }
+
+    fn recv(self, body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {
+        if let Some(pipe) = body.get_active_pipe() {
+            pipe.recv(event_loop);
+
+            return State::Receiving(timeout);
+        } else {
+            return State::RecvOnHold(timeout);
+        }
+    }
+
+    fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message) -> State {
+        if let State::Receiving(timeout) = self {
+            body.send_notify(SocketNotify::MsgRecv(msg));
+            clear_timeout(event_loop, timeout);
+        }
+
+        State::Idle
+    }
+
+    fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
+
+        body.send_notify(SocketNotify::MsgNotRecv(err));
+        body.get_active_pipe().map(|p| p.cancel_recv(event_loop));
+
+        State::Idle
+    }
+
+    fn ready(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) -> State {
+        body.get_pipe(tok).map(|p| p.ready(event_loop, events));
+
+        self
+    }
+
+}
+
+impl Body {
+
+    fn send_notify(&self, evt: SocketNotify) {
+        let send_res = self.notify_sender.send(evt);
+
+        if send_res.is_err() {
+            error!("Failed to send notify to the facade: '{:?}'", send_res.err());
+        }
+    }
+    
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
          if self.excl.add(tok, pipe) {
             Ok(())
@@ -77,79 +259,13 @@ impl Protocol for Pair {
     fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         self.excl.activate(tok);
         self.excl.get(tok).map(|p| p.on_register(event_loop));
-
-        if let Some(msg) = self.pending_send.take() {
-            self.excl.get_active().map(|p| p.send(event_loop, msg));
-        }
-        else if self.pending_recv {
-            self.excl.get_active().map(|p| p.recv(event_loop));
-            self.pending_recv = false;
-        }
     }
 
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Option<mio::Timeout>) {
-        self.send_timeout = timeout;
-
-        let msg = Rc::new(msg);
-        if let Some(pipe) = self.excl.get_active() {
-            pipe.send(event_loop, msg.clone());
-        }
-        
-        self.pending_send = Some(msg);
+    fn get_active_pipe<'a>(&'a mut self) -> Option<&'a mut Pipe> {
+        self.excl.get_active()
     }
 
-    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, _: mio::Token) {
-        self.send_notify(SocketNotify::MsgSent);
-        self.pending_send = None;
-
-        clear_timeout(event_loop, self.send_timeout.take());
+    fn get_pipe<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
+        self.excl.get(tok)
     }
-
-    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
-
-        self.excl.get_active().map(|p| p.cancel_send(event_loop));
-
-        self.pending_send = None;
-        self.send_timeout = None;
-        self.send_notify(SocketNotify::MsgNotSent(err));
-    }
-
-    fn recv(&mut self, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) {
-        self.recv_timeout = timeout;
-
-        if let Some(pipe) = self.excl.get_active() {
-            pipe.recv(event_loop);
-        }
-        self.pending_recv = true;
-    }
-
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, _: mio::Token, msg: Message) {
-        self.send_notify(SocketNotify::MsgRecv(msg));
-        self.pending_recv = false;
-
-        clear_timeout(event_loop, self.recv_timeout.take());
-    }
-
-    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
-
-        self.excl.get_active().map(|p| p.cancel_recv(event_loop));
-
-        self.pending_recv = false;
-        self.recv_timeout = None;
-        self.send_notify(SocketNotify::MsgNotRecv(err));
-    }
-
-    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        self.excl.get(tok).map(|p| p.ready(event_loop, events));
-    }
-
-    fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
-    }
-
-    fn on_survey_timeout(&mut self, _: &mut EventLoop) {}
-    fn on_request_timeout(&mut self, _: &mut EventLoop) {}
 }
-

@@ -36,7 +36,7 @@ pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<
     match socket_type {
         SocketType::Push       => Box::new(push::Push::new(evt_tx)),
         SocketType::Pull       => Box::new(NullProtocol),
-        SocketType::Pair       => Box::new(pair::Pair::new(evt_tx)),
+        SocketType::Pair       => Box::new(pair::Pair::new(socket_id, evt_tx)),
         SocketType::Req        => Box::new(NullProtocol),
         SocketType::Rep        => Box::new(NullProtocol),
         SocketType::Pub        => Box::new(NullProtocol),
@@ -67,9 +67,12 @@ pub trait Protocol {
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message);
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop);
 
-    fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) -> io::Result<()>;
-    fn on_survey_timeout(&mut self, event_loop: &mut EventLoop);
-    fn on_request_timeout(&mut self, event_loop: &mut EventLoop);
+    fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
+        Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
+    }
+
+    fn on_survey_timeout(&mut self, _: &mut EventLoop) {}
+    fn on_request_timeout(&mut self, _: &mut EventLoop) {}
 }
 
 fn clear_timeout(event_loop: &mut EventLoop, handle: Option<mio::Timeout>) {
@@ -108,11 +111,4 @@ impl Protocol for NullProtocol {
     fn recv(&mut self, event_loop: &mut EventLoop, timeout_handle: Option<mio::Timeout>) {}
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) {}
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {}
-
-    fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) -> io::Result<()> {
-        Err(other_io_error("not implemented"))
-    }
-
-    fn on_survey_timeout(&mut self, event_loop: &mut EventLoop) {}
-    fn on_request_timeout(&mut self, event_loop: &mut EventLoop) {}
 }
