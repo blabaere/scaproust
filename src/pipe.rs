@@ -18,6 +18,19 @@ use event_loop_msg::*;
 use send;
 use recv;
 
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+//                                                                           //
+//                                                                           //
+//                                                                           //
+// TODO : add a nb_send (& nb_recv) feature, because pub (maybe dist) need   //
+// to do only nb_send, otherwise a slow sub would block the whole system     //
+//                                                                           //
+//                                                                           //
+//                                                                           //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
+
 // A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
 // That means send/receive size prefix and then message payload
 // according to the connection readiness and the requested operation progress if any
@@ -52,6 +65,10 @@ impl Pipe {
             addr: addr,
             state: Some(Box::new(state))
         }
+    }
+
+    pub fn token(&self) -> mio::Token {
+        self.token
     }
 
     fn on_state_transition<F>(&mut self, transition: F) where F : FnOnce(Box<PipeState>) -> Box<PipeState> {

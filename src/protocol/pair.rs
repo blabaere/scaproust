@@ -79,7 +79,9 @@ impl Protocol for Pair {
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
         let res = self.body.add_pipe(tok, pipe);
 
-        self.on_state_transition(|s, body| s.on_pipe_added(body, tok));
+        if res.is_ok() {
+            self.on_state_transition(|s, body| s.on_pipe_added(body, tok));
+        }
 
         res
      }
@@ -87,7 +89,9 @@ impl Protocol for Pair {
     fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
         let pipe = self.body.remove_pipe(tok);
 
-        self.on_state_transition(|s, body| s.on_pipe_removed(body, tok));
+        if pipe.is_some() {
+            self.on_state_transition(|s, body| s.on_pipe_removed(body, tok));
+        }
 
         pipe
     }
@@ -228,7 +232,6 @@ impl State {
 
         self
     }
-
 }
 
 impl Body {
