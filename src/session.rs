@@ -38,6 +38,7 @@ impl Session {
     }
 
     fn handle_cmd(&mut self, event_loop: &mut EventLoop, cmd: CmdSignal) {
+        debug!("session handle_cmd {}", cmd.name());
         match cmd {
             CmdSignal::Session(c)    => self.handle_session_cmd(event_loop, c),
             CmdSignal::Socket(id, c) => self.handle_socket_cmd(event_loop, id, c)
@@ -45,6 +46,7 @@ impl Session {
     }
 
     fn handle_session_cmd(&mut self, event_loop: &mut EventLoop, cmd: SessionCmdSignal) {
+        debug!("session handle_session_cmd {}", cmd.name());
         match cmd {
             SessionCmdSignal::CreateSocket(t) => self.create_socket(event_loop, t),
             SessionCmdSignal::Shutdown        => {
@@ -57,10 +59,12 @@ impl Session {
     }
 
     fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: SocketId, cmd: SocketCmdSignal) {
+        debug!("session handle_socket_cmd {}", cmd.name());
         self.on_socket_by_id(&id, |s| s.handle_cmd(event_loop, cmd));
     }
 
     fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: EvtSignal) {
+        debug!("session handle_evt {}", evt.name());
         match evt {
             EvtSignal::Socket(id, e) => self.handle_socket_evt(event_loop, id, e),
             EvtSignal::Pipe(tok, e)  => self.handle_pipe_evt(event_loop, tok, e)
@@ -68,6 +72,7 @@ impl Session {
     }
 
     fn handle_socket_evt(&mut self, event_loop: &mut EventLoop, id: SocketId, evt: SocketEvtSignal) {
+        debug!("session handle_socket_evt {}", evt.name());
         match evt {
             SocketEvtSignal::Connected(tok) => {
                 self.socket_ids.insert(tok, id);
@@ -87,6 +92,7 @@ impl Session {
     }
 
     fn handle_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
+        debug!("session handle_pipe_evt {}", evt.name());
         self.on_socket_by_token(&tok, |s| s.on_pipe_evt(event_loop, tok, evt));
     }
 
@@ -155,7 +161,7 @@ impl mio::Handler for Session {
     type Message = EventLoopSignal;
 
     fn notify(&mut self, event_loop: &mut EventLoop, signal: Self::Message) {
-        debug!("session received a signal");
+        debug!("session received a {} signal", signal.name());
 
         match signal {
             EventLoopSignal::Cmd(cmd) => self.handle_cmd(event_loop, cmd),

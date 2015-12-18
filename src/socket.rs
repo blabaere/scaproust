@@ -76,7 +76,7 @@ impl Socket {
     }
 
     pub fn handle_cmd(&mut self, event_loop: &mut EventLoop, cmd: SocketCmdSignal) {
-        debug!("[{:?}] handle_cmd", self.id);
+        debug!("[{:?}] handle_cmd {}", self.id, cmd.name());
 
         match cmd {
             SocketCmdSignal::Connect(addr)  => self.connect(addr),
@@ -88,6 +88,7 @@ impl Socket {
     }
 
     pub fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: SocketEvtSignal) {
+        debug!("[{:?}] handle_evt {}", self.id, evt.name());
         match evt {
             SocketEvtSignal::Connected(tok) => self.protocol.register_pipe(event_loop, tok),
             SocketEvtSignal::Bound(tok)     => self.open_acceptor(event_loop, tok)
@@ -95,7 +96,7 @@ impl Socket {
     }
 
     pub fn on_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
-        debug!("[{:?}] on_pipe_evt: '{:?}'", self.id, tok);
+        debug!("[{:?}] on_pipe_evt: {} '{:?}'", self.id, evt.name(), tok);
         match evt {
             PipeEvtSignal::Opened      => self.protocol.on_pipe_register(event_loop, tok),
             PipeEvtSignal::MsgRcv(msg) => self.protocol.on_recv_by_pipe(event_loop, tok, msg),

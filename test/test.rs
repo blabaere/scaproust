@@ -12,7 +12,7 @@ use std::time;
 
 use scaproust::*;
 
-//#[test]
+#[test]
 fn test_pipeline_connected_to_bound() {
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
@@ -28,7 +28,7 @@ fn test_pipeline_connected_to_bound() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
-//#[test]
+#[test]
 fn test_pipeline_bound_to_connected() {
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
@@ -44,29 +44,31 @@ fn test_pipeline_bound_to_connected() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
-//#[test]
+#[test]
 fn test_send_while_not_connected() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
     let timeout = time::Duration::from_millis(250);
 
     let recver = ::std::thread::spawn(move || {
-        ::std::thread::sleep_ms(50);
+        ::std::thread::sleep(time::Duration::from_millis(50));
         pull.connect("tcp://127.0.0.1:5456").unwrap();
         let received = pull.recv().unwrap();
+        info!("test_send_while_not_connected: msg received");
         assert_eq!(vec![65, 66, 67], received)
     });
 
     push.set_send_timeout(timeout).unwrap();
     push.bind("tcp://127.0.0.1:5456").unwrap();
-
     push.send(vec![65, 66, 67]).unwrap();
+    info!("test_send_while_not_connected: msg sent");
 
     recver.join().unwrap();
 }
 
-//#[test]
+#[test]
 fn test_send_timeout() {
     let session = Session::new().unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
@@ -102,7 +104,7 @@ fn test_recv_while_not_connected() {
     sender.join().unwrap();
 }
 
-//#[test]
+#[test]
 fn test_recv_timeout() {
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
@@ -120,7 +122,7 @@ fn test_recv_timeout() {
 
 #[test]
 fn test_pair_connected_to_bound() {
-    let _ = env_logger::init();
+    //let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut bound = session.create_socket(SocketType::Pair).unwrap();
     let mut connected = session.create_socket(SocketType::Pair).unwrap();
@@ -140,7 +142,7 @@ fn test_pair_connected_to_bound() {
 
 #[test]
 fn test_pair_bound_to_connected() {
-    let _ = env_logger::init();
+    //let _ = env_logger::init();
     info!("test_pair_bound_to_connected");
     let session = Session::new().unwrap();
     let mut bound = session.create_socket(SocketType::Pair).unwrap();
@@ -301,7 +303,7 @@ fn test_survey_deadline() {
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
-////#[test]
+#[test]
 //fn test_req_resend() {
 //    let session = Session::new().unwrap();
 //    let mut server = session.create_socket(SocketType::Rep).unwrap();

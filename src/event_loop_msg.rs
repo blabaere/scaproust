@@ -18,14 +18,41 @@ pub enum EventLoopSignal {
     Evt(EvtSignal)
 }
 
+impl EventLoopSignal {
+    pub fn name(&self) -> &'static str {
+        match *self {
+            EventLoopSignal::Cmd(_) => "Cmd",
+            EventLoopSignal::Evt(_) => "Evt"
+        }
+    }
+}
+
 pub enum CmdSignal {
     Session(SessionCmdSignal),
     Socket(SocketId, SocketCmdSignal)
 }
 
+impl CmdSignal {
+    pub fn name(&self) -> &'static str {
+        match *self {
+            CmdSignal::Session(_) => "Session",
+            CmdSignal::Socket(_,_) => "Socket"
+        }
+    }
+}
+
 pub enum SessionCmdSignal {
     CreateSocket(SocketType),
     Shutdown
+}
+
+impl SessionCmdSignal {
+    pub fn name(&self) -> &'static str {
+        match *self {
+            SessionCmdSignal::CreateSocket(_) => "CreateSocket",
+            SessionCmdSignal::Shutdown => "Shutdown"
+        }
+    }
 }
 
 pub enum SocketCmdSignal {
@@ -34,6 +61,18 @@ pub enum SocketCmdSignal {
     SendMsg(Message),
     RecvMsg,
     SetOption(SocketOption)
+}
+
+impl SocketCmdSignal {
+    pub fn name(&self) -> &'static str {
+        match *self {
+            SocketCmdSignal::Connect(_) => "Connect",
+            SocketCmdSignal::Bind(_) => "Bind",
+            SocketCmdSignal::SendMsg(_) => "SendMsg",
+            SocketCmdSignal::RecvMsg => "RecvMsg",
+            SocketCmdSignal::SetOption(_) => "SetOption"
+        }
+    }
 }
 
 pub enum SocketOption {
@@ -55,15 +94,43 @@ pub enum EvtSignal {
     Pipe(mio::Token, PipeEvtSignal)
 }
 
+impl EvtSignal {
+    pub fn name(&self) -> &'static str {
+        match *self {
+            EvtSignal::Socket(_,_) => "Socket",
+            EvtSignal::Pipe(_,_) => "Pipe"
+        }
+    }
+}
+
 pub enum SocketEvtSignal {
     Connected(mio::Token),
     Bound(mio::Token)
+}
+
+impl SocketEvtSignal {
+    pub fn name(&self) -> &'static str {
+        match *self {
+            SocketEvtSignal::Connected(_) => "Connected",
+            SocketEvtSignal::Bound(_) => "Bound"
+        }
+    }
 }
 
 pub enum PipeEvtSignal {
     Opened,
     MsgRcv(Message),
     MsgSnd
+}
+
+impl PipeEvtSignal {
+    pub fn name(&self) -> &'static str {
+        match *self {
+            PipeEvtSignal::Opened => "Opened",
+            PipeEvtSignal::MsgRcv(_) => "MsgRcv",
+            PipeEvtSignal::MsgSnd => "MsgSnd"
+        }
+    }
 }
 
 pub enum EventLoopTimeout {

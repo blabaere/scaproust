@@ -19,7 +19,7 @@ pub mod excl;
 pub mod priolist;
 
 pub mod push;
-//pub mod pull;
+pub mod pull;
 pub mod pair;
 //pub mod req;
 //pub mod rep;
@@ -35,7 +35,7 @@ pub mod pair;
 pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketNotify>>) -> Box<Protocol> {
     match socket_type {
         SocketType::Push       => Box::new(push::Push::new(socket_id, evt_tx)),
-        SocketType::Pull       => Box::new(NullProtocol),
+        SocketType::Pull       => Box::new(pull::Pull::new(socket_id, evt_tx)),
         SocketType::Pair       => Box::new(pair::Pair::new(socket_id, evt_tx)),
         SocketType::Req        => Box::new(NullProtocol),
         SocketType::Rep        => Box::new(NullProtocol),
