@@ -151,6 +151,7 @@ impl State {
     fn on_pipe_removed(self, _: &mut Body, _: mio::Token) -> State {
         match self {
             State::Sending(msg, t) => State::SendOnHold(msg, t),
+            State::Receiving(t)    => State::RecvOnHold(t),
             other @ _              => other
         }
     }

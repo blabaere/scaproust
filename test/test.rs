@@ -9,6 +9,7 @@ extern crate scaproust;
 
 use std::io;
 use std::time;
+use std::thread;
 
 use scaproust::*;
 
@@ -52,8 +53,8 @@ fn test_send_while_not_connected() {
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
     let timeout = time::Duration::from_millis(250);
 
-    let recver = ::std::thread::spawn(move || {
-        ::std::thread::sleep(time::Duration::from_millis(50));
+    let recver = thread::spawn(move || {
+        thread::sleep(time::Duration::from_millis(50));
         pull.connect("tcp://127.0.0.1:5456").unwrap();
         let received = pull.recv().unwrap();
         info!("test_send_while_not_connected: msg received");
@@ -82,7 +83,7 @@ fn test_send_timeout() {
     assert_eq!(io::ErrorKind::TimedOut, err.kind());
 }
 
-//#[test]
+#[test]
 fn test_recv_while_not_connected() {
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
@@ -92,8 +93,8 @@ fn test_recv_while_not_connected() {
     pull.set_recv_timeout(timeout).unwrap();
     pull.bind("tcp://127.0.0.1:5458").unwrap();
 
-    let sender = ::std::thread::spawn(move || {
-        ::std::thread::sleep_ms(50);
+    let sender = thread::spawn(move || {
+        thread::sleep(time::Duration::from_millis(50));
         push.connect("tcp://127.0.0.1:5458").unwrap();
         push.send(vec![65, 66, 67]).unwrap();
     });
@@ -297,7 +298,7 @@ fn test_survey_deadline() {
     let client_survey = client.recv().unwrap();
     assert_eq!(vec!(65, 66, 67), client_survey);
 
-    ::std::thread::sleep_ms(200);
+    thread::sleep_ms(200);
 
     let err = server.recv().unwrap_err();
     assert_eq!(io::ErrorKind::Other, err.kind());
