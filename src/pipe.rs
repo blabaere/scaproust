@@ -31,6 +31,9 @@ use recv;
 //                                                                           //
 ///////////////////////////////////////////////////////////////////////////////
 
+// TODO ? : split recv & send related state so that a pipe can be both sending and receiving
+// this could be usefulfor req resend where the pipe could be receiving 
+// and then ask to send (the same request)
 
 // A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
 // That means send/receive size prefix and then message payload
@@ -68,10 +71,6 @@ impl Pipe {
         }
     }
 
-    pub fn token(&self) -> mio::Token {
-        self.token
-    }
-
     fn on_state_transition<F>(&mut self, transition: F) where F : FnOnce(Box<PipeState>) -> Box<PipeState> {
         if let Some(old_state) = self.state.take() {
             let old_name = old_state.name();
@@ -80,7 +79,7 @@ impl Pipe {
 
             self.state = Some(new_state);
 
-            debug!("[{:?}] switch from '{}' to '{}.'", self.token, old_name, new_name);
+            debug!("[{:?}] switch from '{}' to '{}'.", self.token, old_name, new_name);
         }
     }
 

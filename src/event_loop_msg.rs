@@ -35,7 +35,7 @@ pub enum CmdSignal {
 impl CmdSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            CmdSignal::Session(_) => "Session",
+            CmdSignal::Session(_)  => "Session",
             CmdSignal::Socket(_,_) => "Socket"
         }
     }
@@ -50,7 +50,7 @@ impl SessionCmdSignal {
     pub fn name(&self) -> &'static str {
         match *self {
             SessionCmdSignal::CreateSocket(_) => "CreateSocket",
-            SessionCmdSignal::Shutdown => "Shutdown"
+            SessionCmdSignal::Shutdown        => "Shutdown"
         }
     }
 }
@@ -66,10 +66,10 @@ pub enum SocketCmdSignal {
 impl SocketCmdSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            SocketCmdSignal::Connect(_) => "Connect",
-            SocketCmdSignal::Bind(_) => "Bind",
-            SocketCmdSignal::SendMsg(_) => "SendMsg",
-            SocketCmdSignal::RecvMsg => "RecvMsg",
+            SocketCmdSignal::Connect(_)   => "Connect",
+            SocketCmdSignal::Bind(_)      => "Bind",
+            SocketCmdSignal::SendMsg(_)   => "SendMsg",
+            SocketCmdSignal::RecvMsg      => "RecvMsg",
             SocketCmdSignal::SetOption(_) => "SetOption"
         }
     }
@@ -98,7 +98,7 @@ impl EvtSignal {
     pub fn name(&self) -> &'static str {
         match *self {
             EvtSignal::Socket(_,_) => "Socket",
-            EvtSignal::Pipe(_,_) => "Pipe"
+            EvtSignal::Pipe(_,_)   => "Pipe"
         }
     }
 }
@@ -112,7 +112,7 @@ impl SocketEvtSignal {
     pub fn name(&self) -> &'static str {
         match *self {
             SocketEvtSignal::Connected(_) => "Connected",
-            SocketEvtSignal::Bound(_) => "Bound"
+            SocketEvtSignal::Bound(_)     => "Bound"
         }
     }
 }
@@ -126,9 +126,9 @@ pub enum PipeEvtSignal {
 impl PipeEvtSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            PipeEvtSignal::Opened => "Opened",
+            PipeEvtSignal::Opened    => "Opened",
             PipeEvtSignal::MsgRcv(_) => "MsgRcv",
-            PipeEvtSignal::MsgSnd => "MsgSnd"
+            PipeEvtSignal::MsgSnd    => "MsgSnd"
         }
     }
 }
@@ -139,7 +139,7 @@ pub enum EventLoopTimeout {
     CancelSend(SocketId),
     CancelRecv(SocketId),
     CancelSurvey(SocketId),
-    CancelResend(SocketId)
+    Resend(SocketId)
 }
 
 pub enum SessionNotify {

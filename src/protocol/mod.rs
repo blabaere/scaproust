@@ -10,7 +10,7 @@ use std::io;
 use mio;
 
 use global::{ SocketType, SocketId, other_io_error };
-use event_loop_msg::{ SocketNotify, SocketEvtSignal, SocketOption };
+use event_loop_msg::{ SocketNotify, SocketOption };
 use pipe::Pipe;
 use EventLoop;
 use Message;
@@ -22,15 +22,12 @@ pub mod push;
 pub mod pull;
 pub mod pair;
 pub mod req;
-//pub mod rep;
+pub mod rep;
 //pub mod pbu;
 //pub mod sub;
 //pub mod bus;
 //pub mod surv;
 //pub mod resp;
-
-//pub mod sender;
-//pub mod receiver;
 
 pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketNotify>>) -> Box<Protocol> {
     match socket_type {
@@ -38,7 +35,7 @@ pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<
         SocketType::Pull       => Box::new(pull::Pull::new(socket_id, evt_tx)),
         SocketType::Pair       => Box::new(pair::Pair::new(socket_id, evt_tx)),
         SocketType::Req        => Box::new(req::Req::new(socket_id, evt_tx)),
-        SocketType::Rep        => Box::new(NullProtocol),
+        SocketType::Rep        => Box::new(rep::Rep::new(socket_id, evt_tx)),
         SocketType::Pub        => Box::new(NullProtocol),
         SocketType::Sub        => Box::new(NullProtocol),
         SocketType::Bus        => Box::new(NullProtocol),
@@ -72,7 +69,7 @@ pub trait Protocol {
     }
 
     fn on_survey_timeout(&mut self, _: &mut EventLoop) {}
-    fn on_request_timeout(&mut self, _: &mut EventLoop) {}
+    fn resend(&mut self, _: &mut EventLoop) {}
 }
 
 fn clear_timeout(event_loop: &mut EventLoop, handle: Option<mio::Timeout>) {

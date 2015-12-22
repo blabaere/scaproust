@@ -151,8 +151,8 @@ impl Session {
         self.on_socket_by_id(&id, |socket| socket.on_survey_timeout(event_loop));
     }
 
-    fn on_request_timeout(&mut self, event_loop: &mut EventLoop, id: SocketId) {
-        self.on_socket_by_id(&id, |socket| socket.on_request_timeout(event_loop));
+    fn resend(&mut self, event_loop: &mut EventLoop, id: SocketId) {
+        self.on_socket_by_id(&id, |socket| socket.resend(event_loop));
     }
 }
 
@@ -182,7 +182,7 @@ impl mio::Handler for Session {
             EventLoopTimeout::CancelSend(socket_id)   => self.on_send_timeout(event_loop, socket_id),
             EventLoopTimeout::CancelRecv(socket_id)   => self.on_recv_timeout(event_loop, socket_id),
             EventLoopTimeout::CancelSurvey(socket_id) => self.on_survey_timeout(event_loop, socket_id),
-            EventLoopTimeout::CancelResend(socket_id) => self.on_request_timeout(event_loop, socket_id)
+            EventLoopTimeout::Resend(socket_id)       => self.resend(event_loop, socket_id)
         }
     }
 

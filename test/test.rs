@@ -162,7 +162,7 @@ fn test_pair_bound_to_connected() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
-//#[test]
+#[test]
 fn test_req_rep() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Rep).unwrap();
@@ -259,7 +259,7 @@ fn test_survey() {
     assert_eq!(vec!(67, 66, 67), server_resp2);
 }
 
-//#[test]
+#[test]
 fn test_send_reply_before_send_request() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Rep).unwrap();
@@ -268,7 +268,7 @@ fn test_send_reply_before_send_request() {
     server.send(vec!(67, 66, 65)).unwrap_err();
 }
 
-//#[test]
+#[test]
 fn test_recv_reply_before_send_request() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Rep).unwrap();

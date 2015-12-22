@@ -28,6 +28,7 @@ fn main() {
     let mut socket = session.create_socket(SocketType::Req).unwrap();
 
     socket.connect("tcp://127.0.0.1:5458").unwrap();
+    socket.connect("tcp://127.0.0.1:5459").unwrap();
 
     let mut input = String::new();
     loop {

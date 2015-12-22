@@ -319,8 +319,8 @@ impl Socket {
         self.protocol.on_survey_timeout(event_loop);
     }
 
-    pub fn on_request_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.protocol.on_request_timeout(event_loop);
+    pub fn resend(&mut self, event_loop: &mut EventLoop) {
+        self.protocol.resend(event_loop);
     }
 }
 

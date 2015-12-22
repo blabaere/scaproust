@@ -19,7 +19,7 @@ use super::clear_timeout;
 use super::priolist::*;
 use pipe::*;
 use global::*;
-use event_loop_msg::{ SocketNotify };
+use event_loop_msg::{ SocketNotify, EventLoopTimeout };
 use EventLoop;
 use Message;
 
@@ -32,6 +32,7 @@ pub struct Req {
 }
 
 struct Body {
+    id: SocketId,
     notify_sender: Rc<Sender<SocketNotify>>,
     pipes: HashMap<mio::Token, Pipe>,
     lb: PrioList,
@@ -43,14 +44,21 @@ enum State {
     Idle,
     Sending(Rc<Message>, Timeout),
     SendOnHold(Rc<Message>, Timeout),
-    WaitingReply(Rc<Message>),
-    Receiving(Timeout),
-    RecvOnHold(Timeout)
+    WaitingReply(PendingRequest),
+    Receiving(PendingRequest, Timeout),
+    RecvOnHold(PendingRequest, Timeout)
+}
+
+struct PendingRequest {
+    peer: mio::Token,
+    req: Rc<Message>,
+    timeout: Timeout
 }
 
 impl Req {
     pub fn new(socket_id: SocketId, notify_tx: Rc<Sender<SocketNotify>>) -> Req {
         let body = Body {
+            id: socket_id,
             notify_sender: notify_tx,
             pipes: HashMap::new(),
             lb: PrioList::new(),
@@ -77,21 +85,6 @@ impl Req {
         }
     }
 }
-
-    //fn cancel_resend_timeout(&mut self, event_loop: &mut EventLoop) {
-    //    self.last_req = None;
-    //    self.cancel_resend_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
-    //}
-
-    //fn start_resend_timeout(&mut self, event_loop: &mut EventLoop, raw_msg: Message) {
-    //    if self.resend_interval > 0u64 {
-    //        let timeout_cmd = EventLoopTimeout::CancelResend(self.socket_id);
-    //        let _ =  event_loop.timeout_ms(timeout_cmd, self.resend_interval).
-    //            map(|timeout| self.cancel_resend_timeout = Some(Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
-    //            map_err(|err| error!("[{:?}] failed to set resend timeout on send: '{:?}'", self.socket_id, err));
-    //        self.last_req = Some(raw_msg);
-    //    }
-    //}
 
 impl Protocol for Req {
     fn id(&self) -> u16 {
@@ -165,20 +158,20 @@ impl Protocol for Req {
         self.on_state_transition(|s, body| s.ready(body, event_loop, tok, events));
     }
 
-    fn on_request_timeout(&mut self, _: &mut EventLoop) {
-
+    fn resend(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s, body| s.resend(body, event_loop));
     }
 }
 
 impl State {
     fn name(&self) -> &'static str {
         match *self {
-            State::Idle             => "Idle",
-            State::Sending(_, _)    => "Sending",
-            State::SendOnHold(_, _) => "SendOnHold",
-            State::WaitingReply(_)  => "WaitingReply",
-            State::Receiving(_)     => "Receiving",
-            State::RecvOnHold(_)    => "RecvOnHold"
+            State::Idle            => "Idle",
+            State::Sending(_, _)   => "Sending",
+            State::SendOnHold(_,_) => "SendOnHold",
+            State::WaitingReply(_) => "WaitingReply",
+            State::Receiving(_,_)  => "Receiving",
+            State::RecvOnHold(_,_) => "RecvOnHold"
         }
     }
 
@@ -195,11 +188,11 @@ impl State {
                     State::Sending(msg, t)
                 }
             },
-            State::Receiving(t) => {
+            State::Receiving(p, t) => {
                 if body.is_active_pipe(tok) {
-                    State::RecvOnHold(t)
+                    State::RecvOnHold(p, t)
                 } else {
-                    State::Receiving(t)
+                    State::Receiving(p, t)
                 }
             },
             other @ _ => other
@@ -217,12 +210,16 @@ impl State {
 
         match self {
             State::SendOnHold(msg, t) => State::Idle.send(body, event_loop, msg, t),
-            State::RecvOnHold(t)      => State::Idle.recv(body, event_loop, t),
+            State::RecvOnHold(_, t)   => State::Idle.recv(body, event_loop, t),
             other @ _                 => other
         }
     }
 
     fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, timeout: Option<mio::Timeout>) -> State {
+        if let State::WaitingReply(p) = self {
+            clear_timeout(event_loop, p.timeout);
+        }
+
         if let Some(pipe) = body.get_active_pipe() {
             pipe.send(event_loop, msg.clone());
 
@@ -232,14 +229,23 @@ impl State {
         }
     }
 
-    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token) -> State {
-        if let State::Sending(_, timeout) = self {
-            body.send_notify(SocketNotify::MsgSent);
-            body.advance_pipe();
-            clear_timeout(event_loop, timeout);
-        }
+    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+        if let State::Sending(msg, timeout) = self {
+            let resend_timeout = body.schedule_resend(event_loop);
+            let pending_request = PendingRequest {
+                peer: tok,
+                req: msg,
+                timeout: resend_timeout
+            };
 
-        State::Idle
+            body.send_notify(SocketNotify::MsgSent);
+
+            clear_timeout(event_loop, timeout);
+
+            State::WaitingReply(pending_request)
+        } else {
+            State::Idle
+        }
     }
 
     fn on_send_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
@@ -252,21 +258,48 @@ impl State {
         State::Idle
     }
 
-    fn recv(self, body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {
-        if let Some(pipe) = body.get_active_pipe() {
-            pipe.recv(event_loop);
+    fn resend(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
+        if let State::WaitingReply(p) = self {
+            let resend_timeout = body.schedule_resend(event_loop);
+            let pending_request = PendingRequest {
+                peer: p.peer,
+                req: p.req,
+                timeout: resend_timeout
+            };
 
-            return State::Receiving(timeout);
+            
+            State::WaitingReply(pending_request)
         } else {
-            return State::RecvOnHold(timeout);
+            // can't send the request again while receiving because 
+            // a pipe has one state and cannot both recv and send a the same time
+            self
+        }
+    }
+
+    fn recv(self, body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {
+        if let State::WaitingReply(p) = self {
+            if let Some(pipe) = body.get_pipe(p.peer) {
+                pipe.recv(event_loop);
+
+                return State::Receiving(p, timeout);
+            } else {
+                return State::RecvOnHold(p, timeout);
+            }
+        } else {
+            let err = other_io_error("Can't recv: currently no pending request");
+            body.send_notify(SocketNotify::MsgNotRecv(err));
+            clear_timeout(event_loop, timeout);
+
+            self
         }
     }
 
     fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message) -> State {
-        if let State::Receiving(timeout) = self {
+        if let State::Receiving(p, timeout) = self {
             body.send_notify(SocketNotify::MsgRecv(msg));
             body.advance_pipe();
             clear_timeout(event_loop, timeout);
+            clear_timeout(event_loop, p.timeout);
         }
 
         State::Idle
@@ -279,6 +312,12 @@ impl State {
         body.get_active_pipe().map(|p| p.cancel_recv(event_loop));
         body.advance_pipe();
 
+        match self {
+            State::Receiving(p, _)  => clear_timeout(event_loop, p.timeout),
+            State::RecvOnHold(p, _) => clear_timeout(event_loop, p.timeout),
+            _                       => {}
+        };
+
         State::Idle
     }
 
@@ -290,6 +329,19 @@ impl State {
 }
 
 impl Body {
+
+    fn schedule_resend(&mut self, event_loop: &mut EventLoop) -> Timeout {
+        if self.resend_interval > 0u64 {
+            let cmd = EventLoopTimeout::Resend(self.id);
+            let ivl = self.resend_interval;
+
+            event_loop.timeout_ms(cmd, ivl).
+                map(|t| Some(t)).
+                unwrap_or_else(|_| None)
+        } else {
+            None
+        }
+    }
 
     fn send_notify(&self, evt: SocketNotify) {
         let send_res = self.notify_sender.send(evt);
