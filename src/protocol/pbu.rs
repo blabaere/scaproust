@@ -4,36 +4,48 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::rc::Rc;
+use std::collections::{ HashMap, HashSet };
 use std::sync::mpsc::Sender;
-use std::collections::HashMap;
 use std::io;
 
 use mio;
 
 use super::Protocol;
 use pipe::*;
-use endpoint::*;
 use global::*;
-use event_loop_msg::{ SocketEvt, SocketOption };
+use event_loop_msg::{ SocketNotify };
 use EventLoop;
-use EventLoopAction;
 use Message;
 
-use super::sender::*;
+type Timeout = Option<mio::Timeout>;
 
 pub struct Pub {
+    id: SocketId,
+    notify_sender: Rc<Sender<SocketNotify>>,
     pipes: HashMap<mio::Token, Pipe>,
-    evt_sender: Rc<Sender<SocketEvt>>,
-    msg_sender: PolyadicMsgSender<MulticastSendingStrategy>
+    dist: HashSet<mio::Token>
 }
 
 impl Pub {
-    pub fn new(evt_tx: Rc<Sender<SocketEvt>>) -> Pub {
-        Pub { 
+    pub fn new(socket_id: SocketId, notify_tx: Rc<Sender<SocketNotify>>) -> Pub {
+        Pub {
+            id: socket_id,
+            notify_sender: notify_tx,
             pipes: HashMap::new(),
-            evt_sender: evt_tx.clone(),
-            msg_sender: new_multicast_msg_sender(evt_tx)
+            dist: HashSet::new()
         }
+    }
+
+    fn send_notify(&self, evt: SocketNotify) {
+        let send_res = self.notify_sender.send(evt);
+
+        if send_res.is_err() {
+            error!("Failed to send notify to the facade: '{:?}'", send_res.err());
+        }
+    }
+
+    fn get_pipe<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
+        self.pipes.get_mut(&tok)
     }
 }
 
@@ -46,48 +58,59 @@ impl Protocol for Pub {
         SocketType::Sub.id()
     }
 
-    fn add_endpoint(&mut self, token: mio::Token, endpoint: Endpoint) {
-        self.pipes.insert(token, Pipe::new(token, endpoint));
+    fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
+        match self.pipes.insert(tok, pipe) {
+            None    => Ok(()),
+            Some(_) => Err(invalid_data_io_error("A pipe has already been added with that token"))
+        }
+     }
+
+    fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
+        self.dist.remove(&tok);
+        self.pipes.remove(&tok)
     }
 
-    fn remove_endpoint(&mut self, token: mio::Token) -> Option<Endpoint> {
-        self.pipes.remove(&token).map(|p| p.remove())
+    fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.pipes.get_mut(&tok).map(|p| p.register(event_loop));
     }
 
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
-        self.msg_sender.send(event_loop, msg, cancel_timeout, &mut self.pipes);
+    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.dist.insert(tok);
+        self.pipes.get_mut(&tok).map(|p| p.on_register(event_loop));
     }
 
-    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.msg_sender.on_send_timeout(event_loop, &mut self.pipes);
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, _: Timeout) {
+        let msg = Rc::new(msg);
+
+        for (tok, mut pipe) in self.pipes.iter_mut() {
+            if self.dist.contains(tok) {
+                pipe.send_nb(event_loop, msg.clone());
+            }
+        }
+
+        self.send_notify(SocketNotify::MsgSent);
     }
 
-    fn recv(&mut self, _: &mut EventLoop, _: EventLoopAction) {
+    fn on_send_by_pipe(&mut self, _: &mut EventLoop, _: mio::Token) {
+    }
+
+    fn on_send_timeout(&mut self, _: &mut EventLoop) {
+    }
+
+    fn recv(&mut self, _: &mut EventLoop, _: Timeout) {
         let err = other_io_error("recv not supported by protocol");
-        let cmd = SocketEvt::MsgNotRecv(err);
-        let _ = self.evt_sender.send(cmd);
+        let ntf = SocketNotify::MsgNotRecv(err);
+
+        self.send_notify(ntf);
     }
-    
+
+    fn on_recv_by_pipe(&mut self, _: &mut EventLoop, _: mio::Token, _: Message) {
+    }
+
     fn on_recv_timeout(&mut self, _: &mut EventLoop) {
     }
 
-    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
-        let mut sent = false;
-
-        if let Some(pipe) = self.pipes.get_mut(&token) {
-            sent = try!(pipe.ready_tx(event_loop, events));
-        }
-
-        match sent {
-            true  => Ok(self.msg_sender.sent_by(event_loop, token, &mut self.pipes)),
-            false => self.msg_sender.resume_send(event_loop, token, &mut self.pipes)
-        }
+    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+        self.get_pipe(tok).map(|p| p.ready(event_loop, events));
     }
-
-    fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
-    }
-
-    fn on_survey_timeout(&mut self, _: &mut EventLoop) {}
-    fn on_request_timeout(&mut self, _: &mut EventLoop) {}
 }

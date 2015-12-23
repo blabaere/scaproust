@@ -23,8 +23,8 @@ pub mod pull;
 pub mod pair;
 pub mod req;
 pub mod rep;
-//pub mod pbu;
-//pub mod sub;
+pub mod pbu;
+pub mod sub;
 //pub mod bus;
 //pub mod surv;
 //pub mod resp;
@@ -36,8 +36,8 @@ pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<
         SocketType::Pair       => Box::new(pair::Pair::new(socket_id, evt_tx)),
         SocketType::Req        => Box::new(req::Req::new(socket_id, evt_tx)),
         SocketType::Rep        => Box::new(rep::Rep::new(socket_id, evt_tx)),
-        SocketType::Pub        => Box::new(NullProtocol),
-        SocketType::Sub        => Box::new(NullProtocol),
+        SocketType::Pub        => Box::new(pbu::Pub::new(socket_id, evt_tx)),
+        SocketType::Sub        => Box::new(sub::Sub::new(socket_id, evt_tx)),
         SocketType::Bus        => Box::new(NullProtocol),
         SocketType::Surveyor   => Box::new(NullProtocol),
         SocketType::Respondent => Box::new(NullProtocol)

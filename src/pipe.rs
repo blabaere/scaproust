@@ -18,19 +18,6 @@ use event_loop_msg::*;
 use send;
 use recv;
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-//                                                                           //
-//                                                                           //
-//                                                                           //
-// TODO : add a nb_send (& nb_recv) feature, because pub (maybe dist) need   //
-// to do only nb_send, otherwise a slow sub would block the whole system     //
-//                                                                           //
-//                                                                           //
-//                                                                           //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
-
 // TODO ? : split recv & send related state so that a pipe can be both sending and receiving
 // this could be usefulfor req resend where the pipe could be receiving 
 // and then ask to send (the same request)
@@ -105,6 +92,10 @@ impl Pipe {
 
     pub fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
         self.on_state_transition(|s: Box<PipeState>| s.send(event_loop, msg));
+    }
+
+    pub fn send_nb(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
+        self.on_state_transition(|s: Box<PipeState>| s.send_nb(event_loop, msg));
     }
 
     pub fn cancel_send(&mut self, event_loop: &mut EventLoop) {
@@ -196,6 +187,10 @@ trait PipeState {
     }
 
     fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
+        Box::new(Dead)
+    }
+
+    fn send_nb(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
         Box::new(Dead)
     }
 
@@ -596,6 +591,18 @@ impl PipeState for Idle {
                     Ok(true)  => self.sent_msg(event_loop),
                     Ok(false) => self.sending_msg(event_loop, operation),
                     Err(e)    => self.on_error(event_loop, e)
+                }
+            },
+            Err(e) => self.on_error(event_loop, e)
+        }
+    }
+
+    fn send_nb(mut self: Box<Self>, event_loop: &mut EventLoop, msg: Rc<Message>) -> Box<PipeState> {
+        match send::SendOperation::new(msg) {
+            Ok(mut operation) => {
+                match operation.send(self.body.connection()) {
+                    Ok(_)  => self,
+                    Err(e) => self.on_error(event_loop, e)
                 }
             },
             Err(e) => self.on_error(event_loop, e)

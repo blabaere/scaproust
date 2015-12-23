@@ -185,8 +185,9 @@ fn test_req_rep() {
     assert_eq!(vec!(67, 66, 65), client_reply);
 }
 
-//#[test]
+#[test]
 fn test_pub_sub() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Pub).unwrap();
     let mut client = session.create_socket(SocketType::Sub).unwrap();
@@ -197,6 +198,8 @@ fn test_pub_sub() {
     client.set_recv_timeout(timeout).unwrap();
     client.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
     client.set_option(SocketOption::Subscribe("B".to_string())).unwrap();
+
+    thread::sleep(time::Duration::from_millis(50));
 
     server.send(vec![65, 66, 67]).unwrap();
     let received_a = client.recv().unwrap();
@@ -298,13 +301,13 @@ fn test_survey_deadline() {
     let client_survey = client.recv().unwrap();
     assert_eq!(vec!(65, 66, 67), client_survey);
 
-    thread::sleep_ms(200);
+    thread::sleep(time::Duration::from_millis(200));
 
     let err = server.recv().unwrap_err();
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
-#[test]
+//#[test]
 //fn test_req_resend() {
 //    let session = Session::new().unwrap();
 //    let mut server = session.create_socket(SocketType::Rep).unwrap();
@@ -337,7 +340,7 @@ fn test_survey_deadline() {
 //}
 
 #[cfg(not(windows))]
-//#[test]
+#[test]
 fn test_ipc() {
     let session = Session::new().unwrap();
     let mut bound = session.create_socket(SocketType::Pair).unwrap();

@@ -138,7 +138,7 @@ impl State {
     fn name(&self) -> &'static str {
         match *self {
             State::Idle             => "Idle",
-            State::Sending(_, _) => "Sending",
+            State::Sending(_, _)    => "Sending",
             State::SendOnHold(_, _) => "SendOnHold"
         }
     }

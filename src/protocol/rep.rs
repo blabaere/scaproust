@@ -120,9 +120,9 @@ impl Protocol for Rep {
     }
 
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.body.clear_backtrace();
+
         self.on_state_transition(|s, body| s.on_send_by_pipe(body, event_loop, tok));
-        
-        self.body.backtrace.clear();
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -136,7 +136,7 @@ impl Protocol for Rep {
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
         if let Some(msg) = decode(raw_msg, tok, self.body.ttl) {
             self.body.set_backtrace(&msg.header);
-            
+
             self.on_state_transition(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
         }
     }
@@ -224,7 +224,6 @@ impl State {
         if let State::Sending(_, timeout) = self {
             body.send_notify(SocketNotify::MsgSent);
             body.advance_pipe();
-            body.clear_backtrace();
 
             clear_timeout(event_loop, timeout);
         }
