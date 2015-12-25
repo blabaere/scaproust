@@ -4,34 +4,49 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::rc::Rc;
-use std::sync::mpsc::Sender;
 use std::collections::HashMap;
+use std::sync::mpsc::Sender;
 use std::io;
 
 use mio;
 
-use byteorder::{ BigEndian, WriteBytesExt, ReadBytesExt };
+use time;
+
+use byteorder::*;
 
 use super::Protocol;
+use super::clear_timeout;
+use super::priolist::*;
 use pipe::*;
-use endpoint::*;
 use global::*;
-use event_loop_msg::{ SocketEvt, SocketOption, EventLoopTimeout };
+use event_loop_msg::{ SocketNotify, EventLoopTimeout };
 use EventLoop;
-use EventLoopAction;
 use Message;
 
-use super::sender::*;
-use super::receiver::*;
+type Timeout = Option<mio::Timeout>;
 
 pub struct Surv {
-    socket_id: SocketId,
+    id: SocketId,
+    body: Body,
+    state: Option<State>
+}
+
+struct Body {
+    id: SocketId,
+    notify_sender: Rc<Sender<SocketNotify>>,
     pipes: HashMap<mio::Token, Pipe>,
-    msg_sender: PolyadicMsgSender<MulticastSendingStrategy>,
-    msg_receiver: PolyadicMsgReceiver,
-    codec: Codec,
-    deadline_ms: u64,
-    cancel_deadline_timeout: Option<EventLoopAction>
+    fq: PrioList,
+    survey_id_seq: u32,
+    resend_interval: u64
+}
+
+enum State {
+    Idle,
+    Sending(Rc<Message>, Timeout),
+    SendOnHold(Rc<Message>, Timeout),
+    Active(PendingSurvey),
+    Receiving(PendingSurvey, Timeout),
+    RecvOnHold(PendingSurvey, Timeout)
 }
 
 impl Surv {

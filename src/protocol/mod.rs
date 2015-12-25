@@ -25,9 +25,19 @@ pub mod req;
 pub mod rep;
 pub mod pbu;
 pub mod sub;
-//pub mod bus;
 //pub mod surv;
 //pub mod resp;
+//pub mod bus;
+
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+//                                                                           //
+//  WHAT IF THE SOCKET AND PROTOCOL LIVED IN USER THREAD ?                   //
+//  THIS WAY THE SOCKET WOULD NOT HAVE TO DEAL WITH I/O STATE                //
+//  AND THE STATE MACHINE WOULD MIMICK THE NANOMSG ONE                       //
+//                                                                           //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 
 pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketNotify>>) -> Box<Protocol> {
     match socket_type {
@@ -40,6 +50,7 @@ pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<
         SocketType::Sub        => Box::new(sub::Sub::new(socket_id, evt_tx)),
         SocketType::Bus        => Box::new(NullProtocol),
         SocketType::Surveyor   => Box::new(NullProtocol),
+        //SocketType::Surveyor   => Box::new(surv::Surv::new(socket_id, evt_tx)),
         SocketType::Respondent => Box::new(NullProtocol)
     }
 }
