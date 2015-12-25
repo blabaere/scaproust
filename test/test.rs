@@ -202,11 +202,11 @@ fn test_pub_sub() {
     thread::sleep(time::Duration::from_millis(500));
 
     server.send(vec![65, 66, 67]).unwrap();
-    let received_a = client.recv().except("client should have received msg A");
+    let received_a = client.recv().expect("client should have received msg A");
     assert_eq!(vec![65, 66, 67], received_a);
 
     server.send(vec![66, 65, 67]).unwrap();
-    let received_b = client.recv().except("client should have received msg B");
+    let received_b = client.recv().expect("client should have received msg B");
     assert_eq!(vec![66, 65, 67], received_b);
 
     server.send(vec![67, 66, 65]).unwrap();

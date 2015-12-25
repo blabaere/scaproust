@@ -37,7 +37,7 @@ struct Body {
     pipes: HashMap<mio::Token, Pipe>,
     fq: PrioList,
     survey_id_seq: u32,
-    resend_interval: u64
+    deadline_ms: u64
 }
 
 enum State {
