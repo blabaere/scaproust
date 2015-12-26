@@ -191,9 +191,11 @@ fn test_pub_sub() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Pub).unwrap();
     let mut client = session.create_socket(SocketType::Sub).unwrap();
-    let timeout = time::Duration::from_millis(50);
+    let timeout = time::Duration::from_millis(250);
 
     server.bind("tcp://127.0.0.1:5463").unwrap();
+
+    thread::sleep(time::Duration::from_millis(500));
     client.connect("tcp://127.0.0.1:5463").unwrap();
     client.set_recv_timeout(timeout).unwrap();
     client.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
