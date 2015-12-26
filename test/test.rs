@@ -13,6 +13,7 @@ use std::thread;
 
 use scaproust::*;
 
+#[cfg(not(windows))]
 #[test]
 fn test_pipeline_connected_to_bound() {
     let session = Session::new().unwrap();
@@ -29,6 +30,7 @@ fn test_pipeline_connected_to_bound() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_pipeline_bound_to_connected() {
     let session = Session::new().unwrap();
@@ -45,6 +47,7 @@ fn test_pipeline_bound_to_connected() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_send_while_not_connected() {
     let _ = env_logger::init();
@@ -69,6 +72,7 @@ fn test_send_while_not_connected() {
     recver.join().unwrap();
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_send_timeout() {
     let session = Session::new().unwrap();
@@ -83,6 +87,7 @@ fn test_send_timeout() {
     assert_eq!(io::ErrorKind::TimedOut, err.kind());
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_recv_while_not_connected() {
     let session = Session::new().unwrap();
@@ -105,6 +110,7 @@ fn test_recv_while_not_connected() {
     sender.join().unwrap();
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_recv_timeout() {
     let session = Session::new().unwrap();
@@ -121,6 +127,7 @@ fn test_recv_timeout() {
     assert_eq!(io::ErrorKind::TimedOut, err.kind());
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_pair_connected_to_bound() {
     //let _ = env_logger::init();
@@ -141,6 +148,7 @@ fn test_pair_connected_to_bound() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_pair_bound_to_connected() {
     //let _ = env_logger::init();
@@ -162,6 +170,7 @@ fn test_pair_bound_to_connected() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_req_rep() {
     let session = Session::new().unwrap();
@@ -264,6 +273,7 @@ fn test_survey() {
     assert_eq!(vec!(67, 66, 67), server_resp2);
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_send_reply_before_send_request() {
     let session = Session::new().unwrap();
@@ -273,6 +283,7 @@ fn test_send_reply_before_send_request() {
     server.send(vec!(67, 66, 65)).unwrap_err();
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_recv_reply_before_send_request() {
     let session = Session::new().unwrap();
