@@ -64,7 +64,7 @@ impl Sub {
 
             self.state = Some(new_state);
 
-            debug!("[{:?}] switch from '{}' to '{}.'", self.id, old_name, new_name);
+            debug!("[{:?}] switch from '{}' to '{}'.", self.id, old_name, new_name);
         }
     }
 }
@@ -79,6 +79,7 @@ impl Protocol for Sub {
     }
 
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
+        debug!("[{:?}] add_pipe '{:?}'.", self.id, tok);
         let res = self.body.add_pipe(tok, pipe);
 
         if res.is_ok() {
@@ -89,6 +90,7 @@ impl Protocol for Sub {
      }
 
     fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
+        debug!("[{:?}] remove_pipe '{:?}'.", self.id, tok);
         let pipe = self.body.remove_pipe(tok);
 
         if pipe.is_some() {
@@ -99,44 +101,54 @@ impl Protocol for Sub {
     }
 
     fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        debug!("[{:?}] register_pipe '{:?}'.", self.id, tok);
         self.on_state_transition(|s, body| s.register_pipe(body, event_loop, tok));
     }
 
     fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        debug!("[{:?}] on_pipe_register '{:?}'.", self.id, tok);
         self.on_state_transition(|s, body| s.on_pipe_register(body, event_loop, tok));
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
+        debug!("[{:?}] send.", self.id);
         self.on_state_transition(|s, body| s.send(body, event_loop, Rc::new(msg), timeout));
     }
 
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        debug!("[{:?}] on_send_by_pipe '{:?}'.", self.id, tok);
         self.on_state_transition(|s, body| s.on_send_by_pipe(body, event_loop, tok));
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
+        debug!("[{:?}] on_send_timeout.", self.id);
         self.on_state_transition(|s, body| s.on_send_timeout(body, event_loop));
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
+        debug!("[{:?}] recv.", self.id);
         self.on_state_transition(|s, body| s.recv(body, event_loop, timeout));
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) {
+        debug!("[{:?}] on_recv_by_pipe '{:?}'.", self.id, tok);
         if self.body.accept(&msg) {
             self.on_state_transition(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
         }
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
+        debug!("[{:?}] on_recv_by_pipe.", self.id);
         self.on_state_transition(|s, body| s.on_recv_timeout(body, event_loop));
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+        debug!("[{:?}] ready '{:?}'.", self.id, tok);
         self.on_state_transition(|s, body| s.ready(body, event_loop, tok, events));
     }
 
     fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
+        debug!("[{:?}] set_option.", self.id);
         match option {
             SocketOption::Subscribe(subscription)   => Ok(self.body.subscribe(subscription)),
             SocketOption::Unsubscribe(subscription) => Ok(self.body.unsubscribe(subscription)),
