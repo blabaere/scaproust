@@ -200,7 +200,7 @@ fn test_pub_sub() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Pub).unwrap();
     let mut client = session.create_socket(SocketType::Sub).unwrap();
-    let timeout = time::Duration::from_millis(250);
+    let timeout = time::Duration::from_millis(1_000);
 
     server.bind("tcp://127.0.0.1:5463").unwrap();
     client.connect("tcp://127.0.0.1:5463").unwrap();
