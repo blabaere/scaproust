@@ -203,14 +203,14 @@ fn test_pub_sub() {
     let timeout = time::Duration::from_millis(50);
 
     server.bind("tcp://127.0.0.1:5463").unwrap();
-    thread::sleep(time::Duration::from_millis(250));
-
     client.connect("tcp://127.0.0.1:5463").unwrap();
     client.set_recv_timeout(timeout).unwrap();
     client.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
     client.set_option(SocketOption::Subscribe("B".to_string())).unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    // On appveyor, it seems that the connection takes forever to establish
+    // and therefore the server publishes to nobody if done too early
+    thread::sleep(time::Duration::from_millis(1_000));
 
     server.send(vec![65, 66, 67]).unwrap();
     let received_a = client.recv().expect("client should have received msg A");
