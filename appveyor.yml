@@ -9,6 +9,4 @@ build: false
 
 test_script:
   - cargo build
-  - SET RUST_LOG="scaproust,pusher"
-  - SET RUST_TEST_THREADS=1
-  - cargo test --verbose
+  - SET RUST_LOG="scaproust,pusher" ; SET RUST_TEST_THREADS=1 ; cargo test --verbose
