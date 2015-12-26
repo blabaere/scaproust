@@ -191,17 +191,17 @@ fn test_pub_sub() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Pub).unwrap();
     let mut client = session.create_socket(SocketType::Sub).unwrap();
-    let timeout = time::Duration::from_millis(250);
+    let timeout = time::Duration::from_millis(50);
 
     server.bind("tcp://127.0.0.1:5463").unwrap();
+    thread::sleep(time::Duration::from_millis(250));
 
-    thread::sleep(time::Duration::from_millis(500));
     client.connect("tcp://127.0.0.1:5463").unwrap();
     client.set_recv_timeout(timeout).unwrap();
     client.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
     client.set_option(SocketOption::Subscribe("B".to_string())).unwrap();
 
-    thread::sleep(time::Duration::from_millis(500));
+    thread::sleep(time::Duration::from_millis(250));
 
     server.send(vec![65, 66, 67]).unwrap();
     let received_a = client.recv().expect("client should have received msg A");
