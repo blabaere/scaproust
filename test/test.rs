@@ -200,7 +200,7 @@ fn test_pub_sub() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Pub).unwrap();
     let mut client = session.create_socket(SocketType::Sub).unwrap();
-    let timeout = time::Duration::from_millis(50);
+    let timeout = time::Duration::from_millis(250);
 
     server.bind("tcp://127.0.0.1:5463").unwrap();
     client.connect("tcp://127.0.0.1:5463").unwrap();
@@ -212,15 +212,23 @@ fn test_pub_sub() {
     // and therefore the server publishes to nobody if done too early
     thread::sleep(time::Duration::from_millis(1_000));
 
-    server.send(vec![65, 66, 67]).unwrap();
+    thread::spawn(move || {
+        thread::sleep(time::Duration::from_millis(100));
+        server.send(vec![65, 66, 67]).unwrap();
+
+        thread::sleep(time::Duration::from_millis(100));
+        server.send(vec![66, 65, 67]).unwrap();
+
+        thread::sleep(time::Duration::from_millis(100));
+        server.send(vec![67, 66, 65]).unwrap();
+    });
+
     let received_a = client.recv().expect("client should have received msg A");
     assert_eq!(vec![65, 66, 67], received_a);
 
-    server.send(vec![66, 65, 67]).unwrap();
     let received_b = client.recv().expect("client should have received msg B");
     assert_eq!(vec![66, 65, 67], received_b);
 
-    server.send(vec![67, 66, 65]).unwrap();
     let not_received_c = client.recv().unwrap_err();
     assert_eq!(io::ErrorKind::TimedOut, not_received_c.kind());
 }
