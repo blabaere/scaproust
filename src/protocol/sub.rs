@@ -138,7 +138,7 @@ impl Protocol for Sub {
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        debug!("[{:?}] on_recv_by_pipe.", self.id);
+        debug!("[{:?}] on_recv_timeout.", self.id);
         self.on_state_transition(|s, body| s.on_recv_timeout(body, event_loop));
     }
 

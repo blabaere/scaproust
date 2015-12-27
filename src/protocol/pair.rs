@@ -61,7 +61,7 @@ impl Pair {
 
             self.state = Some(new_state);
 
-            debug!("[{:?}] switch from '{}' to '{}.'", self.id, old_name, new_name);
+            debug!("[{:?}] switch from '{}' to '{}'.", self.id, old_name, new_name);
         }
     }
 }

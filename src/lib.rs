@@ -33,7 +33,6 @@ pub use global::SocketType;
 pub use event_loop_msg::SocketOption;
 
 pub type EventLoop = mio::EventLoop<session::Session>;
-//type EventLoopAction = Box<Fn(&mut EventLoop) -> bool>;
 
 pub struct Message {
     pub header: Vec<u8>,
