@@ -59,6 +59,10 @@ pub fn invalid_data_io_error(msg: &'static str) -> Error {
     Error::new(ErrorKind::InvalidData, msg)
 }
 
+pub fn would_block_io_error(msg: &'static str) -> Error {
+    Error::new(ErrorKind::WouldBlock, msg)
+}
+
 pub fn convert_notify_err<T>(err: NotifyError<T>) -> Error {
     match err {
         NotifyError::Io(e)     => e,

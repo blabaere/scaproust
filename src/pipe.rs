@@ -601,8 +601,9 @@ impl PipeState for Idle {
         match send::SendOperation::new(msg) {
             Ok(mut operation) => {
                 match operation.send(self.body.connection()) {
-                    Ok(_)  => self,
-                    Err(e) => self.on_error(event_loop, e)
+                    Ok(true)  => self,
+                    Ok(false) => self.on_error(event_loop, global::would_block_io_error("Non blocking send requested, but would block.")),
+                    Err(e)    => self.on_error(event_loop, e)
                 }
             },
             Err(e) => self.on_error(event_loop, e)

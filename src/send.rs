@@ -58,32 +58,44 @@ impl SendOperation {
     }
 
     pub fn send(&mut self, connection: &mut Connection) -> io::Result<bool> {
+        debug!("Sending message ...");
         // try send size prefix
+        debug!("Sending prefix");
         if self.step == Step::Prefix {
             if try!(self.send_buffer_and_check(connection)) {
+                debug!("Sending prefix: DONE");
                 self.step_forward();
             } else {
+                debug!("Sending prefix: IN PROGRESS");
                 return Ok(false);
             }
         }
 
         // try send msg header
+        debug!("Sending header");
         if self.step == Step::Header {
             if try!(self.send_buffer_and_check(connection)) {
+                debug!("Sending header: DONE");
                 self.step_forward();
             } else {
+                debug!("Sending header: IN PROGRESS");
                 return Ok(false);
             }
         }
 
         // try send msg body
+        debug!("Sending body");
         if self.step == Step::Body {
             if try!(self.send_buffer_and_check(connection)) {
+                debug!("Sending body: DONE");
                 self.step_forward();
             } else {
+                debug!("Sending body: IN PROGRESS");
                 return Ok(false);
             }
         }
+
+        debug!("Sending message: DONE");
 
         Ok(true)
     }
@@ -111,8 +123,11 @@ impl SendOperation {
                 None => 0
             };
 
+            debug!("Sent {}/{} bytes.", written, fragment.len());
+
             Ok(written)
         } else {
+            debug!("Did not write anything because buffer is empty !");
             Ok(0)
         }
     }
