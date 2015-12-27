@@ -213,9 +213,10 @@ fn test_pub_sub() {
     // and therefore the server publishes to nobody if done too early
     thread::sleep(time::Duration::from_millis(1_000));
 
-    thread::spawn(move || {
+    let sender_thread = thread::spawn(move || {
         thread::sleep(time::Duration::from_millis(250));
-        server.send(vec![65, 66, 67]).unwrap();
+        //server.send(vec![65, 66, 67]).unwrap();
+        server.send(vec![65; 8192]).unwrap();
 
         //thread::sleep(time::Duration::from_millis(100));
         //server.send(vec![66, 65, 67]).unwrap();
@@ -225,13 +226,16 @@ fn test_pub_sub() {
     });
 
     let received_a = client.recv().expect("client should have received msg A");
-    assert_eq!(vec![65, 66, 67], received_a);
+    //assert_eq!(vec![65, 66, 67], received_a);
+    assert_eq!(vec![65; 8192], received_a);
 
     //let received_b = client.recv().expect("client should have received msg B");
     //assert_eq!(vec![66, 65, 67], received_b);
 
     //let not_received_c = client.recv().unwrap_err();
     //assert_eq!(io::ErrorKind::TimedOut, not_received_c.kind());
+
+    sender_thread.join().unwrap();
 }
 
 //#[test]
