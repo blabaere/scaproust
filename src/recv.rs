@@ -95,11 +95,8 @@ impl RecvOperation {
                 None => 0
             };
 
-            debug!("Received {}/{} bytes.", read, buffer.len());
-
             Ok(read)
         } else {
-            debug!("Did not read anything because buffer is empty !");
             Ok(0)
         }
     }

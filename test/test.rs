@@ -204,6 +204,9 @@ fn test_req_rep() {
 // for a mysterious reason the publisher can send the 8 bytes of the prefix
 // but then the next 3 bytes of the body can't be sent : WouldBlock
 // Since Pub requires non-blocking send, the operation is not completed
+// the bad news is that it means any send on windows require at least one event loop round trip
+// and that all dist base protocols will NOT WORK AT ALL !!!
+// ie: pub, survey, bus
 #[cfg(not(windows))]
 #[test]
 fn test_pub_sub() {

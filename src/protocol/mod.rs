@@ -29,16 +29,6 @@ pub mod sub;
 //pub mod resp;
 //pub mod bus;
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-//                                                                           //
-//  WHAT IF THE SOCKET AND PROTOCOL LIVED IN USER THREAD ?                   //
-//  THIS WAY THE SOCKET WOULD NOT HAVE TO DEAL WITH I/O STATE                //
-//  AND THE STATE MACHINE WOULD MIMICK THE NANOMSG ONE                       //
-//                                                                           //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
-
 pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketNotify>>) -> Box<Protocol> {
     match socket_type {
         SocketType::Push       => Box::new(push::Push::new(socket_id, evt_tx)),
