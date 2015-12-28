@@ -16,6 +16,7 @@ use scaproust::*;
 
 #[test]
 fn test_pipeline_connected_to_bound() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
@@ -33,6 +34,7 @@ fn test_pipeline_connected_to_bound() {
 
 #[test]
 fn test_pipeline_bound_to_connected() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
@@ -75,6 +77,7 @@ fn test_send_while_not_connected() {
 
 #[test]
 fn test_send_timeout() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
     let timeout = time::Duration::from_millis(50);
@@ -90,6 +93,7 @@ fn test_send_timeout() {
 
 #[test]
 fn test_recv_while_not_connected() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
@@ -113,6 +117,7 @@ fn test_recv_while_not_connected() {
 
 #[test]
 fn test_recv_timeout() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
@@ -130,7 +135,7 @@ fn test_recv_timeout() {
 
 #[test]
 fn test_pair_connected_to_bound() {
-    //let _ = env_logger::init();
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut bound = session.create_socket(SocketType::Pair).unwrap();
     let mut connected = session.create_socket(SocketType::Pair).unwrap();
@@ -151,7 +156,7 @@ fn test_pair_connected_to_bound() {
 
 #[test]
 fn test_pair_bound_to_connected() {
-    //let _ = env_logger::init();
+    let _ = env_logger::init();
     info!("test_pair_bound_to_connected");
     let session = Session::new().unwrap();
     let mut bound = session.create_socket(SocketType::Pair).unwrap();
@@ -173,6 +178,7 @@ fn test_pair_bound_to_connected() {
 
 #[test]
 fn test_req_rep() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Rep).unwrap();
     let mut client = session.create_socket(SocketType::Req).unwrap();
@@ -230,6 +236,7 @@ fn test_pub_sub() {
 
 //#[test]
 fn test_bus() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Bus).unwrap();
     let mut client1 = session.create_socket(SocketType::Bus).unwrap();
@@ -249,6 +256,7 @@ fn test_bus() {
 
 //#[test]
 fn test_survey() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Surveyor).unwrap();
     let mut client1 = session.create_socket(SocketType::Respondent).unwrap();
@@ -356,6 +364,7 @@ fn test_survey_deadline() {
 //}
 
 
+#[cfg(not(windows))]
 #[test]
 fn test_ipc() {
     let session = Session::new().unwrap();
