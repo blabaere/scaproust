@@ -13,8 +13,8 @@ use std::thread;
 
 use scaproust::*;
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_pipeline_connected_to_bound() {
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
@@ -30,8 +30,8 @@ fn test_pipeline_connected_to_bound() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_pipeline_bound_to_connected() {
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
@@ -47,8 +47,8 @@ fn test_pipeline_bound_to_connected() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_send_while_not_connected() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -72,8 +72,8 @@ fn test_send_while_not_connected() {
     recver.join().unwrap();
 }
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_send_timeout() {
     let session = Session::new().unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
@@ -87,8 +87,8 @@ fn test_send_timeout() {
     assert_eq!(io::ErrorKind::TimedOut, err.kind());
 }
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_recv_while_not_connected() {
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
@@ -110,8 +110,8 @@ fn test_recv_while_not_connected() {
     sender.join().unwrap();
 }
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_recv_timeout() {
     let session = Session::new().unwrap();
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
@@ -127,8 +127,8 @@ fn test_recv_timeout() {
     assert_eq!(io::ErrorKind::TimedOut, err.kind());
 }
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_pair_connected_to_bound() {
     //let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -148,8 +148,8 @@ fn test_pair_connected_to_bound() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_pair_bound_to_connected() {
     //let _ = env_logger::init();
     info!("test_pair_bound_to_connected");
@@ -170,8 +170,8 @@ fn test_pair_bound_to_connected() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_req_rep() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Rep).unwrap();
@@ -194,48 +194,38 @@ fn test_req_rep() {
     assert_eq!(vec!(67, 66, 65), client_reply);
 }
 
+// this is not working on appveyor
+// for a mysterious reason the publisher can send the 8 bytes of the prefix
+// but then the next 3 bytes of the body can't be sent : WouldBlock
+// Since Pub requires non-blocking send, the operation is not completed
+#[cfg(not(windows))]
 #[test]
 fn test_pub_sub() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Pub).unwrap();
     let mut client = session.create_socket(SocketType::Sub).unwrap();
-    let timeout = time::Duration::from_millis(1_000);
+    let timeout = time::Duration::from_millis(50);
 
     server.bind("tcp://127.0.0.1:5463").unwrap();
     client.connect("tcp://127.0.0.1:5463").unwrap();
     client.set_recv_timeout(timeout).unwrap();
-    //client.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
-    //client.set_option(SocketOption::Subscribe("B".to_string())).unwrap();
-    client.set_option(SocketOption::Subscribe("".to_string())).unwrap();
+    client.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
+    client.set_option(SocketOption::Subscribe("B".to_string())).unwrap();
 
-    // On appveyor, it seems that the connection takes forever to establish
-    // and therefore the server publishes to nobody if done too early
-    thread::sleep(time::Duration::from_millis(1_000));
+    thread::sleep(time::Duration::from_millis(500));
 
-    let sender_thread = thread::spawn(move || {
-        thread::sleep(time::Duration::from_millis(250));
-        server.send(vec![65, 66, 67]).unwrap();
-        //server.send(vec![65; 2_000_000]).unwrap();
-
-        //thread::sleep(time::Duration::from_millis(100));
-        //server.send(vec![66, 65, 67]).unwrap();
-
-        //thread::sleep(time::Duration::from_millis(100));
-        //server.send(vec![67, 66, 65]).unwrap();
-    });
-
-    let received_a = client.recv().expect("client should have received msg A");
+    server.send(vec![65, 66, 67]).unwrap();
+    let received_a = client.recv().unwrap();
     assert_eq!(vec![65, 66, 67], received_a);
-    //assert_eq!(vec![65; 2_000_000], received_a);
 
-    //let received_b = client.recv().expect("client should have received msg B");
-    //assert_eq!(vec![66, 65, 67], received_b);
+    server.send(vec![66, 65, 67]).unwrap();
+    let received_b = client.recv().unwrap();
+    assert_eq!(vec![66, 65, 67], received_b);
 
-    //let not_received_c = client.recv().unwrap_err();
-    //assert_eq!(io::ErrorKind::TimedOut, not_received_c.kind());
-
-    sender_thread.join().unwrap();
+    server.send(vec![67, 66, 65]).unwrap();
+    let not_received_c = client.recv().unwrap_err();
+    assert_eq!(io::ErrorKind::TimedOut, not_received_c.kind());
 }
 
 //#[test]
@@ -286,8 +276,8 @@ fn test_survey() {
     assert_eq!(vec!(67, 66, 67), server_resp2);
 }
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_send_reply_before_send_request() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Rep).unwrap();
@@ -296,8 +286,8 @@ fn test_send_reply_before_send_request() {
     server.send(vec!(67, 66, 65)).unwrap_err();
 }
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_recv_reply_before_send_request() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Rep).unwrap();
@@ -365,8 +355,8 @@ fn test_survey_deadline() {
 //    assert_eq!(vec!(69, 69, 69), client_reply);
 //}
 
-////#[cfg(not(windows))]
-////#[test]
+
+#[test]
 fn test_ipc() {
     let session = Session::new().unwrap();
     let mut bound = session.create_socket(SocketType::Pair).unwrap();

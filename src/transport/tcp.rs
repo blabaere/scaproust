@@ -34,7 +34,6 @@ impl Tcp {
 
     fn connect(&self, addr: net::SocketAddr) -> Result<Box<Connection>, io::Error> {
         let tcp_stream = try!(tcp::TcpStream::connect(&addr));
-        try!(tcp_stream.set_nodelay(true));
         let connection = TcpConnection { stream: tcp_stream };
 
         Ok(Box::new(connection))
