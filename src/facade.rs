@@ -29,7 +29,7 @@ impl SessionFacade {
     pub fn new() -> io::Result<SessionFacade> {
         let mut builder = mio::EventLoopBuilder::new();
 
-        mio::EventLoopBuilder::new().
+        builder.
             notify_capacity(4_096).
             messages_per_tick(256).
             timer_tick_ms(15).
