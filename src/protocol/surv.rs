@@ -4,13 +4,15 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::rc::Rc;
-use std::collections::HashMap;
+use std::collections::{ HashMap, HashSet };
 use std::sync::mpsc::Sender;
 use std::io;
 
 use mio;
 
-use time;
+use time as ext_time;
+
+use std::time;
 
 use byteorder::*;
 
@@ -19,7 +21,7 @@ use super::clear_timeout;
 use super::priolist::*;
 use pipe::*;
 use global::*;
-use event_loop_msg::{ SocketNotify, EventLoopTimeout };
+use event_loop_msg::{ SocketNotify, EventLoopTimeout, SocketOption };
 use EventLoop;
 use Message;
 
@@ -35,40 +37,52 @@ struct Body {
     id: SocketId,
     notify_sender: Rc<Sender<SocketNotify>>,
     pipes: HashMap<mio::Token, Pipe>,
+    dist: HashSet<mio::Token>,
     fq: PrioList,
     survey_id_seq: u32,
     deadline_ms: u64
 }
 
+struct PendingSurvey {
+    timeout: Timeout
+}
+
 enum State {
     Idle,
-    Sending(Rc<Message>, Timeout),
-    SendOnHold(Rc<Message>, Timeout),
     Active(PendingSurvey),
     Receiving(PendingSurvey, Timeout),
     RecvOnHold(PendingSurvey, Timeout)
 }
 
 impl Surv {
-    pub fn new(evt_tx: Rc<Sender<SocketEvt>>, socket_id: SocketId) -> Surv {
-        Surv { 
-            socket_id: socket_id,
+    pub fn new(socket_id: SocketId, notify_tx: Rc<Sender<SocketNotify>>) -> Surv {
+        let body = Body {
+            id: socket_id,
+            notify_sender: notify_tx,
             pipes: HashMap::new(),
-            msg_sender: new_multicast_msg_sender(evt_tx.clone()),
-            msg_receiver: PolyadicMsgReceiver::new(evt_tx.clone()),
-            codec: Codec::new(),
-            deadline_ms: 1000,
-            cancel_deadline_timeout: None
+            dist: HashSet::new(),
+            fq: PrioList::new(),
+            survey_id_seq: ext_time::get_time().nsec as u32,
+            deadline_ms: 1_000
+        };
+
+        Surv {
+            id: socket_id,
+            body: body,
+            state: Some(State::Idle)
         }
     }
 
-    fn reset_survey_deadline_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.cancel_deadline_timeout.take().map(|cancel_timeout| cancel_timeout.call_box((event_loop,)));
+    fn on_state_transition<F>(&mut self, transition: F) where F : FnOnce(State, &mut Body) -> State {
+        if let Some(old_state) = self.state.take() {
+            let old_name = old_state.name();
+            let new_state = transition(old_state, &mut self.body);
+            let new_name = new_state.name();
 
-        let timeout_cmd = EventLoopTimeout::CancelSurvey(self.socket_id);
-        let _ =  event_loop.timeout_ms(timeout_cmd, self.deadline_ms).
-            map(|timeout| self.cancel_deadline_timeout = Some(Box::new(move |el: &mut EventLoop| {el.clear_timeout(timeout)}))).
-            map_err(|err| error!("[{:?}] failed to set survey deadline on send: '{:?}'", self.socket_id, err));
+            self.state = Some(new_state);
+
+            debug!("[{:?}] switch from '{}' to '{}'.", self.id, old_name, new_name);
+        }
     }
 }
 
@@ -81,151 +95,305 @@ impl Protocol for Surv {
         SocketType::Respondent.id()
     }
 
-    fn add_endpoint(&mut self, token: mio::Token, endpoint: Endpoint) {
-        self.pipes.insert(token, Pipe::new(token, endpoint));
+    fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
+        let res = self.body.add_pipe(tok, pipe);
+
+        if res.is_ok() {
+            self.on_state_transition(|s, body| s.on_pipe_added(body, tok));
+        }
+
+        res
+     }
+
+    fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
+        let pipe = self.body.remove_pipe(tok);
+
+        if pipe.is_some() {
+            self.on_state_transition(|s, body| s.on_pipe_removed(body, tok));
+        }
+
+        pipe
     }
 
-    fn remove_endpoint(&mut self, token: mio::Token) -> Option<Endpoint> {
-        self.pipes.remove(&token).map(|p| p.remove())
+    fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.on_state_transition(|s, body| s.register_pipe(body, event_loop, tok));
     }
 
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, cancel_timeout: EventLoopAction) {
-        self.reset_survey_deadline_timeout(event_loop);
-
-        match self.codec.encode(msg) {
-            Err(e) => self.msg_sender.on_send_err(event_loop, e, &mut self.pipes),
-            Ok(raw_msg) => self.msg_sender.send(event_loop, raw_msg, cancel_timeout, &mut self.pipes)
-        };
+    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.on_state_transition(|s, body| s.on_pipe_register(body, event_loop, tok));
     }
 
-    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.msg_sender.on_send_timeout(event_loop, &mut self.pipes);
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
+        // TODO set deadline timer
+        //self.reset_survey_deadline_timeout(event_loop);
+        let survey_id = self.body.next_survey_id();
+        let msg = encode(msg, survey_id);
+
+        self.on_state_transition(|s, body| s.send(body, event_loop, Rc::new(msg), timeout));
     }
 
-    fn recv(&mut self, event_loop: &mut EventLoop, cancel_timeout: EventLoopAction) {
-        match self.codec.has_pending_survey() {
-            true  => self.msg_receiver.recv(event_loop, &mut self.codec, cancel_timeout, &mut self.pipes),
-            false => self.msg_sender.on_send_err(event_loop, other_io_error("no running survey"), &mut self.pipes)
+    fn on_send_by_pipe(&mut self, _: &mut EventLoop, _: mio::Token) {
+    }
+
+    fn on_send_timeout(&mut self, _: &mut EventLoop) {
+    }
+
+    fn recv(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
+        self.on_state_transition(|s, body| s.recv(body, event_loop, timeout));
+    }
+
+    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
+        if let Some((msg, survey_id)) = decode(raw_msg, tok) {
+            if survey_id == self.body.cur_survey_id() {
+                self.on_state_transition(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
+            }
         }
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.msg_receiver.on_recv_timeout(event_loop, &mut self.pipes)
+        self.on_state_transition(|s, body| s.on_recv_timeout(body, event_loop));
     }
 
-    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) -> io::Result<()> {
-        let mut sent = false;
-        let mut received = None;
-
-        if let Some(pipe) = self.pipes.get_mut(&token) {
-            let (s, r) = try!(pipe.ready(event_loop, events));
-            sent = s;
-            received = r;
-        }
-
-        let send_result = match sent {
-            true  => Ok(self.msg_sender.sent_by(event_loop, token, &mut self.pipes)),
-            false => self.msg_sender.resume_send(event_loop, token, &mut self.pipes)
-        };
-
-        let recv_result = match received {
-            Some(msg) => Ok(self.msg_receiver.received_by(event_loop, &mut self.codec, msg, token, &mut self.pipes)),
-            None => self.msg_receiver.resume_recv(event_loop, &mut self.codec, token, &mut self.pipes)
-        };
-
-        send_result.and(recv_result)
+    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+        self.on_state_transition(|s, body| s.ready(body, event_loop, tok, events));
     }
 
     fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
         match option {
-            SocketOption::SurveyDeadline(timeout) => {
-                let deadline = timeout.to_millis();
-
-                if deadline == 0u64 {
-                    Err(io::Error::new(io::ErrorKind::InvalidData, "survey deadline cannot be zero"))
-                } else {
-                    self.deadline_ms = deadline;
-                    Ok(())
-                }
-            },
+            SocketOption::SurveyDeadline(timeout) => self.body.set_deadline(timeout),
             _ => Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
         }
     }
 
     fn on_survey_timeout(&mut self, _: &mut EventLoop) {
-        self.codec.clear_pending_survey();
+        // TODO do something about that
+        //self.codec.clear_pending_survey();
     }
-
-    fn on_request_timeout(&mut self, _: &mut EventLoop) {}
 }
 
-struct Codec {
-    pending_survey_id: Option<u32>,
-    survey_id_seq: u32
-}
-
-impl Codec {
-    fn new() -> Codec {
-        Codec {
-            pending_survey_id: None,
-            survey_id_seq: ::time::get_time().nsec as u32
+impl State {
+    fn name(&self) -> &'static str {
+        match *self {
+            State::Idle            => "Idle",
+            State::Active(_)       => "WaitingVotes",
+            State::Receiving(_,_)  => "Receiving",
+            State::RecvOnHold(_,_) => "RecvOnHold"
         }
     }
 
-    fn encode(&mut self, msg: Message) -> io::Result<Message> {
-        let mut raw_msg = msg;
-        let survey_id = self.next_survey_id();
+    fn on_pipe_added(self, _: &mut Body, _: mio::Token) -> State {
+        self
+    }
 
-        self.pending_survey_id = Some(survey_id);
+    fn on_pipe_removed(self, body: &mut Body, tok: mio::Token) -> State {
+        match self {
+            State::Receiving(p, t) => {
+                if body.is_active_pipe(tok) {
+                    State::RecvOnHold(p, t)
+                } else {
+                    State::Receiving(p, t)
+                }
+            },
+            other @ _ => other
+        }
+    }
 
-        raw_msg.header.reserve(4);
-        try!(raw_msg.header.write_u32::<BigEndian>(survey_id));
+    fn register_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+        body.register_pipe(event_loop, tok);
 
-        Ok(raw_msg)
+        self
+    }
+
+    fn on_pipe_register(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+        body.on_pipe_register(event_loop, tok);
+
+        match self {
+            State::RecvOnHold(_, t)   => State::Idle.recv(body, event_loop, t),
+            other @ _                 => other
+        }
+    }
+
+    fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, timeout: Option<mio::Timeout>) -> State {
+        if let State::Active(p) = self {
+            clear_timeout(event_loop, p.timeout);
+        }
+
+        for (tok, mut pipe) in body.pipes.iter_mut() {
+            if body.dist.contains(tok) {
+                pipe.send_nb(event_loop, msg.clone());
+            }
+        }
+
+        body.send_notify(SocketNotify::MsgSent);
+
+        let deadline = body.schedule_deadline(event_loop);
+        let pending_survey = PendingSurvey {
+            timeout: deadline
+        };
+
+        State::Active(pending_survey)
+    }
+
+    fn recv(self, body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {
+        if let State::Active(p) = self {
+            if let Some(pipe) = body.get_active_pipe() {
+                pipe.recv(event_loop);
+
+                return State::Receiving(p, timeout);
+            } else {
+                return State::RecvOnHold(p, timeout);
+            }
+        } else {
+            let err = other_io_error("Can't recv: currently no pending survey");
+            body.send_notify(SocketNotify::MsgNotRecv(err));
+            clear_timeout(event_loop, timeout);
+
+            self
+        }
+    }
+
+    fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message) -> State {
+        if let State::Receiving(p, timeout) = self {
+            body.send_notify(SocketNotify::MsgRecv(msg));
+            body.advance_pipe();
+            clear_timeout(event_loop, timeout);
+            clear_timeout(event_loop, p.timeout);
+        }
+
+        State::Idle
+    }
+
+    fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
+
+        body.send_notify(SocketNotify::MsgNotRecv(err));
+        body.get_active_pipe().map(|p| p.cancel_recv(event_loop));
+        body.advance_pipe();
+
+        match self {
+            State::Receiving(p, _)  => clear_timeout(event_loop, p.timeout),
+            State::RecvOnHold(p, _) => clear_timeout(event_loop, p.timeout),
+            _                       => {}
+        };
+
+        State::Idle
+    }
+
+    fn ready(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) -> State {
+        body.get_pipe(tok).map(|p| p.ready(event_loop, events));
+
+        self
+    }
+}
+
+impl Body {
+
+    fn set_deadline(&mut self, deadline: time::Duration) -> io::Result<()> {
+        let deadline_ms = deadline.to_millis();
+
+        if deadline_ms == 0u64 {
+            Err(io::Error::new(io::ErrorKind::InvalidData, "survey deadline cannot be zero"))
+        } else {
+            self.deadline_ms = deadline_ms;
+            Ok(())
+        }
+    }
+
+    fn schedule_deadline(&mut self, event_loop: &mut EventLoop) -> Timeout {
+        let cmd = EventLoopTimeout::CancelSurvey(self.id);
+        let ivl = self.deadline_ms;
+
+        event_loop.timeout_ms(cmd, ivl).
+            map(|t| Some(t)).
+            unwrap_or_else(|_| None)
+    }
+
+    fn send_notify(&self, evt: SocketNotify) {
+        let send_res = self.notify_sender.send(evt);
+
+        if send_res.is_err() {
+            error!("Failed to send notify to the facade: '{:?}'", send_res.err());
+        }
+    }
+    
+    fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
+        match self.pipes.insert(tok, pipe) {
+            None    => Ok(()),
+            Some(_) => Err(invalid_data_io_error("A pipe has already been added with that token"))
+        }
+    }
+
+    fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
+        self.dist.remove(&tok);
+        self.fq.remove(&tok);
+        self.pipes.remove(&tok)
+    }
+
+    fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.fq.insert(tok, 8);
+        self.pipes.get_mut(&tok).map(|p| p.register(event_loop));
+    }
+
+    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.dist.insert(tok);
+        self.fq.activate(tok);
+        self.pipes.get_mut(&tok).map(|p| p.on_register(event_loop));
+    }
+
+    fn get_active_pipe<'a>(&'a mut self) -> Option<&'a mut Pipe> {
+        match self.fq.get() {
+            Some(tok) => self.pipes.get_mut(&tok),
+            None      => None
+        }
+    }
+
+    fn is_active_pipe(&self, tok: mio::Token) -> bool {
+        self.fq.get() == Some(tok)
+    }
+
+    fn advance_pipe(&mut self) {
+        self.fq.advance();
+    }
+
+    fn get_pipe<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
+        self.pipes.get_mut(&tok)
+    }
+
+    fn cur_survey_id(&self) -> u32 {
+        self.survey_id_seq | 0x80000000
     }
 
     fn next_survey_id(&mut self) -> u32 {
-        let next_id = self.survey_id_seq | 0x80000000;
-
         self.survey_id_seq += 1;
-
-        next_id
-    }
-
-    fn has_pending_survey(&self) -> bool {
-        self.pending_survey_id.is_some()
-    }
-
-    fn clear_pending_survey(&mut self) {
-        self.pending_survey_id = None;
+        self.survey_id_seq | 0x80000000
     }
 }
 
-impl MsgDecoder for Codec {
-    fn decode(&mut self, raw_msg: Message, _: mio::Token) -> io::Result<Option<Message>> {
-        if raw_msg.get_body().len() < 4 {
-            return Ok(None);
-        }
+fn encode(msg: Message, survey_id: u32) -> Message {
+    let mut raw_msg = msg;
+    let mut survey_id_bytes: [u8; 4] = [0; 4];
 
-        let (mut header, mut payload) = raw_msg.explode();
-        let body = payload.split_off(4);
-        let mut survey_id_reader = io::Cursor::new(payload);
+    BigEndian::write_u32(&mut survey_id_bytes[0..4], survey_id);
 
-        let survey_id = try!(survey_id_reader.read_u32::<BigEndian>());
+    raw_msg.header.reserve(4);
+    raw_msg.header.extend_from_slice(&survey_id_bytes[0..4]);
+    raw_msg
+}
 
-        if header.len() == 0 {
-            header = survey_id_reader.into_inner();
-        } else {
-            let survey_id_bytes = survey_id_reader.into_inner();
-            header.push_all(&survey_id_bytes);
-        }
-
-        if Some(survey_id) == self.pending_survey_id {
-            let msg = Message::with_header_and_body(header, body);
-
-            Ok(Some(msg))
-        } else {
-            Ok(None)
-        }
+fn decode(raw_msg: Message, _: mio::Token) -> Option<(Message, u32)> {
+    if raw_msg.get_body().len() < 4 {
+        return None;
     }
+
+    let (mut header, mut payload) = raw_msg.explode();
+    let body = payload.split_off(4);
+    let survey_id = BigEndian::read_u32(&payload);
+
+    if header.len() == 0 {
+        header = payload;
+    } else {
+        header.extend_from_slice(&payload);
+    }
+
+    Some((Message::with_header_and_body(header, body), survey_id))
 }
