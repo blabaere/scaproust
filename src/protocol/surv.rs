@@ -16,7 +16,7 @@ use std::time;
 
 use byteorder::*;
 
-use super::Protocol;
+use super::{ Protocol, Timeout };
 use super::clear_timeout;
 use super::priolist::*;
 use pipe::*;
@@ -24,8 +24,6 @@ use global::*;
 use event_loop_msg::{ SocketNotify, EventLoopTimeout, SocketOption };
 use EventLoop;
 use Message;
-
-type Timeout = Option<mio::Timeout>;
 
 pub struct Surv {
     id: SocketId,
@@ -124,8 +122,6 @@ impl Protocol for Surv {
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
-        // TODO set deadline timer
-        //self.reset_survey_deadline_timeout(event_loop);
         let survey_id = self.body.next_survey_id();
         let msg = encode(msg, survey_id);
 
@@ -158,16 +154,15 @@ impl Protocol for Surv {
         self.on_state_transition(|s, body| s.ready(body, event_loop, tok, events));
     }
 
+    fn on_survey_timeout(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s, body| s.on_survey_timeout(body, event_loop));
+    }
+
     fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
         match option {
             SocketOption::SurveyDeadline(timeout) => self.body.set_deadline(timeout),
             _ => Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
         }
-    }
-
-    fn on_survey_timeout(&mut self, _: &mut EventLoop) {
-        // TODO do something about that
-        //self.codec.clear_pending_survey();
     }
 }
 
@@ -213,7 +208,7 @@ impl State {
         }
     }
 
-    fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, timeout: Option<mio::Timeout>) -> State {
+    fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, _: Option<mio::Timeout>) -> State {
         if let State::Active(p) = self {
             clear_timeout(event_loop, p.timeout);
         }
@@ -232,6 +227,10 @@ impl State {
         };
 
         State::Active(pending_survey)
+    }
+
+    fn on_survey_timeout(self, _: &mut Body, _: &mut EventLoop) -> State {
+        State::Idle
     }
 
     fn recv(self, body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {
@@ -257,7 +256,8 @@ impl State {
             body.send_notify(SocketNotify::MsgRecv(msg));
             body.advance_pipe();
             clear_timeout(event_loop, timeout);
-            clear_timeout(event_loop, p.timeout);
+
+            return State::Active(p);
         }
 
         State::Idle
@@ -271,12 +271,10 @@ impl State {
         body.advance_pipe();
 
         match self {
-            State::Receiving(p, _)  => clear_timeout(event_loop, p.timeout),
-            State::RecvOnHold(p, _) => clear_timeout(event_loop, p.timeout),
-            _                       => {}
-        };
-
-        State::Idle
+            State::Receiving(p, _)  => State::Active(p),
+            State::RecvOnHold(p, _) => State::Active(p),
+            _                       => State::Idle
+        }
     }
 
     fn ready(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) -> State {

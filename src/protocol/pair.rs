@@ -9,16 +9,14 @@ use std::io;
 
 use mio;
 
-use super::Protocol;
+use super::{ Protocol, Timeout };
 use super::clear_timeout;
 use super::excl::*;
 use pipe::*;
 use global::*;
-use event_loop_msg::{ SocketNotify, SocketOption };
+use event_loop_msg::{ SocketNotify };
 use EventLoop;
 use Message;
-
-type Timeout = Option<mio::Timeout>;
 
 pub struct Pair {
     id: SocketId,

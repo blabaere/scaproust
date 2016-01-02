@@ -15,6 +15,8 @@ use pipe::Pipe;
 use EventLoop;
 use Message;
 
+pub type Timeout = Option<mio::Timeout>;
+
 pub mod excl;
 pub mod priolist;
 
@@ -26,7 +28,7 @@ pub mod rep;
 pub mod pbu;
 pub mod sub;
 pub mod surv;
-//pub mod resp;
+pub mod resp;
 //pub mod bus;
 
 pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketNotify>>) -> Box<Protocol> {
@@ -39,9 +41,8 @@ pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<
         SocketType::Pub        => Box::new(pbu::Pub::new(socket_id, evt_tx)),
         SocketType::Sub        => Box::new(sub::Sub::new(socket_id, evt_tx)),
         SocketType::Bus        => Box::new(NullProtocol),
-        //SocketType::Surveyor   => Box::new(NullProtocol),
         SocketType::Surveyor   => Box::new(surv::Surv::new(socket_id, evt_tx)),
-        SocketType::Respondent => Box::new(NullProtocol)
+        SocketType::Respondent => Box::new(resp::Resp::new(socket_id, evt_tx))
     }
 }
 

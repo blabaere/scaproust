@@ -62,7 +62,6 @@ fn test_send_while_not_connected() {
         thread::sleep(time::Duration::from_millis(50));
         pull.connect("tcp://127.0.0.1:5456").unwrap();
         let received = pull.recv().unwrap();
-        info!("test_send_while_not_connected: msg received");
         assert_eq!(vec![65, 66, 67], received)
     });
 
@@ -257,33 +256,38 @@ fn test_bus() {
     assert_eq!(vec![65, 66, 67], received2);
 }
 
-//#[test]
+#[test]
 fn test_survey() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Surveyor).unwrap();
     let mut client1 = session.create_socket(SocketType::Respondent).unwrap();
     let mut client2 = session.create_socket(SocketType::Respondent).unwrap();
+    let timeout = time::Duration::from_millis(50);
 
     server.bind("tcp://127.0.0.1:5465").unwrap();
     client1.connect("tcp://127.0.0.1:5465").unwrap();
     client2.connect("tcp://127.0.0.1:5465").unwrap();
+    client1.set_recv_timeout(timeout).unwrap();
+    client2.set_recv_timeout(timeout).unwrap();
+
+    thread::sleep(time::Duration::from_millis(500));
 
     let server_survey = vec!(65, 66, 67);
-    server.send(server_survey).unwrap();
+    server.send(server_survey).expect("Server should have send a survey");
 
-    let client1_survey = client1.recv().unwrap();
+    let client1_survey = client1.recv().expect("Client #1 should have received the survey");
     assert_eq!(vec!(65, 66, 67), client1_survey);
 
-    let client2_survey = client2.recv().unwrap();
+    let client2_survey = client2.recv().expect("Client #2 should have received the survey");
     assert_eq!(vec!(65, 66, 67), client2_survey);
 
-    client1.send(vec!(65, 66, 65)).unwrap();
-    let server_resp1 = server.recv().unwrap();
+    client1.send(vec!(65, 66, 65)).expect("Client #1 should have send a vote");
+    let server_resp1 = server.recv().expect("Server should have received the vote from client #1");
     assert_eq!(vec!(65, 66, 65), server_resp1);
 
-    client2.send(vec!(67, 66, 67)).unwrap();
-    let server_resp2 = server.recv().unwrap();
+    client2.send(vec!(67, 66, 67)).expect("Client #2 should have send a vote");
+    let server_resp2 = server.recv().expect("Server should have received the vote from client #2");
     assert_eq!(vec!(67, 66, 67), server_resp2);
 }
 
@@ -311,16 +315,21 @@ fn test_recv_reply_before_send_request() {
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
-//#[test]
+#[test]
 fn test_survey_deadline() {
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Surveyor).unwrap();
     let mut client = session.create_socket(SocketType::Respondent).unwrap();
-    let timeout = time::Duration::from_millis(150);
+    let timeout = time::Duration::from_millis(50);
+    let deadline = time::Duration::from_millis(150);
 
-    server.set_option(SocketOption::SurveyDeadline(timeout)).unwrap();
+    server.set_option(SocketOption::SurveyDeadline(deadline)).unwrap();
     server.bind("tcp://127.0.0.1:5468").unwrap();
     client.connect("tcp://127.0.0.1:5468").unwrap();
+    server.set_recv_timeout(timeout).unwrap();
+    server.set_recv_timeout(timeout).unwrap();
+
+    thread::sleep(time::Duration::from_millis(500));
 
     let server_survey = vec!(65, 66, 67);
     server.send(server_survey).unwrap();

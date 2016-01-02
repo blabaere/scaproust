@@ -10,7 +10,7 @@ use std::io;
 
 use mio;
 
-use super::Protocol;
+use super::{ Protocol, Timeout };
 use super::clear_timeout;
 use super::priolist::*;
 use pipe::*;
@@ -18,8 +18,6 @@ use global::*;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
 use Message;
-
-type Timeout = Option<mio::Timeout>;
 
 pub struct Push {
     id: SocketId,

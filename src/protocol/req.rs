@@ -14,7 +14,7 @@ use time;
 
 use byteorder::*;
 
-use super::Protocol;
+use super::{ Protocol, Timeout };
 use super::clear_timeout;
 use super::priolist::*;
 use pipe::*;
@@ -22,8 +22,6 @@ use global::*;
 use event_loop_msg::{ SocketNotify, EventLoopTimeout };
 use EventLoop;
 use Message;
-
-type Timeout = Option<mio::Timeout>;
 
 pub struct Req {
     id: SocketId,

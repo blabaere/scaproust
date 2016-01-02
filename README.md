@@ -41,7 +41,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
     - [x] PUSH
     - [x] PULL
   - [ ] SURVEY
-    - [ ] SURVEYOR
+    - [x] SURVEYOR
     - [ ] SURVEYOR deadline
     - [ ] RESPONDENT  
 

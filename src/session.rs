@@ -17,7 +17,6 @@ use socket::Socket;
 use protocol;
 
 use EventLoop;
-use Message;
 
 pub struct Session {
     event_sender: mpsc::Sender<SessionNotify>,

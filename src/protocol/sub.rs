@@ -10,7 +10,7 @@ use std::io;
 
 use mio;
 
-use super::Protocol;
+use super::{ Protocol, Timeout };
 use super::clear_timeout;
 use super::priolist::*;
 use pipe::*;
@@ -18,8 +18,6 @@ use global::*;
 use event_loop_msg::{ SocketNotify, SocketOption };
 use EventLoop;
 use Message;
-
-type Timeout = Option<mio::Timeout>;
 
 pub struct Sub {
     id: SocketId,
@@ -186,7 +184,7 @@ impl State {
         }
     }
 
-    fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, timeout: Option<mio::Timeout>) -> State {
+    fn send(self, body: &mut Body, _: &mut EventLoop, _: Rc<Message>, _: Option<mio::Timeout>) -> State {
         let err = other_io_error("send not supported by protocol");
         let ntf = SocketNotify::MsgNotSent(err);
 
@@ -195,11 +193,11 @@ impl State {
         self
     }
 
-    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token) -> State {
+    fn on_send_by_pipe(self, _: &mut Body, _: &mut EventLoop, _: mio::Token) -> State {
         self
     }
 
-    fn on_send_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
+    fn on_send_timeout(self, _: &mut Body, _: &mut EventLoop) -> State {
         self
     }
 

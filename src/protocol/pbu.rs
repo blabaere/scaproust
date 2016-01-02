@@ -10,14 +10,12 @@ use std::io;
 
 use mio;
 
-use super::Protocol;
+use super::{ Protocol, Timeout };
 use pipe::*;
 use global::*;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
 use Message;
-
-type Timeout = Option<mio::Timeout>;
 
 pub struct Pub {
     id: SocketId,
