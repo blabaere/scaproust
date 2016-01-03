@@ -1,4 +1,4 @@
-// Copyright 2015 Copyright (c) 2015 Benoît Labaere (benoit.labaere@gmail.com)
+// Copyright 2016 Copyright (c) 2015 Benoît Labaere (benoit.labaere@gmail.com)
 //
 // Licensed under the MIT license LICENSE or <http://opensource.org/licenses/MIT>
 // This file may not be copied, modified, or distributed except according to those terms.
@@ -128,10 +128,12 @@ impl Protocol for Surv {
         self.on_state_transition(|s, body| s.send(body, event_loop, Rc::new(msg), timeout));
     }
 
-    fn on_send_by_pipe(&mut self, _: &mut EventLoop, _: mio::Token) {
+    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.on_state_transition(|s, body| s.on_send_by_pipe(body, event_loop, tok));
     }
 
-    fn on_send_timeout(&mut self, _: &mut EventLoop) {
+    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s, body| s.on_send_timeout(body, event_loop));
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
@@ -227,6 +229,14 @@ impl State {
         };
 
         State::Active(pending_survey)
+    }
+
+    fn on_send_by_pipe(self, _: &mut Body, _: &mut EventLoop, _: mio::Token) -> State {
+        self
+    }
+
+    fn on_send_timeout(self, _: &mut Body, _: &mut EventLoop) -> State {
+        self
     }
 
     fn on_survey_timeout(self, _: &mut Body, _: &mut EventLoop) -> State {

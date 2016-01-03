@@ -1,4 +1,4 @@
-// Copyright 2015 Copyright (c) 2015 Benoît Labaere (benoit.labaere@gmail.com)
+// Copyright 2016 Copyright (c) 2015 Benoît Labaere (benoit.labaere@gmail.com)
 //
 // Licensed under the MIT license LICENSE or <http://opensource.org/licenses/MIT>
 // This file may not be copied, modified, or distributed except according to those terms.
@@ -29,7 +29,7 @@ pub mod pbu;
 pub mod sub;
 pub mod surv;
 pub mod resp;
-//pub mod bus;
+pub mod bus;
 
 pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketNotify>>) -> Box<Protocol> {
     match socket_type {
@@ -40,7 +40,7 @@ pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<
         SocketType::Rep        => Box::new(rep::Rep::new(socket_id, evt_tx)),
         SocketType::Pub        => Box::new(pbu::Pub::new(socket_id, evt_tx)),
         SocketType::Sub        => Box::new(sub::Sub::new(socket_id, evt_tx)),
-        SocketType::Bus        => Box::new(NullProtocol),
+        SocketType::Bus        => Box::new(bus::Bus::new(socket_id, evt_tx)),
         SocketType::Surveyor   => Box::new(surv::Surv::new(socket_id, evt_tx)),
         SocketType::Respondent => Box::new(resp::Resp::new(socket_id, evt_tx))
     }

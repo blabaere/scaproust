@@ -206,6 +206,8 @@ fn test_req_rep() {
 // the bad news is that it means any send on windows require at least one event loop round trip
 // and that all dist base protocols will NOT WORK AT ALL !!!
 // ie: pub, survey, bus
+// It's very likely that it comes from the way mio emulates *nix-like async I/O on Windows
+
 #[cfg(not(windows))]
 #[test]
 fn test_pub_sub() {
@@ -236,26 +238,33 @@ fn test_pub_sub() {
     assert_eq!(io::ErrorKind::TimedOut, not_received_c.kind());
 }
 
-//#[test]
+#[cfg(not(windows))]
+#[test]
 fn test_bus() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Bus).unwrap();
     let mut client1 = session.create_socket(SocketType::Bus).unwrap();
     let mut client2 = session.create_socket(SocketType::Bus).unwrap();
+    let timeout = time::Duration::from_millis(50);
 
     server.bind("tcp://127.0.0.1:5464").unwrap();
     client1.connect("tcp://127.0.0.1:5464").unwrap();
     client2.connect("tcp://127.0.0.1:5464").unwrap();
+    client1.set_recv_timeout(timeout).unwrap();
+    client2.set_recv_timeout(timeout).unwrap();
+
+    thread::sleep(time::Duration::from_millis(150));
 
     let sent = vec![65, 66, 67];
-    server.send(sent).unwrap();
-    let received1 = client1.recv().unwrap();
+    server.send(sent).expect("Server should have send a msg");
+    let received1 = client1.recv().expect("Client #1 should have received the msg");
     assert_eq!(vec![65, 66, 67], received1);
-    let received2 = client2.recv().unwrap();
+    let received2 = client2.recv().expect("Client #2 should have received the msg");
     assert_eq!(vec![65, 66, 67], received2);
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_survey() {
     let _ = env_logger::init();
@@ -315,6 +324,7 @@ fn test_recv_reply_before_send_request() {
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
+#[cfg(not(windows))]
 #[test]
 fn test_survey_deadline() {
     let session = Session::new().unwrap();
