@@ -584,28 +584,22 @@ impl PipeState for Idle {
     }
 
     fn send(mut self: Box<Self>, event_loop: &mut EventLoop, msg: Rc<Message>) -> Box<PipeState> {
-        match send::SendOperation::new(msg) {
-            Ok(mut operation) => {
-                match operation.send(self.body.connection()) {
-                    Ok(true)  => self.sent_msg(event_loop),
-                    Ok(false) => self.sending_msg(event_loop, operation),
-                    Err(e)    => self.on_error(event_loop, e)
-                }
-            },
-            Err(e) => self.on_error(event_loop, e)
+        let mut operation = send::SendOperation::new(msg);
+
+        match operation.send(self.body.connection()) {
+            Ok(true)  => self.sent_msg(event_loop),
+            Ok(false) => self.sending_msg(event_loop, operation),
+            Err(e)    => self.on_error(event_loop, e)
         }
     }
 
     fn send_nb(mut self: Box<Self>, event_loop: &mut EventLoop, msg: Rc<Message>) -> Box<PipeState> {
-        match send::SendOperation::new(msg) {
-            Ok(mut operation) => {
-                match operation.send(self.body.connection()) {
-                    Ok(true)  => self,
-                    Ok(false) => self.on_error(event_loop, global::would_block_io_error("Non blocking send requested, but would block.")),
-                    Err(e)    => self.on_error(event_loop, e)
-                }
-            },
-            Err(e) => self.on_error(event_loop, e)
+        let mut operation = send::SendOperation::new(msg);
+        
+        match operation.send(self.body.connection()) {
+            Ok(true)  => self,
+            Ok(false) => self.on_error(event_loop, global::would_block_io_error("Non blocking send requested, but would block.")),
+            Err(e)    => self.on_error(event_loop, e)
         }
     }
 

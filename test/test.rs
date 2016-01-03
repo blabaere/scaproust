@@ -3,7 +3,8 @@
 // Licensed under the MIT license LICENSE or <http://opensource.org/licenses/MIT>
 // This file may not be copied, modified, or distributed except according to those terms.
 
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 extern crate env_logger;
 extern crate scaproust;
 
@@ -185,18 +186,18 @@ fn test_req_rep() {
     server.bind("tcp://127.0.0.1:5462").unwrap();
     client.connect("tcp://127.0.0.1:5462").unwrap();
 
-    let client_request = vec!(65, 66, 67);
+    let client_request = vec![65, 66, 67];
     client.send(client_request).unwrap();
 
     let server_request = server.recv().unwrap();
-    assert_eq!(vec!(65, 66, 67), server_request);
+    assert_eq!(vec![65, 66, 67], server_request);
 
-    let server_reply = vec!(67, 66, 65);
+    let server_reply = vec![67, 66, 65];
     server.send(server_reply).unwrap();
 
     let client_reply = client.recv().unwrap();
 
-    assert_eq!(vec!(67, 66, 65), client_reply);
+    assert_eq!(vec![67, 66, 65], client_reply);
 }
 
 // this is not working on appveyor
@@ -282,22 +283,22 @@ fn test_survey() {
 
     thread::sleep(time::Duration::from_millis(500));
 
-    let server_survey = vec!(65, 66, 67);
+    let server_survey = vec![65, 66, 67];
     server.send(server_survey).expect("Server should have send a survey");
 
     let client1_survey = client1.recv().expect("Client #1 should have received the survey");
-    assert_eq!(vec!(65, 66, 67), client1_survey);
+    assert_eq!(vec![65, 66, 67], client1_survey);
 
     let client2_survey = client2.recv().expect("Client #2 should have received the survey");
-    assert_eq!(vec!(65, 66, 67), client2_survey);
+    assert_eq!(vec![65, 66, 67], client2_survey);
 
-    client1.send(vec!(65, 66, 65)).expect("Client #1 should have send a vote");
+    client1.send(vec![65, 66, 65]).expect("Client #1 should have send a vote");
     let server_resp1 = server.recv().expect("Server should have received the vote from client #1");
-    assert_eq!(vec!(65, 66, 65), server_resp1);
+    assert_eq!(vec![65, 66, 65], server_resp1);
 
-    client2.send(vec!(67, 66, 67)).expect("Client #2 should have send a vote");
+    client2.send(vec![67, 66, 67]).expect("Client #2 should have send a vote");
     let server_resp2 = server.recv().expect("Server should have received the vote from client #2");
-    assert_eq!(vec!(67, 66, 67), server_resp2);
+    assert_eq!(vec![67, 66, 67], server_resp2);
 }
 
 
@@ -307,7 +308,7 @@ fn test_send_reply_before_send_request() {
     let mut server = session.create_socket(SocketType::Rep).unwrap();
 
     server.bind("tcp://127.0.0.1:5466").unwrap();
-    server.send(vec!(67, 66, 65)).unwrap_err();
+    server.send(vec![67, 66, 65]).unwrap_err();
 }
 
 
@@ -341,11 +342,11 @@ fn test_survey_deadline() {
 
     thread::sleep(time::Duration::from_millis(500));
 
-    let server_survey = vec!(65, 66, 67);
+    let server_survey = vec![65, 66, 67];
     server.send(server_survey).unwrap();
 
     let client_survey = client.recv().unwrap();
-    assert_eq!(vec!(65, 66, 67), client_survey);
+    assert_eq!(vec![65, 66, 67], client_survey);
 
     thread::sleep(time::Duration::from_millis(200));
 
@@ -353,8 +354,8 @@ fn test_survey_deadline() {
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
-//#[test]
-//fn test_req_resend() {
+// #[test]
+// fn test_req_resend() {
 //    let session = Session::new().unwrap();
 //    let mut server = session.create_socket(SocketType::Rep).unwrap();
 //    let mut client = session.create_socket(SocketType::Req).unwrap();
@@ -383,7 +384,7 @@ fn test_survey_deadline() {
 //    let client_reply = client.recv().unwrap();
 //
 //    assert_eq!(vec!(69, 69, 69), client_reply);
-//}
+// }
 
 
 #[cfg(not(windows))]
@@ -396,12 +397,11 @@ fn test_ipc() {
     bound.bind("ipc:///tmp/test_ipc.ipc").unwrap();
     connected.connect("ipc:///tmp/test_ipc.ipc").unwrap();
 
-    connected.send(vec!(65, 66, 67)).unwrap();
+    connected.send(vec![65, 66, 67]).unwrap();
     let received = bound.recv().unwrap();
     assert_eq!(vec![65, 66, 67], received);
 
-    bound.send(vec!(67, 66, 65)).unwrap();
+    bound.send(vec![67, 66, 65]).unwrap();
     let received = connected.recv().unwrap();
-    assert_eq!(vec!(67, 66, 65), received);
+    assert_eq!(vec![67, 66, 65], received);
 }
-

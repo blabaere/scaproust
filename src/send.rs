@@ -6,7 +6,7 @@
 use std::rc::Rc;
 use std::io;
 
-use byteorder::{ BigEndian, WriteBytesExt };
+use byteorder::*;
 
 use Message;
 use transport::Connection;
@@ -31,25 +31,25 @@ impl Step {
 }
 
 pub struct SendOperation {
-    prefix: Vec<u8>,
+    prefix: [u8; 8],
     msg: Rc<Message>,
     step: Step,
     written: usize
 }
 
 impl SendOperation {
-    pub fn new(msg: Rc<Message>) -> io::Result<SendOperation> {
-        let mut prefix = Vec::with_capacity(8);
+    pub fn new(msg: Rc<Message>) -> SendOperation {
+        let mut prefix = [0u8; 8];
         let msg_len = msg.len() as u64;
 
-        try!(prefix.write_u64::<BigEndian>(msg_len));
+        BigEndian::write_u64(&mut prefix, msg_len);
 
-        Ok(SendOperation {
+        SendOperation {
             prefix: prefix,
             msg: msg,
             step: Step::Prefix,
             written: 0
-        })
+        }
     }
 
     fn step_forward(&mut self) {
