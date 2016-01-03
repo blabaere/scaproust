@@ -28,7 +28,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
 ## Progress
 - [ ] Protocols
   - [x] PAIR
-  - [ ] BUS
+  - [x] BUS
   - [ ] REQREP
     - [x] REQ
     - [ ] REQ resend
@@ -40,10 +40,10 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
   - [x] PIPELINE
     - [x] PUSH
     - [x] PULL
-  - [ ] SURVEY
+  - [x] SURVEY
     - [x] SURVEYOR
-    - [ ] SURVEYOR deadline
-    - [ ] RESPONDENT  
+    - [x] SURVEYOR deadline
+    - [x] RESPONDENT  
 
 - [ ] Transports
   - [x] TCP
@@ -84,7 +84,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
 
 - [ ] Protocol options
     - [ ] REQ resend interval
-    - [ ] SURVEYOR deadline
+    - [x] SURVEYOR deadline
     - [x] SUB subscribe
     - [x] SUB unsubscribe
 
