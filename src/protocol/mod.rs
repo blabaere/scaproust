@@ -9,7 +9,7 @@ use std::io;
 
 use mio;
 
-use global::{ SocketType, SocketId, other_io_error };
+use global::{ SocketType, SocketId };
 use event_loop_msg::{ SocketNotify, SocketOption };
 use pipe::Pipe;
 use EventLoop;
@@ -78,36 +78,4 @@ fn clear_timeout(event_loop: &mut EventLoop, handle: Option<mio::Timeout>) {
     if let Some(timeout) = handle {
         event_loop.clear_timeout(timeout);
     }
-}
-
-struct NullProtocol;
-
-impl Protocol for NullProtocol {
-    fn id(&self) -> u16 {
-        0
-    }
-    fn peer_id(&self) -> u16 {
-        0
-    }
-
-    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) -> io::Result<()> {
-        Err(other_io_error("not implemented"))
-    }
-    fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe> {
-        None
-    }
-
-    fn register_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token) {}
-    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, token: mio::Token) {}
-
-    fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
-    }
-
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout_handle: Option<mio::Timeout>) {}
-    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token) {}
-    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {}
-
-    fn recv(&mut self, event_loop: &mut EventLoop, timeout_handle: Option<mio::Timeout>) {}
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) {}
-    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {}
 }

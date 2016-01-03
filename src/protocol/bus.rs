@@ -26,7 +26,6 @@ pub struct Bus {
 }
 
 struct Body {
-    id: SocketId,
     notify_sender: Rc<Sender<SocketNotify>>,
     pipes: HashMap<mio::Token, Pipe>,
     dist: HashSet<mio::Token>,
@@ -42,7 +41,6 @@ enum State {
 impl Bus {
     pub fn new(socket_id: SocketId, notify_tx: Rc<Sender<SocketNotify>>) -> Bus {
         let body = Body {
-            id: socket_id,
             notify_sender: notify_tx,
             pipes: HashMap::new(),
             dist: HashSet::new(),

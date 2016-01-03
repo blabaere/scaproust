@@ -18,16 +18,14 @@ use EventLoop;
 use Message;
 
 pub struct Pub {
-    id: SocketId,
     notify_sender: Rc<Sender<SocketNotify>>,
     pipes: HashMap<mio::Token, Pipe>,
     dist: HashSet<mio::Token>
 }
 
 impl Pub {
-    pub fn new(socket_id: SocketId, notify_tx: Rc<Sender<SocketNotify>>) -> Pub {
+    pub fn new(_: SocketId, notify_tx: Rc<Sender<SocketNotify>>) -> Pub {
         Pub {
-            id: socket_id,
             notify_sender: notify_tx,
             pipes: HashMap::new(),
             dist: HashSet::new()

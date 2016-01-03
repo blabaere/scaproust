@@ -18,10 +18,6 @@ use event_loop_msg::*;
 use send;
 use recv;
 
-// TODO ? : split recv & send related state so that a pipe can be both sending and receiving
-// this could be usefulfor req resend where the pipe could be receiving 
-// and then ask to send (the same request)
-
 // A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
 // That means send/receive size prefix and then message payload
 // according to the connection readiness and the requested operation progress if any
@@ -174,7 +170,6 @@ trait PipeState {
     }
 
     fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
-        // TODO test hup and error, then call readable or writable, or maybe both ?
         Box::new(Dead)
     }
 
@@ -204,7 +199,6 @@ trait PipeState {
 
     fn on_error(self: Box<Self>, _: &mut EventLoop, err: io::Error) -> Box<PipeState> {
         debug!("State '{}' failed: {:?}", self.name(), err);
-        // TODO send a Disconnected signal
         Box::new(Dead)
     }
 }
@@ -226,7 +220,7 @@ trait LivePipeState {
 }
 
 fn unregister_live(state: &LivePipeState, event_loop: &mut EventLoop) -> Box<PipeState> {
-    state.unregister(event_loop);
+    let _ = state.unregister(event_loop);
     Box::new(Dead)
 }
 
