@@ -6,7 +6,7 @@
 use std::rc::Rc;
 use std::io;
 
-use byteorder::{ BigEndian, WriteBytesExt };
+use byteorder::*;
 
 use mio;
 
@@ -255,6 +255,18 @@ fn no_transition_if_ok<F : PipeState + 'static>(f: Box<F>, res: io::Result<()>, 
 
 ///////////////////////////////////////////////////////////////////////////////
 //                                                                           //
+// HANDSHAKE                                                                 //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
+fn create_handshake(protocol_id: u16) -> [u8; 8] {
+    // handshake is Zero, 'S', 'P', Version, Proto[2], Rsvd[2]
+    let mut handshake = [0, 83, 80, 0, 0, 0, 0, 0];
+    BigEndian::write_u16(&mut handshake[4..6], protocol_id);
+    handshake
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
 // INITIAL STATE                                                             //
 //                                                                           //
 ///////////////////////////////////////////////////////////////////////////////
@@ -310,10 +322,7 @@ impl From<Initial> for HandshakeTx {
 impl HandshakeTx {
 
     fn write_handshake(&mut self) -> io::Result<()> {
-        // handshake is Zero, 'S', 'P', Version, Proto, Rsvd
-        let mut handshake = vec!(0, 83, 80, 0);
-        try!(handshake.write_u16::<BigEndian>(self.protocol_id));
-        try!(handshake.write_u16::<BigEndian>(0));
+        let handshake = create_handshake(self.protocol_id);
         try!(
             self.body.connection().try_write(&handshake).
             and_then(|w| self.check_sent_handshake(w)));
@@ -397,12 +406,9 @@ impl HandshakeRx {
     }
 
     fn check_received_handshake(&self, handshake: &[u8; 8]) -> io::Result<()> {
-        let mut expected_handshake = vec!(0, 83, 80, 0);
-        try!(expected_handshake.write_u16::<BigEndian>(self.protocol_peer_id));
-        try!(expected_handshake.write_u16::<BigEndian>(0));
-        let mut both = handshake.iter().zip(expected_handshake.iter());
+        let expected_handshake = create_handshake(self.protocol_peer_id);
 
-        if both.all(|(l,r)| l == r) {
+        if handshake == &expected_handshake {
             Ok(())
         } else {
             error!("expected '{:?}' but received '{:?}' !", expected_handshake, handshake);
@@ -459,10 +465,9 @@ struct Activable {
 impl Activable {
     fn subscribe_to_all(&self, event_loop: &mut EventLoop) -> io::Result<()> {
         self.body.reregister(
-                event_loop, 
-                mio::EventSet::readable() | mio::EventSet::writable(), 
-                mio::PollOpt::edge())
-        
+            event_loop, 
+            mio::EventSet::readable() | mio::EventSet::writable(), 
+            mio::PollOpt::edge())
     }
 }
 
@@ -733,9 +738,9 @@ impl PipeState for Sending {
 
         let mut operation = self.operation.take().unwrap();
         match operation.send(self.body.connection()) {
-                Ok(true)  => self.sent_msg(event_loop),
-                Ok(false) => self.sending_msg(event_loop, operation),
-                Err(e)    => self.on_error(event_loop, e)
+            Ok(true)  => self.sent_msg(event_loop),
+            Ok(false) => self.sending_msg(event_loop, operation),
+            Err(e)    => self.on_error(event_loop, e)
         }
     }
 
@@ -764,5 +769,20 @@ struct Dead;
 impl PipeState for Dead {
     fn name(&self) -> &'static str {
         "Dead"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn can_compare_array_slices() {
+        let handshake1 : [u8; 8]= [0, 1, 2, 3, 4, 5, 6, 7];
+        let handshake2 : [u8; 8]= [0, 1, 2, 3, 4, 5, 6, 7];
+        let handshake3 : [u8; 8]= [0, 0, 0, 3, 4, 5, 6, 7];
+
+        assert!(&handshake1 == &handshake2);
+        assert!(&handshake1 != &handshake3);
+        assert!(&handshake2 != &handshake3);
     }
 }
