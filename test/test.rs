@@ -200,16 +200,6 @@ fn test_req_rep() {
     assert_eq!(vec![67, 66, 65], client_reply);
 }
 
-// this is not working on appveyor
-// for a mysterious reason the publisher can send the 8 bytes of the prefix
-// but then the next 3 bytes of the body can't be sent : WouldBlock
-// Since Pub requires non-blocking send, the operation is not completed
-// the bad news is that it means any send on windows require at least one event loop round trip
-// and that all dist base protocols will NOT WORK AT ALL !!!
-// ie: pub, survey, bus
-// It's very likely that it comes from the way mio emulates *nix-like async I/O on Windows
-
-#[cfg(not(windows))]
 #[test]
 fn test_pub_sub() {
     let _ = env_logger::init();
@@ -239,7 +229,6 @@ fn test_pub_sub() {
     assert_eq!(io::ErrorKind::TimedOut, not_received_c.kind());
 }
 
-//#[cfg(not(windows))]
 #[test]
 fn test_bus() {
     let _ = env_logger::init();
@@ -265,7 +254,6 @@ fn test_bus() {
     assert_eq!(vec![65, 66, 67], received2);
 }
 
-//#[cfg(not(windows))]
 #[test]
 fn test_survey() {
     let _ = env_logger::init();
@@ -327,7 +315,6 @@ fn test_recv_reply_before_send_request() {
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
-//#[cfg(not(windows))]
 #[test]
 fn test_survey_deadline() {
     let _ = env_logger::init();
