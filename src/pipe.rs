@@ -594,9 +594,7 @@ impl PipeState for Idle {
     }
 
     fn send_nb(mut self: Box<Self>, event_loop: &mut EventLoop, msg: Rc<Message>) -> Box<PipeState> {
-        let mut operation = send::SendOperation::new(msg);
-        
-        match operation.send(self.body.connection()) {
+        match send::send_nb(self.body.connection(), msg) {
             Ok(true)  => self,
             Ok(false) => self.on_error(event_loop, global::would_block_io_error("Non blocking send requested, but would block.")),
             Err(e)    => self.on_error(event_loop, e)

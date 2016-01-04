@@ -3,6 +3,8 @@ The way mio works on Windows currently makes it impossible to send several chunk
 without having to wait for an event loop round-trip.
 This is required for dist based protocols to work (pub, survey and bus).
 One way around this could be to create one buffer with everything (size prefix, header & payload).
+Or to have Message implement trait bytes::buf::Buf ?
+See http://carllerche.github.io/bytes/bytes/buf/trait.Buf.html
 
 ### Current problem: REQ resend
 There can be only one operation in progress for a given socket but resend occurs in background.

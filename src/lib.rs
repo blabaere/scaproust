@@ -5,9 +5,8 @@
 
 #![crate_name = "scaproust"]
 
-#![feature(unboxed_closures)]
-
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 extern crate byteorder;
 extern crate mio;
 extern crate time;

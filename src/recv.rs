@@ -5,7 +5,7 @@
 
 use std::io;
 
-use byteorder::{ BigEndian, ReadBytesExt };
+use byteorder::*;
 
 use Message;
 use transport::Connection;
@@ -61,8 +61,7 @@ impl RecvOperation {
                 return Ok(None);
             } else if self.read == self.prefix.len() {
                 self.step_forward();
-                let mut bytes: &[u8] = &mut self.prefix;
-                self.msg_len = try!(bytes.read_u64::<BigEndian>());
+                self.msg_len = BigEndian::read_u64(&self.prefix);
                 self.buffer = Some(vec![0u8; self.msg_len as usize]);
             } else {
                 return Ok(None);

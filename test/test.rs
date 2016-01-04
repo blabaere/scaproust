@@ -239,7 +239,7 @@ fn test_pub_sub() {
     assert_eq!(io::ErrorKind::TimedOut, not_received_c.kind());
 }
 
-#[cfg(not(windows))]
+//#[cfg(not(windows))]
 #[test]
 fn test_bus() {
     let _ = env_logger::init();
@@ -265,7 +265,7 @@ fn test_bus() {
     assert_eq!(vec![65, 66, 67], received2);
 }
 
-#[cfg(not(windows))]
+//#[cfg(not(windows))]
 #[test]
 fn test_survey() {
     let _ = env_logger::init();
@@ -304,6 +304,7 @@ fn test_survey() {
 
 #[test]
 fn test_send_reply_before_send_request() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Rep).unwrap();
 
@@ -314,6 +315,7 @@ fn test_send_reply_before_send_request() {
 
 #[test]
 fn test_recv_reply_before_send_request() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Rep).unwrap();
     let mut client = session.create_socket(SocketType::Req).unwrap();
@@ -325,9 +327,10 @@ fn test_recv_reply_before_send_request() {
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
-#[cfg(not(windows))]
+//#[cfg(not(windows))]
 #[test]
 fn test_survey_deadline() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Surveyor).unwrap();
     let mut client = session.create_socket(SocketType::Respondent).unwrap();
@@ -390,6 +393,7 @@ fn test_survey_deadline() {
 #[cfg(not(windows))]
 #[test]
 fn test_ipc() {
+    let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut bound = session.create_socket(SocketType::Pair).unwrap();
     let mut connected = session.create_socket(SocketType::Pair).unwrap();
