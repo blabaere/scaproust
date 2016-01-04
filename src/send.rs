@@ -21,8 +21,10 @@ pub fn send_nb(connection: &mut Connection, msg: Rc<Message>) -> io::Result<bool
     let msg_len = msg.len();
     let buf_len = 8 + msg_len;
     let mut buffer = Vec::with_capacity(buf_len);
+    let mut prefix = [0u8; 8];
 
-    BigEndian::write_u64(&mut buffer[0..8], msg_len as u64);
+    BigEndian::write_u64(&mut prefix, msg_len as u64);
+    buffer.extend_from_slice(&prefix);
     buffer.extend_from_slice(msg.get_header());
     buffer.extend_from_slice(msg.get_body());
 
