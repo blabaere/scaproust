@@ -1,11 +1,3 @@
-### Windows problem: non-blocking send not available
-The way mio works on Windows currently makes it impossible to send several chunks of bytes
-without having to wait for an event loop round-trip.
-This is required for dist based protocols to work (pub, survey and bus).
-One way around this could be to create one buffer with everything (size prefix, header & payload).
-Or to have Message implement trait bytes::buf::Buf ?
-See http://carllerche.github.io/bytes/bytes/buf/trait.Buf.html
-
 ### Current problem: REQ resend
 There can be only one operation in progress for a given socket but resend occurs in background.
 Resend must be scheduled when a regular send succeeds, and cancelled when the matching recv occurs.
@@ -41,3 +33,9 @@ https://github.com/dwrensha/gj
 https://github.com/zonyitoo/simplesched  
 https://github.com/alexcrichton/wio (for appveyor ci script and doc publication too)  
 https://github.com/burrows-labs/mio-websockets  
+
+### Windows problem: non-blocking send not available
+The way mio works on Windows currently makes it impossible to send several chunks of bytes
+without having to wait for an event loop round-trip.
+This is required for dist based protocols to work (pub, survey and bus).
+The applied workaround is to create a buffer for each non-blocking send operation.
