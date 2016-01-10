@@ -1,12 +1,18 @@
 [package]
-name      = "scaproust"
-version   = "0.1.0"
-authors   = ["blabaere <benoit.labaere@gmail.com>"]
-readme    = "README.md"
-keywords  = ["io", "nanomsg", "messaging"]
-exclude   = [
+name          = "scaproust"
+version       = "0.1.0"
+authors       = ["blabaere <benoit.labaere@gmail.com>"]
+description   = "Nanomsg scalability protocols implementation in rust"
+readme        = "README.md"
+keywords      = ["io", "nanomsg", "messaging"]
+license       = "MIT/Apache"
+documentation = "https://github.com/blabaere/scaproust"
+homepage      = "https://github.com/blabaere/scaproust"
+repository    = "https://github.com/blabaere/scaproust"
+exclude       = [
   ".gitignore",
   ".travis.yml",
+  "appveyor.yml",
   "test/**/*",
 ]
 

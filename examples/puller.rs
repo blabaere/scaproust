@@ -22,7 +22,7 @@ fn main() {
     let session = Session::new().unwrap();
     let mut socket = session.create_socket(SocketType::Pull).unwrap();
 
-    socket.connect("tcp://127.0.0.1:5457").unwrap();
+    socket.bind("tcp://127.0.0.1:5454").unwrap();
 
     let mut input = String::new();
     loop {
