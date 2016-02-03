@@ -18,7 +18,7 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 ### Refactors:
 - Rename session into something less oriented ? (context, environment ...)
 - Implement Read & Write trait on sockets
-- Use a pool for payloads
+- Use a pool for payloads and buffers (if any)
 
 ### Features:
 - For raw bus socket, store the pipe token in the header when receving a message. When sending, check if there is a pipe token in the header and skip the specified pipe

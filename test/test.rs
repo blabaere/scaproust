@@ -397,3 +397,35 @@ fn test_ipc() {
     let received = connected.recv().unwrap();
     assert_eq!(vec![67, 66, 65], received);
 }
+
+#[test]
+fn test_bus_device() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut server = session.create_socket(SocketType::Bus).unwrap();
+    let mut client1 = session.create_socket(SocketType::Bus).unwrap();
+    let mut client2 = session.create_socket(SocketType::Bus).unwrap();
+    let timeout = time::Duration::from_millis(50);
+
+    server.bind("tcp://127.0.0.1:5470").unwrap();
+    client1.connect("tcp://127.0.0.1:5470").unwrap();
+    client2.connect("tcp://127.0.0.1:5470").unwrap();
+    client1.set_send_timeout(timeout).unwrap();
+    client2.set_send_timeout(timeout).unwrap();
+    client1.set_recv_timeout(timeout).unwrap();
+    client2.set_recv_timeout(timeout).unwrap();
+
+    thread::sleep(time::Duration::from_millis(500));
+
+    let device_thread = thread::spawn(move || device(server));
+
+    client1.send(vec![65, 66, 67]).unwrap();
+    let received = client2.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received);
+
+    let err = client1.recv().unwrap_err();
+    assert_eq!(io::ErrorKind::TimedOut, err.kind());
+
+    drop(session);
+    device_thread.join().unwrap().unwrap_err();
+}

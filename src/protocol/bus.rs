@@ -11,6 +11,8 @@ use std::io;
 
 use mio;
 
+use byteorder::*;
+
 use super::{ Protocol, Timeout };
 use super::clear_timeout;
 use super::priolist::*;
@@ -106,7 +108,10 @@ impl Protocol for Bus {
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
-        self.on_state_transition(|s, body| s.send(body, event_loop, Rc::new(msg), timeout));
+        let (raw_msg, pipe_id) = encode(msg);
+        let origin = pipe_id.map(|id| mio::Token(id as usize));
+
+        self.on_state_transition(|s, body| s.send(body, event_loop, Rc::new(raw_msg), origin, timeout));
     }
 
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
@@ -121,7 +126,9 @@ impl Protocol for Bus {
         self.on_state_transition(|s, body| s.recv(body, event_loop, timeout));
     }
 
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) {
+    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
+        let msg = decode(raw_msg, tok);
+
         self.on_state_transition(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
     }
 
@@ -175,10 +182,21 @@ impl State {
         }
     }
 
-    fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, _: Option<mio::Timeout>) -> State {
-        for (tok, mut pipe) in body.pipes.iter_mut() {
-            if body.dist.contains(tok) {
-                pipe.send_nb(event_loop, msg.clone());
+    fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, origin: Option<mio::Token>, _: Option<mio::Timeout>) -> State {
+        if let Some(excluded) = origin {
+            for (tok, mut pipe) in body.pipes.iter_mut() {
+                if tok.as_usize() == excluded.as_usize() {
+                    continue;
+                }
+                if body.dist.contains(tok) {
+                    pipe.send_nb(event_loop, msg.clone());
+                }
+            }
+        } else {
+            for (tok, mut pipe) in body.pipes.iter_mut() {
+                if body.dist.contains(tok) {
+                    pipe.send_nb(event_loop, msg.clone());
+                }
             }
         }
 
@@ -284,4 +302,28 @@ impl Body {
     fn get_pipe<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
         self.pipes.get_mut(&tok)
     }
+}
+
+fn decode(raw_msg: Message, pipe_id: mio::Token) -> Message {
+    let mut msg = raw_msg;
+    let mut pipe_id_bytes: [u8; 4] = [0; 4];
+
+    BigEndian::write_u32(&mut pipe_id_bytes[..], pipe_id.as_usize() as u32);
+
+    msg.header.reserve(4);
+    msg.header.extend_from_slice(&pipe_id_bytes);
+    msg
+}
+
+fn encode(msg: Message) -> (Message, Option<u32>) {
+    if msg.get_header().len() < 4 {
+        return (msg, None);
+    }
+
+    let (mut header, body) = msg.explode();
+    let remaining_header = header.split_off(4);
+    let pipe_id = BigEndian::read_u32(&header);
+    let raw_msg = Message::with_header_and_body(remaining_header, body);
+
+    (raw_msg, Some(pipe_id))
 }

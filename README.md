@@ -32,6 +32,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
   - [ ] REQREP
     - [x] REQ
     - [ ] REQ resend
+    - [ ] REQ prefetch replies
     - [x] REP
   - [x] PUBSUB
     - [x] PUB
@@ -59,7 +60,6 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
   - [x] Rebind on failure
   - [ ] Device
   - [ ] Logs
-  - [ ] Statistics
 
 - [ ] Advanced features
   - [x] Fair queuing
@@ -68,6 +68,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
   - [ ] Recv priority
   - [ ] Send (scatter array + control header)
   - [ ] Recv (scatter array + control header)
+  - [ ] Statistics
 
 - [ ] Socket options
   - [ ] Linger

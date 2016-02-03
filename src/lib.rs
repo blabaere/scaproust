@@ -23,6 +23,7 @@ mod pipe;
 mod send;
 mod recv;
 mod acceptor;
+mod device;
 
 pub use facade::{
     SessionFacade as Session,
@@ -31,6 +32,8 @@ pub use facade::{
 
 pub use global::SocketType;
 pub use event_loop_msg::SocketOption;
+
+pub use device::*;
 
 pub type EventLoop = mio::EventLoop<session::Session>;
 

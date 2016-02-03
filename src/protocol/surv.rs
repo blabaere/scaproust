@@ -312,7 +312,7 @@ impl Body {
         let cmd = EventLoopTimeout::CancelSurvey(self.id);
         let ivl = self.deadline_ms;
 
-        event_loop.timeout_ms(cmd, ivl).
+        event_loop.timeout(cmd, time::Duration::from_millis(ivl)).
             map(|t| Some(t)).
             unwrap_or_else(|_| None)
     }

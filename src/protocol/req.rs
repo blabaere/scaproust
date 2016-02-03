@@ -8,6 +8,7 @@ use std::rc::Rc;
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::io;
+use std::time::Duration;
 
 use mio;
 
@@ -334,7 +335,7 @@ impl Body {
             let cmd = EventLoopTimeout::Resend(self.id);
             let ivl = self.resend_interval;
 
-            event_loop.timeout_ms(cmd, ivl).
+            event_loop.timeout(cmd, Duration::from_millis(ivl)).
                 map(|t| Some(t)).
                 unwrap_or_else(|_| None)
         } else {

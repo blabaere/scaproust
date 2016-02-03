@@ -32,7 +32,7 @@ impl SessionFacade {
         builder.
             notify_capacity(4_096).
             messages_per_tick(256).
-            timer_tick_ms(15).
+            timer_tick(time::Duration::from_millis(15)).
             timer_wheel_size(1_024).
             timer_capacity(4_096);
 
