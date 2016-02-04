@@ -70,13 +70,13 @@ impl SessionFacade {
         try!(self.send_cmd(cmd));
 
         match self.evt_receiver.recv() {
-            Ok(SessionNotify::SocketCreated(id, rx)) => Ok(self.new_socket(id, rx)),
+            Ok(SessionNotify::SocketCreated(id, rx)) => Ok(self.new_socket(id, socket_type, rx)),
             Err(_)                                   => Err(other_io_error("evt channel closed"))
         }
     }
 
-    fn new_socket(&self, id: SocketId, rx: mpsc::Receiver<SocketNotify>) -> SocketFacade {
-        SocketFacade::new(id, self.cmd_sender.clone(), rx)
+    fn new_socket(&self, id: SocketId, socket_type: SocketType, rx: mpsc::Receiver<SocketNotify>) -> SocketFacade {
+        SocketFacade::new(id, socket_type, self.cmd_sender.clone(), rx)
     }
 }
 
@@ -88,15 +88,30 @@ impl Drop for SessionFacade {
 
 pub struct SocketFacade {
     id: SocketId,
+    socket_type: SocketType, 
     cmd_sender: Sender<EventLoopSignal>,
     evt_receiver: Receiver<SocketNotify>
     // Could use https://github.com/polyfractal/bounded-spsc-queue ?
     // Maybe once a smart waiting strategy is available (like spin, then sleep 0, then sleep 1, then mutex ?)
+    // or something that would help for poll
 }
 
 impl SocketFacade {
-    pub fn new(id: SocketId, cmd_tx: Sender<EventLoopSignal>, evt_rx: Receiver<SocketNotify>) -> SocketFacade {
-        SocketFacade { id: id, cmd_sender: cmd_tx, evt_receiver: evt_rx }
+    pub fn new(
+        id: SocketId,
+        socket_type: SocketType, 
+        cmd_tx: Sender<EventLoopSignal>, 
+        evt_rx: Receiver<SocketNotify>) -> SocketFacade {
+        SocketFacade { 
+            id: id, 
+            socket_type: socket_type,
+            cmd_sender: cmd_tx, 
+            evt_receiver: evt_rx 
+        }
+    }
+
+    pub fn get_socket_type(&self) -> SocketType {
+        self.socket_type
     }
 
     fn send_cmd(&self, cmd: SocketCmdSignal) -> Result<(), io::Error> {
@@ -185,6 +200,43 @@ impl SocketFacade {
 
     pub fn set_recv_timeout(&mut self, timeout: time::Duration) -> io::Result<()> {
         self.set_option(SocketOption::RecvTimeout(timeout))
+    }
+
+    pub fn run_relay_device(mut self) -> io::Result<()> {
+        loop {
+            let msg = try!(self.recv_msg());
+
+            try!(self.send_msg(msg));
+        }
+    }
+
+    pub fn run_bridge_device(self, other: SocketFacade) -> io::Result<()> {
+        if !self.socket_type.matches(other.socket_type) {
+            other_io_error("Socket types do not match");
+        }
+
+        match self.get_socket_type() {
+            SocketType::Pull | SocketType::Sub => self.one_way_device(other),
+            SocketType::Push | SocketType::Pub => other.one_way_device(self),
+            SocketType::Req        |
+            SocketType::Rep        |
+            SocketType::Respondent |
+            SocketType::Surveyor   |
+            SocketType::Pair       => self.two_way_device(other),
+            SocketType::Bus        => Err(invalid_data_io_error("socket type not supported"))
+        }
+    }
+
+    fn one_way_device(mut self: SocketFacade, mut sender: SocketFacade) -> io::Result<()> {
+        loop {
+            let msg = try!(self.recv_msg());
+
+            try!(sender.send_msg(msg));
+        }
+    }
+
+    fn two_way_device(mut self: SocketFacade, mut other: SocketFacade) -> io::Result<()> {
+        Err(other_io_error("not implemented"))
     }
 }
 

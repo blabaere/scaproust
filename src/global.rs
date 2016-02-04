@@ -29,6 +29,26 @@ impl SocketType {
     pub fn id(&self) -> u16 {
         *self as u16
     }
+
+    pub fn peer(&self) -> SocketType {
+        match *self {
+            SocketType::Pair       => SocketType::Pair,
+            SocketType::Pub        => SocketType::Sub,
+            SocketType::Sub        => SocketType::Pub,
+            SocketType::Req        => SocketType::Rep,
+            SocketType::Rep        => SocketType::Req,
+            SocketType::Push       => SocketType::Pull,
+            SocketType::Pull       => SocketType::Push,
+            SocketType::Surveyor   => SocketType::Respondent,
+            SocketType::Respondent => SocketType::Surveyor,
+            SocketType::Bus        => SocketType::Bus
+        }
+    }
+
+    pub fn matches(&self, other: SocketType) -> bool {
+        self.peer() == other &&
+        other.peer() == *self
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

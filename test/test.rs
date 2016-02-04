@@ -399,7 +399,7 @@ fn test_ipc() {
 }
 
 #[test]
-fn test_bus_device() {
+fn test_device_bus() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut server = session.create_socket(SocketType::Bus).unwrap();
@@ -417,13 +417,47 @@ fn test_bus_device() {
 
     thread::sleep(time::Duration::from_millis(500));
 
-    let device_thread = thread::spawn(move || device(server));
+    let device_thread = thread::spawn(move || server.run_relay_device());
 
     client1.send(vec![65, 66, 67]).unwrap();
     let received = client2.recv().unwrap();
     assert_eq!(vec![65, 66, 67], received);
 
     let err = client1.recv().unwrap_err();
+    assert_eq!(io::ErrorKind::TimedOut, err.kind());
+
+    drop(session);
+    device_thread.join().unwrap().unwrap_err();
+}
+
+#[test]
+fn test_device_pipeline() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut d_push = session.create_socket(SocketType::Push).unwrap();
+    let mut d_pull = session.create_socket(SocketType::Pull).unwrap();
+    let mut push = session.create_socket(SocketType::Push).unwrap();
+    let mut pull = session.create_socket(SocketType::Pull).unwrap();
+    let timeout = time::Duration::from_millis(50);
+
+    d_push.bind("tcp://127.0.0.1:5471").unwrap();
+    d_pull.bind("tcp://127.0.0.1:5472").unwrap();
+
+    push.connect("tcp://127.0.0.1:5472").unwrap();
+    pull.connect("tcp://127.0.0.1:5471").unwrap();
+
+    push.set_send_timeout(timeout).unwrap();
+    pull.set_recv_timeout(timeout).unwrap();
+
+    thread::sleep(time::Duration::from_millis(500));
+
+    let device_thread = thread::spawn(move || d_pull.run_bridge_device(d_push));
+
+    push.send(vec![65, 66, 67]).unwrap();
+    let received = pull.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received);
+
+    let err = pull.recv().unwrap_err();
     assert_eq!(io::ErrorKind::TimedOut, err.kind());
 
     drop(session);
