@@ -185,7 +185,7 @@ impl State {
     fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, origin: Option<mio::Token>, _: Option<mio::Timeout>) -> State {
         if let Some(excluded) = origin {
             for (tok, mut pipe) in body.pipes.iter_mut() {
-                if tok.as_usize() == excluded.as_usize() {
+                if *tok == excluded {
                     continue;
                 }
                 if body.dist.contains(tok) {
