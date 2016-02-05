@@ -56,22 +56,41 @@ impl SessionCmdSignal {
     }
 }
 
+
 pub enum SocketCmdSignal {
     Connect(String),
     Bind(String),
     SendMsg(Message),
     RecvMsg,
-    SetOption(SocketOption)
+    SetOption(SocketOption),
+    CreateProbe(Vec<PollRequest>)
+}
+
+pub struct PollRequest {
+    socketId: SocketId,
+    recv: bool,
+    send: bool
+}
+
+impl PollRequest {
+    pub fn new_for_recv(socketId: SocketId) -> PollRequest {
+        PollRequest {
+            socketId: socketId,
+            recv: true,
+            send: false
+        }
+    }
 }
 
 impl SocketCmdSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            SocketCmdSignal::Connect(_)   => "Connect",
-            SocketCmdSignal::Bind(_)      => "Bind",
-            SocketCmdSignal::SendMsg(_)   => "SendMsg",
-            SocketCmdSignal::RecvMsg      => "RecvMsg",
-            SocketCmdSignal::SetOption(_) => "SetOption"
+            SocketCmdSignal::Connect(_)     => "Connect",
+            SocketCmdSignal::Bind(_)        => "Bind",
+            SocketCmdSignal::SendMsg(_)     => "SendMsg",
+            SocketCmdSignal::RecvMsg        => "RecvMsg",
+            SocketCmdSignal::SetOption(_)   => "SetOption",
+            SocketCmdSignal::CreateProbe(_) => "CreateProbe"
         }
     }
 }
@@ -157,5 +176,9 @@ pub enum SocketNotify {
     MsgRecv(Message),
     MsgNotRecv(io::Error),
     OptionSet,
-    OptionNotSet(io::Error)
+    OptionNotSet(io::Error),
+    ProbeCreated(mpsc::Receiver<PollResult>),
+    ProbeNotCreated(io::Error)
 }
+
+pub struct PollResult(pub Vec<(bool, bool)>);

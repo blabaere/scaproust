@@ -216,27 +216,78 @@ impl SocketFacade {
         }
 
         match self.get_socket_type() {
-            SocketType::Pull | SocketType::Sub => self.one_way_device(other),
-            SocketType::Push | SocketType::Pub => other.one_way_device(self),
+            SocketType::Pull | SocketType::Sub => self.run_one_way_device(other),
+            SocketType::Push | SocketType::Pub => other.run_one_way_device(self),
             SocketType::Req        |
             SocketType::Rep        |
             SocketType::Respondent |
             SocketType::Surveyor   |
-            SocketType::Pair       => self.two_way_device(other),
-            SocketType::Bus        => Err(invalid_data_io_error("socket type not supported"))
+            SocketType::Bus        |
+            SocketType::Pair       => self.run_two_way_device(other)
         }
     }
 
-    fn one_way_device(mut self: SocketFacade, mut sender: SocketFacade) -> io::Result<()> {
+    fn run_one_way_device(mut self, mut other: SocketFacade) -> io::Result<()> {
         loop {
-            let msg = try!(self.recv_msg());
-
-            try!(sender.send_msg(msg));
+            try!(self.forward_msg(&mut other))
         }
     }
 
-    fn two_way_device(mut self: SocketFacade, mut other: SocketFacade) -> io::Result<()> {
-        Err(other_io_error("not implemented"))
+    fn run_two_way_device(mut self, mut other: SocketFacade) -> io::Result<()> {
+        let probe = try!(self.setup_two_way_device(&other));
+
+        loop {
+            match probe.recv() {
+                Ok(PollResult(votes)) => try!(self.on_two_way_device_step(&mut other, votes)),
+                Err(_)                => return Err(other_io_error("device evt channel closed"))
+            }
+        }
+    }
+
+    fn setup_two_way_device(&self, other: &SocketFacade) -> io::Result<mpsc::Receiver<PollResult>> {
+        let poll_spec = self.create_poll_spec(&other);
+        let cmd = SocketCmdSignal::CreateProbe(poll_spec);
+
+        try!(self.send_cmd(cmd));
+
+        match self.evt_receiver.recv() {
+            Ok(SocketNotify::ProbeCreated(rx))   => Ok(rx),
+            Ok(SocketNotify::ProbeNotCreated(e)) => Err(e),
+            Ok(_)                                => Err(other_io_error("unexpected evt")),
+            Err(_)                               => Err(other_io_error("evt channel closed"))
+        }
+    }
+
+    fn create_poll_spec(&self, other: &SocketFacade) -> Vec<PollRequest> {
+        vec!(self.create_recv_poll_request(), other.create_recv_poll_request())
+    }
+
+    fn create_recv_poll_request(&self) -> PollRequest {
+        PollRequest::new_for_recv(self.id)
+    }
+
+    fn on_two_way_device_step(&mut self, other: &mut SocketFacade, votes: Vec<(bool, bool)>) -> io::Result<()> {
+        let (self_can_recv,_) = votes[0];
+        let (other_can_recv,_) = votes[1];
+
+        if self_can_recv && other_can_recv {
+            // TODO is it really a good idea to do 4 blocking operations ?
+            let msg1 = try!(self.recv_msg());
+            let msg2 = try!(other.recv_msg());
+
+            try!(other.send_msg(msg1));
+            try!(self.send_msg(msg2));
+        } else if self_can_recv {
+            try!(self.forward_msg(other));
+        } else if other_can_recv {
+            try!(other.forward_msg(self));
+        }
+
+        Ok(())
+    }
+
+    fn forward_msg(&mut self, other: &mut SocketFacade) -> io::Result<()> {
+        self.recv_msg().and_then(|msg| other.send_msg(msg))
     }
 }
 

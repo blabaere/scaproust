@@ -84,7 +84,8 @@ impl Socket {
             SocketCmdSignal::Bind(addr)     => self.bind(addr),
             SocketCmdSignal::SendMsg(msg)   => self.send(event_loop, msg),
             SocketCmdSignal::RecvMsg        => self.recv(event_loop),
-            SocketCmdSignal::SetOption(opt) => self.set_option(event_loop, opt)
+            SocketCmdSignal::SetOption(opt) => self.set_option(event_loop, opt),
+            _ => {}
         }
     }
 
