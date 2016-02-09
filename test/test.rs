@@ -463,3 +463,30 @@ fn test_device_pipeline() {
     drop(session);
     device_thread.join().unwrap().unwrap_err();
 }
+
+//#[test]
+fn check_readable_pipe_is_used_for_recv() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut pull = session.create_socket(SocketType::Pull).unwrap();
+    let mut push1 = session.create_socket(SocketType::Push).unwrap();
+    let mut push2 = session.create_socket(SocketType::Push).unwrap();
+    let mut push3 = session.create_socket(SocketType::Push).unwrap();
+    let timeout = time::Duration::from_millis(50);
+
+    pull.bind("tcp://127.0.0.1:5473").unwrap();
+    push1.connect("tcp://127.0.0.1:5473").unwrap();
+    push2.connect("tcp://127.0.0.1:5473").unwrap();
+    push3.connect("tcp://127.0.0.1:5473").unwrap();
+
+    push1.set_send_timeout(timeout).unwrap();
+    push2.set_send_timeout(timeout).unwrap();
+    push3.set_send_timeout(timeout).unwrap();
+    pull.set_recv_timeout(timeout).unwrap();
+
+    thread::sleep(time::Duration::from_millis(250));
+
+    push2.send(vec![65, 66, 67]).unwrap();
+    let received = pull.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received);
+}

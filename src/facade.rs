@@ -204,9 +204,7 @@ impl SocketFacade {
 
     pub fn run_relay_device(mut self) -> io::Result<()> {
         loop {
-            let msg = try!(self.recv_msg());
-
-            try!(self.send_msg(msg));
+            try!(self.recv_msg().and_then(|msg| self.send_msg(msg)));
         }
     }
 
@@ -271,7 +269,6 @@ impl SocketFacade {
         let (other_can_recv,_) = votes[1];
 
         if self_can_recv && other_can_recv {
-            // TODO is it really a good idea to do 4 blocking operations ?
             let msg1 = try!(self.recv_msg());
             let msg2 = try!(other.recv_msg());
 

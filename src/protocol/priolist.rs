@@ -4,21 +4,12 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-// priolist::add 
-// does nothing on the collection but assign a priority to the token (endpoint)
 
-// priolist::activate
-// actually adds the item in the list of its assigned priority slot
-// makes it the current item of its slot if the slot was empty
-// makes its slot the current if the priolist was empty
-// or if the current slot has a lower priority (meaning higher index)
 
 /*
-
 WARNING:  
-fq & lb must not be responsible for pipe storage, 
-since they deal only one side of endpoint.
-Bus, for example use fq and broadcast.
+fq & lb must not own the pipes, since they deal only one side of endpoint.
+Bus, for example uses fq and broadcast.
 So they should store some references, or Rc ?
 
 lb & fq needs to support:
@@ -27,6 +18,27 @@ lb & fq needs to support:
  - activate (token): called each time a pipe is ready to write/read
  - move next(): called each time a msg is sent/received
  - get() -> tok: call when send/recv is requested
+*/
+
+/* functions spec
+### ADD assign the item a priority
+
+### ACTIVATE
+ - make the item part of the active items subset
+ - if there was no current, it becomes current
+ - if the current had lower priority, it becomes current
+
+### ADVANCE 
+ - if current is to be released, remove it from the active items subset
+ - select the new current amongst active items
+
+### GET returns the current item if any
+
+### REMOVE 
+ - remove the priority association
+ - if active, remove the item from active items if 
+ - if current, select another item to be the current
+
 */
 
 // let's ignore priority for now.
