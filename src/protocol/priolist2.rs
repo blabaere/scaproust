@@ -32,6 +32,7 @@ lb & fq needs to support:
  - if current, select another item to be the current
 
 */
+use std::ops::Range;
 
 use mio;
 
@@ -59,6 +60,14 @@ impl PrioList {
         self.current.map(|i| self.items[i].token)
     }
 
+    fn set(&mut self, index: usize) {
+        self.current = Some(index);
+    }
+
+    fn unset(&mut self) {
+        self.current = None;
+    }
+
     pub fn insert(&mut self, tok: mio::Token, priority: u8) {
         self.items.push(PrioListItem::new(tok, priority));
     }
@@ -79,10 +88,10 @@ impl PrioList {
 
         if let Some(current) = self.current {
             if self.items[index].priority < self.items[current].priority {
-                self.current = Some(index);
+                self.set(index);
             }
         } else {
-            self.current = Some(index);
+            self.set(index);
         }
     }
 
@@ -97,28 +106,67 @@ impl PrioList {
 
     pub fn advance(&mut self) {
         if let Some(index) = self.current {
-            if let Some(i) = self.find_active_index_after(index + 1) {
-                self.current = Some(i);
+            let priority = self.items[index].priority;
+            if let Some(i) = self.find_active_index_after(index, priority) {
+                self.set(i);
+            } else if let Some(i) = self.find_active_index_before(index, priority) {
+                self.set(i);
             }
         }
     }
 
-    fn find_active_index_after(&self, from: usize) -> Option<usize> {
-        if from == self.items.len() {
+    fn find_active_index_after(&self, pivot: usize, priority: u8) -> Option<usize> {
+        let from = pivot + 1;
+        let to = self.items.len();
+        if from == to {
             None
         } else {
-            for i in from..self.items.len() {
-                if self.items[i].active {
-                    return Some(i);
-                }
-            }
-
-            None
+            self.find_active_index(from..to, priority)
         }
+    }
+
+    fn find_active_index_before(&self, pivot: usize, priority: u8) -> Option<usize> {
+        if pivot == 0 {
+            None
+        } else {
+            self.find_active_index(0..pivot, priority)
+        }
+    }
+
+    fn find_active_index(&self, range: Range<usize>, priority: u8) -> Option<usize> {
+        self.find_item_index(range, &|item| item.active && item.priority == priority)
+    }
+
+    fn find_item_index<P>(&self, range: Range<usize>, predicate: &P) -> Option<usize> where P: Fn(&PrioListItem) -> bool {
+        for i in range {
+            if predicate(&self.items[i]) {
+                return Some(i);
+            }
+        }
+
+        None
     }
 
     pub fn deactivate_and_advance(&mut self) {
-        
+        if let Some(index) = self.current {
+            self.items[index].active = false;
+
+            let priority = self.items[index].priority;
+            if let Some(i) = self.find_active_index_after(index, priority) {
+                self.set(i);
+            } else if let Some(i) = self.find_active_index_before(index, priority) {
+                self.set(i);
+            } else if priority < 16 {
+                let next_priority = priority + 1;
+                let len = self.items.len();
+                for p in next_priority..16 {
+                    if let Some(i) = self.find_active_index_before(len, p) {
+                        self.set(i);
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -262,7 +310,7 @@ mod tests {
     }
 
     #[test]
-    fn advance_whith_single_active_item_loops() {
+    fn advance_with_single_active_item_loops() {
         let mut list = PrioList::new();
 
         list.insert(mio::Token(10), 8);
@@ -272,16 +320,88 @@ mod tests {
     }
 
     #[test]
+    fn find_active_index_after_works() {
+        let mut list = PrioList::new();
+        
+        list.insert(mio::Token(10), 8);
+        list.insert(mio::Token(20), 8);
+        list.insert(mio::Token(30), 8);
+
+        assert_eq!(None, list.find_active_index_after(0, 8));
+        assert_eq!(None, list.find_active_index_after(1, 8));
+        assert_eq!(None, list.find_active_index_after(2, 8));
+
+        list.activate(mio::Token(10));
+        assert_eq!(None, list.find_active_index_after(0, 8));
+        assert_eq!(None, list.find_active_index_after(1, 8));
+        assert_eq!(None, list.find_active_index_after(2, 8));
+
+        list.activate(mio::Token(20));
+        assert_eq!(Some(1), list.find_active_index_after(0, 8));
+        assert_eq!(None, list.find_active_index_after(1, 8));
+        assert_eq!(None, list.find_active_index_after(2, 8));
+
+        list.activate(mio::Token(30));
+        assert_eq!(Some(1), list.find_active_index_after(0, 8));
+        assert_eq!(Some(2), list.find_active_index_after(1, 8));
+        assert_eq!(None, list.find_active_index_after(2, 8));
+    }
+
+    #[test]
+    fn find_active_index_before_works() {
+        let mut list = PrioList::new();
+        
+        list.insert(mio::Token(10), 8);
+        list.insert(mio::Token(20), 8);
+        list.insert(mio::Token(30), 8);
+
+        assert_eq!(None, list.find_active_index_before(0, 8));
+        assert_eq!(None, list.find_active_index_before(1, 8));
+        assert_eq!(None, list.find_active_index_before(2, 8));
+
+        list.activate(mio::Token(30));
+        assert_eq!(None, list.find_active_index_before(0, 8));
+        assert_eq!(None, list.find_active_index_before(1, 8));
+        assert_eq!(None, list.find_active_index_before(2, 8));
+
+        list.activate(mio::Token(20));
+        assert_eq!(None, list.find_active_index_before(0, 8));
+        assert_eq!(None, list.find_active_index_before(1, 8));
+        assert_eq!(Some(1), list.find_active_index_before(2, 8));
+
+        list.activate(mio::Token(10));
+        assert_eq!(None, list.find_active_index_before(0, 8));
+        assert_eq!(Some(0), list.find_active_index_before(1, 8));
+        assert_eq!(Some(0), list.find_active_index_before(2, 8));
+    }
+
+    #[test]
     fn advance_can_move_forward() {
         let mut list = PrioList::new();
         
         list.insert(mio::Token(10), 8);
         list.insert(mio::Token(20), 8);
+        list.insert(mio::Token(30), 8);
 
         list.activate(mio::Token(10));
         list.activate(mio::Token(20));
         list.activate(mio::Token(30));
         list.advance();
         assert_eq!(Some(mio::Token(20)), list.get());
+    }
+
+    #[test]
+    fn advance_can_skip_lower_priority() {
+        let mut list = PrioList::new();
+        
+        list.insert(mio::Token(10), 1);
+        list.insert(mio::Token(20), 9);
+        list.insert(mio::Token(30), 1);
+
+        list.activate(mio::Token(10));
+        list.activate(mio::Token(20));
+        list.activate(mio::Token(30));
+        list.advance();
+        assert_eq!(Some(mio::Token(30)), list.get());
     }
 }
