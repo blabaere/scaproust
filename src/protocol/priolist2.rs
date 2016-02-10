@@ -149,22 +149,32 @@ impl PrioList {
 
     pub fn deactivate_and_advance(&mut self) {
         if let Some(index) = self.current {
-            self.items[index].active = false;
+            self.deactivate_index_and_advance(index)
+        } else {
+            self.advance()
+        }
+    }
 
-            let priority = self.items[index].priority;
-            if let Some(i) = self.find_active_index_after(index, priority) {
+    fn deactivate_index_and_advance(&mut self, index: usize) {
+        self.items[index].active = false;
+        self.unset();
+
+        let priority = self.items[index].priority;
+        if let Some(i) = self.find_active_index_after(index, priority) {
+            self.set(i);
+        } else if let Some(i) = self.find_active_index_before(index, priority) {
+            self.set(i);
+        } else if priority < 16 {
+            self.advance_through_priorities(priority + 1);
+        }
+    }
+
+    fn advance_through_priorities(&mut self, from: u8) {
+        let len = self.items.len();
+        for priority in from..16 {
+            if let Some(i) = self.find_active_index(0..len, priority) {
                 self.set(i);
-            } else if let Some(i) = self.find_active_index_before(index, priority) {
-                self.set(i);
-            } else if priority < 16 {
-                let next_priority = priority + 1;
-                let len = self.items.len();
-                for p in next_priority..16 {
-                    if let Some(i) = self.find_active_index_before(len, p) {
-                        self.set(i);
-                        break;
-                    }
-                }
+                break;
             }
         }
     }
@@ -404,4 +414,41 @@ mod tests {
         list.advance();
         assert_eq!(Some(mio::Token(30)), list.get());
     }
+
+    #[test]
+    fn deactivate_and_advance_can_jump_to_lower_priority() {
+        let mut list = PrioList::new();
+        
+        list.insert(mio::Token(10), 8);
+        list.insert(mio::Token(20), 10);
+        list.insert(mio::Token(30), 10);
+
+        list.activate(mio::Token(10));
+        list.activate(mio::Token(20));
+        list.activate(mio::Token(30));
+        assert_eq!(Some(mio::Token(10)), list.get());
+
+        list.deactivate_and_advance();
+        assert_eq!(Some(mio::Token(20)), list.get());
+
+        list.advance();
+        assert_eq!(Some(mio::Token(30)), list.get());
+
+        list.advance();
+        assert_eq!(Some(mio::Token(20)), list.get());
+
+        list.activate(mio::Token(10));
+        assert_eq!(Some(mio::Token(10)), list.get());
+    }
+
+    fn deactivate_the_only_item_unsets_current() {
+        let mut list = PrioList::new();
+        
+        list.insert(mio::Token(10), 8);
+        assert_eq!(Some(mio::Token(10)), list.get());
+
+        list.deactivate_and_advance();
+        assert_eq!(None, list.get());
+    }
+
 }
