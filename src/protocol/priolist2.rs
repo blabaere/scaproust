@@ -28,20 +28,13 @@ lb & fq needs to support:
 
 ### REMOVE 
  - remove the priority association
- - if active, remove the item from active items if 
+ - if active, remove the item from active items
  - if current, select another item to be the current
 
 */
 use std::ops::Range;
 
 use mio;
-
-/*
-
-    fn get_client<'a>(&'a mut self, token: Token) -> &'a mut SimpleClient {
-        &mut self.clients[token]
-    }
-*/
 
 pub struct PrioList {
     items: Vec<PrioListItem>,
@@ -68,11 +61,44 @@ impl PrioList {
         self.current = None;
     }
 
+    fn full_range(&self) -> Range<usize> {
+        0..self.items.len()
+    }
+
     pub fn insert(&mut self, tok: mio::Token, priority: u8) {
         self.items.push(PrioListItem::new(tok, priority));
     }
 
     pub fn remove(&mut self, tok: mio::Token) {
+        let all = self.full_range();
+        if let Some(index) = self.find_item_index(all, &|item| item.token == tok) {
+            self.remove_index(index);
+        }
+    }
+
+    fn remove_index(&mut self, index: usize) {
+        if let Some(current) = self.current {
+            if index == current {
+                self.deactivate_index_and_advance(index);
+                if let Some(new_current) = self.current {
+                    self.remove_index_that_is_not_current(index, new_current);
+                }
+            } else {
+                self.remove_index_that_is_not_current(index, current);
+            }
+        } else {
+            self.items.swap_remove(index);
+        }
+    }
+
+    fn remove_index_that_is_not_current(&mut self, index: usize, current: usize) {
+        if index < current {
+            self.items.swap(index, current);
+            self.items.swap_remove(current);
+            self.set(index);
+        } else { // index > current
+            self.items.swap_remove(index);
+        }
     }
 
     pub fn activate(&mut self, tok: mio::Token) {
@@ -95,15 +121,6 @@ impl PrioList {
         }
     }
 
-    fn find_activable_index(&self, tok: mio::Token) -> Option<usize> {
-        self.items.
-            iter().
-            enumerate().
-            filter(|&(_, item)| item.token == tok && item.active == false).
-            nth(0).
-            map(|(i, _)| i)
-    }
-
     pub fn advance(&mut self) {
         if let Some(index) = self.current {
             let priority = self.items[index].priority;
@@ -115,22 +132,20 @@ impl PrioList {
         }
     }
 
+    fn find_activable_index(&self, tok: mio::Token) -> Option<usize> {
+        let all = self.full_range();
+        self.find_item_index(all, &|item|item.token == tok && item.active == false)
+    }
+
     fn find_active_index_after(&self, pivot: usize, priority: u8) -> Option<usize> {
         let from = pivot + 1;
         let to = self.items.len();
-        if from == to {
-            None
-        } else {
-            self.find_active_index(from..to, priority)
-        }
+
+        self.find_active_index(from..to, priority)
     }
 
     fn find_active_index_before(&self, pivot: usize, priority: u8) -> Option<usize> {
-        if pivot == 0 {
-            None
-        } else {
-            self.find_active_index(0..pivot, priority)
-        }
+        self.find_active_index(0..pivot, priority)
     }
 
     fn find_active_index(&self, range: Range<usize>, priority: u8) -> Option<usize> {
@@ -170,9 +185,9 @@ impl PrioList {
     }
 
     fn advance_through_priorities(&mut self, from: u8) {
-        let len = self.items.len();
         for priority in from..16 {
-            if let Some(i) = self.find_active_index(0..len, priority) {
+            let all = self.full_range();
+            if let Some(i) = self.find_active_index(all, priority) {
                 self.set(i);
                 break;
             }
@@ -441,14 +456,22 @@ mod tests {
         assert_eq!(Some(mio::Token(10)), list.get());
     }
 
+    #[test]
     fn deactivate_the_only_item_unsets_current() {
         let mut list = PrioList::new();
         
         list.insert(mio::Token(10), 8);
+        list.activate(mio::Token(10));
         assert_eq!(Some(mio::Token(10)), list.get());
 
         list.deactivate_and_advance();
         assert_eq!(None, list.get());
     }
 
+    #[test]
+    fn for_loop_over_empty_range_does_nothing() {
+        for i in 1..1 {
+            panic!("{:?}", i);
+        }
+    }
 }

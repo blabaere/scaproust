@@ -63,12 +63,16 @@ impl Pipe {
 
             self.state = Some(new_state);
 
-            debug!("[{:?}] switch from '{}' to '{}'.", self.token, old_name, new_name);
+            debug!("[{:?}] switch from '{}' to '{}'.", self.token.as_usize(), old_name, new_name);
         }
     }
 
     pub fn register(&mut self, event_loop: &mut EventLoop) {
         self.on_state_transition(|s: Box<PipeState>| s.register(event_loop));
+    }
+
+    pub fn reregister(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s: Box<PipeState>| s.reregister(event_loop));
     }
 
     pub fn on_register(&mut self, event_loop: &mut EventLoop) {
@@ -170,6 +174,10 @@ trait PipeState {
         Box::new(Dead)
     }
 
+    fn reregister(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        Box::new(Dead)
+    }
+
     fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
         Box::new(Dead)
     }
@@ -212,12 +220,23 @@ trait LivePipeState {
     }
 
     fn debug(&self, log: &str) {
-        debug!("[{:?}] {}", self.body().token(), log)
+        debug!("[{:?}] {}", self.body().token().as_usize(), log)
     }
 
     fn send_sig(&self, sig: PipeEvtSignal) -> io::Result<()> {
         self.body().send_sig(sig)
     }
+
+    fn reregister(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body().reregister(
+            event_loop, 
+            mio::EventSet::readable() | mio::EventSet::writable(), 
+            mio::PollOpt::edge())
+    }
+}
+
+fn reregister_live(state: &LivePipeState, event_loop: &mut EventLoop) -> io::Result<()> {
+    state.reregister(event_loop)
 }
 
 fn unregister_live(state: &LivePipeState, event_loop: &mut EventLoop) -> Box<PipeState> {
@@ -463,15 +482,6 @@ struct Activable {
     body: PipeBody
 }
 
-impl Activable {
-    fn subscribe_to_all(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.reregister(
-            event_loop, 
-            mio::EventSet::readable() | mio::EventSet::writable(), 
-            mio::PollOpt::edge())
-    }
-}
-
 impl From<HandshakeRx> for Activable {
     fn from(state: HandshakeRx) -> Activable {
         Activable {
@@ -486,7 +496,7 @@ impl PipeState for Activable {
     }
 
     fn on_register(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = self.subscribe_to_all(event_loop);
+        let res = reregister_live(self.as_ref(), event_loop);
 
         transition_if_ok::<Activable, Idle>(self, res, event_loop)
     }
@@ -564,6 +574,12 @@ impl Idle {
 impl PipeState for Idle {
     fn name(&self) -> &'static str {
         "Idle"
+    }
+
+    fn reregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        let res = reregister_live(self.as_ref(), event_loop);
+
+        no_transition_if_ok(self, res, event_loop)
     }
 
     fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
@@ -673,6 +689,7 @@ impl PipeState for Receiving {
     fn cancel_recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         transition::<Receiving, Idle>(self)
     }
+
     fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         unregister_live(self.as_ref(), event_loop)
     }

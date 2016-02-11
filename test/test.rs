@@ -464,7 +464,7 @@ fn test_device_pipeline() {
     device_thread.join().unwrap().unwrap_err();
 }
 
-//#[test]
+#[test]
 fn check_readable_pipe_is_used_for_recv() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -479,14 +479,51 @@ fn check_readable_pipe_is_used_for_recv() {
     push2.connect("tcp://127.0.0.1:5473").unwrap();
     push3.connect("tcp://127.0.0.1:5473").unwrap();
 
+    thread::sleep(time::Duration::from_millis(250));
+
     push1.set_send_timeout(timeout).unwrap();
     push2.set_send_timeout(timeout).unwrap();
     push3.set_send_timeout(timeout).unwrap();
     pull.set_recv_timeout(timeout).unwrap();
 
+    // Make sure the socket will try to read from the correct pipe
+    push2.send(vec![65, 66, 67]).unwrap();
+    let received1 = pull.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received1);
+
+    // Make sure the socket will try to read from the same correct pipe
+    push2.send(vec![67, 66, 65]).unwrap();
+    let received2 = pull.recv().unwrap();
+    assert_eq!(vec![67, 66, 65], received2);
+
+    // Make sure the socket will try to read from the new correct pipe
+    push1.send(vec![66, 67, 65]).unwrap();
+    let received3 = pull.recv().unwrap();
+    assert_eq!(vec![66, 67, 65], received3);
+}
+
+#[test]
+fn check_readable_pipe_is_used_for_recv_when_receiving_two_messages_in_one_event() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut pull = session.create_socket(SocketType::Pull).unwrap();
+    let mut push = session.create_socket(SocketType::Push).unwrap();
+    let timeout = time::Duration::from_millis(50);
+
+    pull.bind("tcp://127.0.0.1:5474").unwrap();
+    push.connect("tcp://127.0.0.1:5474").unwrap();
+
+    push.set_send_timeout(timeout).unwrap();
+    pull.set_recv_timeout(timeout).unwrap();
+
     thread::sleep(time::Duration::from_millis(250));
 
-    push2.send(vec![65, 66, 67]).unwrap();
-    let received = pull.recv().unwrap();
-    assert_eq!(vec![65, 66, 67], received);
+    push.send(vec![65, 66, 67]).expect("First push failed");
+    push.send(vec![67, 66, 65]).expect("Second push failed");
+
+    let received1 = pull.recv().expect("First pull failed");
+    assert_eq!(vec![65, 66, 67], received1);
+
+    let received2 = pull.recv().expect("Second pull failed");
+    assert_eq!(vec![67, 66, 65], received2);
 }

@@ -98,7 +98,7 @@ impl Socket {
     }
 
     pub fn on_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
-        debug!("[{:?}] on_pipe_evt: {} '{:?}'", self.id, evt.name(), tok);
+        debug!("[{:?}] on_pipe_evt [{:?}]: {}", self.id, tok.as_usize(), evt.name());
         match evt {
             PipeEvtSignal::Opened      => self.protocol.on_pipe_register(event_loop, tok),
             PipeEvtSignal::MsgRcv(msg) => self.protocol.on_recv_by_pipe(event_loop, tok, msg),
@@ -122,15 +122,15 @@ impl Socket {
             unwrap_or_else(|err| self.send_notify(SocketNotify::NotConnected(err)));
     }
 
-    pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, token: mio::Token) {
-        debug!("[{:?}] pipe [{:?}] reconnect: '{}'", self.id, token, addr);
+    pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
+        debug!("[{:?}] pipe [{:?}] reconnect: '{}'", self.id, tok.as_usize(), addr);
 
         let conn_addr = addr.clone();
         let reconn_addr = addr.clone();
 
         self.create_connection(&addr).
-            and_then(|conn| self.on_connection_created(Some(conn_addr), conn, Some(token))).
-            unwrap_or_else(|_| self.schedule_reconnect(event_loop, token, reconn_addr));
+            and_then(|conn| self.on_connection_created(Some(conn_addr), conn, Some(tok))).
+            unwrap_or_else(|_| self.schedule_reconnect(event_loop, tok, reconn_addr));
     }
 
     fn create_connection(&self, addr: &str) -> io::Result<Box<Connection>> {
@@ -164,7 +164,7 @@ impl Socket {
     }
 
     pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
-        debug!("[{:?}] acceptor [{:?}] rebind: '{}'", self.id, tok, addr);
+        debug!("[{:?}] acceptor [{:?}] rebind: '{}'", self.id, tok.as_usize(), addr);
 
         self.create_listener(&addr).
             map(|lst| self.on_listener_created(addr.clone(), lst, Some(tok))).
@@ -205,7 +205,7 @@ impl Socket {
     }
 
     fn acceptor_ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        debug!("[{:?}] acceptor [{:?}] ready: '{:?}'", self.id, tok, events);
+        debug!("[{:?}] acceptor [{:?}] ready: '{:?}'", self.id, tok.as_usize(), events);
 
         self.acceptors.get_mut(&tok).unwrap().
             ready(event_loop, events).
@@ -213,39 +213,39 @@ impl Socket {
             unwrap_or_else(|e| self.on_acceptor_error(event_loop, tok, e));
     }
 
-    fn pipe_ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
-        debug!("[{:?}] pipe [{:?}] ready: '{:?}'", self.id, token, events);
+    fn pipe_ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+        debug!("[{:?}] pipe [{:?}] ready: '{:?}'", self.id, tok.as_usize(), events);
 
         if events.is_hup() {
-            self.remove_pipe_and_schedule_reconnect(event_loop, token);
+            self.remove_pipe_and_schedule_reconnect(event_loop, tok);
         } else if events.is_error() {
-            self.remove_pipe_and_schedule_reconnect(event_loop, token);
+            self.remove_pipe_and_schedule_reconnect(event_loop, tok);
         } else {
-            self.protocol.ready(event_loop, token, events);
+            self.protocol.ready(event_loop, tok, events);
         }
     }
 
-    fn remove_pipe_and_schedule_reconnect(&mut self, event_loop: &mut EventLoop, token: mio::Token) {
-        if let Some(mut pipe) = self.protocol.remove_pipe(token) {
+    fn remove_pipe_and_schedule_reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        if let Some(mut pipe) = self.protocol.remove_pipe(tok) {
             let _ = pipe.unregister(event_loop);
             if let Some(addr) = pipe.addr() {
-                self.schedule_reconnect(event_loop, token, addr);
+                self.schedule_reconnect(event_loop, tok, addr);
             }
         }
     }
 
-    fn schedule_reconnect(&mut self, event_loop: &mut EventLoop, token: mio::Token, addr: String) {
+    fn schedule_reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
         let timespan = time::Duration::from_millis(500);
         let _ = event_loop.
-            timeout(EventLoopTimeout::Reconnect(token, addr), timespan).
-            map_err(|err| error!("[{:?}] pipe [{:?}] reconnect timeout failed: '{:?}'", self.id, token, err));
+            timeout(EventLoopTimeout::Reconnect(tok, addr), timespan).
+            map_err(|err| error!("[{:?}] pipe [{:?}] reconnect timeout failed: '{:?}'", self.id, tok.as_usize(), err));
     }
 
     fn schedule_rebind(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
         let timespan = time::Duration::from_millis(500);
         let _ = event_loop.
             timeout(EventLoopTimeout::Rebind(tok, addr), timespan).
-            map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok, err));
+            map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok.as_usize(), err));
     }
 
     fn on_connections_accepted(&mut self, conns: Vec<Box<Connection>>) -> io::Result<()> {
@@ -255,17 +255,17 @@ impl Socket {
         Ok(())
     }
 
-    fn on_acceptor_error(&mut self, event_loop: &mut EventLoop, token: mio::Token, err: io::Error) {
-        debug!("[{:?}] acceptor [{:?}] error: '{:?}'", self.id, token, err);
+    fn on_acceptor_error(&mut self, event_loop: &mut EventLoop, tok: mio::Token, err: io::Error) {
+        debug!("[{:?}] acceptor [{:?}] error: '{:?}'", self.id, tok.as_usize(), err);
 
-        if let Some(mut acceptor) = self.remove_acceptor(token) {
+        if let Some(mut acceptor) = self.remove_acceptor(tok) {
             acceptor.
                 close(event_loop).
-                unwrap_or_else(|err| debug!("[{:?}] acceptor [{:?}] error while closing: '{:?}'", self.id, token, err));
+                unwrap_or_else(|err| debug!("[{:?}] acceptor [{:?}] error while closing: '{:?}'", self.id, tok, err));
             let timespan = time::Duration::from_millis(500);
             let _ = event_loop.
-                timeout(EventLoopTimeout::Rebind(token, acceptor.addr()), timespan).
-                map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, token, err));
+                timeout(EventLoopTimeout::Rebind(tok, acceptor.addr()), timespan).
+                map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok, err));
 
         }
     }

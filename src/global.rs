@@ -4,6 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::fmt;
 use std::rc::Rc;
 use std::cell::Cell;
 use std::io::{ Error, ErrorKind };
@@ -51,8 +52,14 @@ impl SocketType {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SocketId(pub usize);
+
+impl fmt::Debug for SocketId {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
 
 #[derive(Clone)]
 pub struct IdSequence {

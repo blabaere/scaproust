@@ -13,7 +13,7 @@ use mio;
 
 use super::{ Protocol, Timeout };
 use super::clear_timeout;
-use super::priolist::*;
+use super::priolist2::*;
 use pipe::*;
 use global::*;
 use event_loop_msg::{ SocketNotify };
@@ -136,9 +136,9 @@ impl Protocol for Pull {
 impl State {
     fn name(&self) -> &'static str {
         match *self {
-            State::Idle             => "Idle",
-            State::Receiving(_)     => "Receiving",
-            State::RecvOnHold(_)    => "RecvOnHold"
+            State::Idle          => "Idle",
+            State::Receiving(_)  => "Receiving",
+            State::RecvOnHold(_) => "RecvOnHold"
         }
     }
 
@@ -167,11 +167,8 @@ impl State {
 
     fn on_pipe_register(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
         body.on_pipe_register(event_loop, tok);
-
-        match self {
-            State::RecvOnHold(t) => State::Idle.recv(body, event_loop, t),
-            other @ _           => other
-        }
+        
+        self
     }
 
     fn send(self, body: &mut Body, _: &mut EventLoop, _: Rc<Message>, _: Option<mio::Timeout>) -> State {
@@ -204,7 +201,7 @@ impl State {
     fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message) -> State {
         if let State::Receiving(timeout) = self {
             body.send_notify(SocketNotify::MsgRecv(msg));
-            body.advance_pipe();
+            body.advance_pipe(event_loop);
             clear_timeout(event_loop, timeout);
         }
 
@@ -216,15 +213,18 @@ impl State {
 
         body.send_notify(SocketNotify::MsgNotRecv(err));
         body.get_active_pipe().map(|p| p.cancel_recv(event_loop));
-        body.advance_pipe();
+        body.advance_pipe(event_loop);
 
         State::Idle
     }
 
     fn ready(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) -> State {
-        body.get_pipe(tok).map(|p| p.ready(event_loop, events));
+        body.ready(event_loop, tok, events);
 
-        self
+        match self {
+            State::RecvOnHold(t) => State::Idle.recv(body, event_loop, t),
+            other @ _            => other
+        }
     }
 }
 
@@ -246,17 +246,16 @@ impl Body {
     }
 
     fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
-        self.fq.remove(&tok);
+        self.fq.remove(tok);
         self.pipes.remove(&tok)
     }
 
     fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.fq.insert(tok, 8);
         self.pipes.get_mut(&tok).map(|p| p.register(event_loop));
     }
 
     fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.fq.activate(tok);
+        self.fq.insert(tok, 8);
         self.pipes.get_mut(&tok).map(|p| p.on_register(event_loop));
     }
 
@@ -271,11 +270,20 @@ impl Body {
         self.fq.get() == Some(tok)
     }
 
-    fn advance_pipe(&mut self) {
-        self.fq.advance();
+    fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
+        self.get_active_pipe().map(|p| p.reregister(event_loop));
+        self.fq.deactivate_and_advance();
     }
 
     fn get_pipe<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
         self.pipes.get_mut(&tok)
+    }
+            
+    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+        if events.is_readable() {
+            self.fq.activate(tok);
+        }
+
+        self.get_pipe(tok).map(|p| p.ready(event_loop, events));
     }
 }
