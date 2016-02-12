@@ -55,7 +55,7 @@ impl Pipe {
         }
     }
 
-    fn on_state_transition<F>(&mut self, transition: F) where F : FnOnce(Box<PipeState>) -> Box<PipeState> {
+    fn apply<F>(&mut self, transition: F) where F : FnOnce(Box<PipeState>) -> Box<PipeState> {
         if let Some(old_state) = self.state.take() {
             let old_name = old_state.name();
             let new_state = transition(old_state);
@@ -68,43 +68,43 @@ impl Pipe {
     }
 
     pub fn open(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.open(event_loop));
+        self.apply(|s| s.open(event_loop));
     }
 
     pub fn on_open_ack(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.on_open_ack(event_loop));
+        self.apply(|s| s.on_open_ack(event_loop));
     }
 
     pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) {
-        self.on_state_transition(|s: Box<PipeState>| s.ready(event_loop, events));
+        self.apply(|s| s.ready(event_loop, events));
     }
 
     pub fn recv(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.recv(event_loop));
+        self.apply(|s| s.recv(event_loop));
     }
 
     pub fn cancel_recv(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.cancel_recv(event_loop));
+        self.apply(|s| s.cancel_recv(event_loop));
     }
 
     pub fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
-        self.on_state_transition(|s: Box<PipeState>| s.send(event_loop, msg));
+        self.apply(|s| s.send(event_loop, msg));
     }
 
     pub fn send_nb(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
-        self.on_state_transition(|s: Box<PipeState>| s.send_nb(event_loop, msg));
+        self.apply(|s| s.send_nb(event_loop, msg));
     }
 
     pub fn cancel_send(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.cancel_send(event_loop));
+        self.apply(|s| s.cancel_send(event_loop));
     }
 
     pub fn resync_readiness(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.resync_readiness(event_loop));
+        self.apply(|s| s.resync_readiness(event_loop));
     }
 
     pub fn close(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.close(event_loop));
+        self.apply(|s| s.close(event_loop));
     }
 
     pub fn addr(self) -> Option<String> {
@@ -127,22 +127,22 @@ impl PipeBody {
         &mut *self.connection
     }
 
-    fn register(&self,
-        event_loop: &mut EventLoop, 
-        events: mio::EventSet,
-        opt: mio::PollOpt) -> io::Result<()> {
+    fn subscribe(&self, event_loop: &mut EventLoop, events: mio::EventSet, opt: mio::PollOpt) -> io::Result<()> {
         let io = self.connection.as_evented();
+        let events = events | mio::EventSet::hup() | mio::EventSet::error();
 
         event_loop.register(io, self.token, events, opt)
     }
 
-    fn reregister(&self,
-        event_loop: &mut EventLoop, 
-        events: mio::EventSet,
-        opt: mio::PollOpt) -> io::Result<()> {
+    fn resubscribe(&self, event_loop: &mut EventLoop, events: mio::EventSet, opt: mio::PollOpt) -> io::Result<()> {
         let io = self.connection.as_evented();
+        let events = events | mio::EventSet::hup() | mio::EventSet::error();
 
-        event_loop.reregister(io, self.token, mio::EventSet::hup() | mio::EventSet::error() | events, opt)
+        event_loop.reregister(io, self.token, events, opt)
+    }
+
+    fn unsubscribe(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        event_loop.deregister(self.connection.as_evented())
     }
 
     fn send_sig(&self, sig: PipeEvtSignal) -> io::Result<()> {
@@ -151,10 +151,6 @@ impl PipeBody {
         let send_res = self.sig_sender.send(loop_sig);
 
         send_res.map_err(|e| global::convert_notify_err(e))
-    }
-
-    fn unregister(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        event_loop.deregister(self.connection.as_evented())
     }
 }
 
@@ -215,10 +211,6 @@ trait PipeState {
 trait LivePipeState {
     fn body<'a>(&'a self) -> &'a PipeBody;
 
-    fn unregister(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body().unregister(event_loop)
-    }
-
     fn debug(&self, log: &str) {
         debug!("[{:?}] {}", self.body().token().as_usize(), log)
     }
@@ -227,21 +219,17 @@ trait LivePipeState {
         self.body().send_sig(sig)
     }
 
-    fn reregister(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body().reregister(
+    fn resync_readiness(&self, event_loop: &mut EventLoop) -> io::Result<()> {
+        self.body().resubscribe(
             event_loop, 
             mio::EventSet::readable() | mio::EventSet::writable(), 
             mio::PollOpt::edge())
     }
 
     fn close(&self, event_loop: &mut EventLoop) -> Box<PipeState> {
-        self.unregister(event_loop);
+        let _ = self.body().unsubscribe(event_loop);
         Box::new(Dead)
     }
-}
-
-fn reregister_live(state: &LivePipeState, event_loop: &mut EventLoop) -> io::Result<()> {
-    state.reregister(event_loop)
 }
 
 fn transition<F, T>(f: Box<F>) -> Box<T> where
@@ -302,7 +290,7 @@ impl PipeState for Initial {
     }
 
     fn open(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = self.body.register(event_loop, mio::EventSet::writable(), mio::PollOpt::level());
+        let res = self.body.subscribe(event_loop, mio::EventSet::writable(), mio::PollOpt::level());
 
         transition_if_ok::<Initial, HandshakeTx>(self, res, event_loop)
     }
@@ -359,11 +347,11 @@ impl HandshakeTx {
     }
 
     fn subscribe_to_readable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.reregister(event_loop, mio::EventSet::readable(), mio::PollOpt::level())
+        self.body.resubscribe(event_loop, mio::EventSet::readable(), mio::PollOpt::level())
     }
 
     fn subscribe_to_writable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.reregister(event_loop, mio::EventSet::writable(), mio::PollOpt::level())
+        self.body.resubscribe(event_loop, mio::EventSet::writable(), mio::PollOpt::level())
     }
 }
 
@@ -437,7 +425,7 @@ impl HandshakeRx {
     }
 
     fn subscribe_to_readable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        self.body.reregister(event_loop, mio::EventSet::readable(), mio::PollOpt::level())
+        self.body.resubscribe(event_loop, mio::EventSet::readable(), mio::PollOpt::level())
     }
 
     fn send_sig(&self, sig: PipeEvtSignal) -> io::Result<()> {
@@ -496,7 +484,7 @@ impl PipeState for Activable {
     }
 
     fn on_open_ack(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = reregister_live(self.as_ref(), event_loop);
+        let res = self.as_ref().resync_readiness(event_loop);
 
         transition_if_ok::<Activable, Idle>(self, res, event_loop)
     }
@@ -617,7 +605,7 @@ impl PipeState for Idle {
     }
 
     fn resync_readiness(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = reregister_live(self.as_ref(), event_loop);
+        let res = self.as_ref().resync_readiness(event_loop);
 
         no_transition_if_ok(self, res, event_loop)
     }
