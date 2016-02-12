@@ -271,7 +271,7 @@ impl Body {
     }
 
     fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.get_active_pipe().map(|p| p.reregister(event_loop));
+        self.get_active_pipe().map(|p| p.resync_readiness(event_loop));
         self.fq.deactivate_and_advance();
     }
 
