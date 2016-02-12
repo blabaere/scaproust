@@ -69,6 +69,7 @@ impl SessionFacade {
 
         match self.evt_receiver.recv() {
             Ok(SessionNotify::SocketCreated(id, rx)) => Ok(self.new_socket(id, socket_type, rx)),
+            Ok(_)                                    => Err(other_io_error("unexpected evt")),
             Err(_)                                   => Err(other_io_error("evt channel closed"))
         }
     }
@@ -83,32 +84,99 @@ impl SessionFacade {
 
     pub fn create_bridge_device(&self, left: SocketFacade, right: SocketFacade) -> io::Result<Box<DeviceFacade>> {
         if !left.matches(&right) {
-            other_io_error("Socket types do not match");
+            return Err(other_io_error("Socket types do not match"));
         }
 
         match left.get_socket_type() {
-            SocketType::Pull | SocketType::Sub => Ok(create_one_way_device(left, right)),
-            SocketType::Push | SocketType::Pub => Ok(create_one_way_device(right, left)),
+            SocketType::Pull | SocketType::Sub => self.create_one_way_device(left, right),
+            SocketType::Push | SocketType::Pub => self.create_one_way_device(right, left),
             SocketType::Req        |
             SocketType::Rep        |
             SocketType::Respondent |
             SocketType::Surveyor   |
             SocketType::Bus        |
-            SocketType::Pair       => unimplemented!()
+            SocketType::Pair       => self.create_two_way_device(left, right)
         }
     }
-}
 
-fn create_one_way_device(left: SocketFacade, right: SocketFacade) -> Box<DeviceFacade> {
-    box OneWayDevice::new(left, right)
-}
+    fn create_one_way_device(&self, left: SocketFacade, right: SocketFacade) -> io::Result<Box<DeviceFacade>> {
+        Ok(box OneWayDevice::new(left, right))
+    }
 
-/*fn create_two_way_device(left: SocketFacade, right: SocketFacade) -> Box<DeviceFacade> {
-    box OneWayDevice::new(left, right)
-}*/
+    fn create_two_way_device(&self, left: SocketFacade, right: SocketFacade) -> io::Result<Box<DeviceFacade>> {
+        let req = PollRequest(left.get_id(), right.get_id());
+        let cmd = SessionCmdSignal::CreateProbe(req);
+
+        try!(self.send_cmd(cmd));
+
+        match self.evt_receiver.recv() {
+            Ok(SessionNotify::ProbeCreated(id, rx)) => Ok(self.new_device(id, rx)),
+            Ok(_)                                   => Err(other_io_error("unexpected evt")),
+            Err(_)                                  => Err(other_io_error("evt channel closed"))
+        }
+    }
+
+    fn new_device(&self, id: ProbeId, rx: mpsc::Receiver<PollResult>) -> Box<DeviceFacade> {
+        box TwoWayDevice::new(id, self.cmd_sender.clone(), rx)
+    }
+}
 
 impl Drop for SessionFacade {
     fn drop(&mut self) {
         let _ = self.send_cmd(SessionCmdSignal::Shutdown);
     }
 }
+/*
+
+    fn run_two_way_device(mut self, mut other: SocketFacade) -> io::Result<()> {
+        let probe = try!(self.setup_two_way_device(&other));
+
+        loop {
+            match probe.recv() {
+                Ok(PollResult(votes)) => try!(self.on_two_way_device_step(&mut other, votes)),
+                Err(_)                => return Err(other_io_error("device evt channel closed"))
+            }
+        }
+    }
+
+    fn setup_two_way_device(&self, other: &SocketFacade) -> io::Result<mpsc::Receiver<PollResult>> {
+        let poll_spec = self.create_poll_spec(&other);
+        let cmd = SocketCmdSignal::CreateProbe(poll_spec);
+
+        try!(self.send_cmd(cmd));
+
+        match self.evt_receiver.recv() {
+            Ok(SocketNotify::ProbeCreated(rx))   => Ok(rx),
+            Ok(SocketNotify::ProbeNotCreated(e)) => Err(e),
+            Ok(_)                                => Err(other_io_error("unexpected evt")),
+            Err(_)                               => Err(other_io_error("evt channel closed"))
+        }
+    }
+
+    fn create_poll_spec(&self, other: &SocketFacade) -> Vec<PollRequest> {
+        vec!(self.create_recv_poll_request(), other.create_recv_poll_request())
+    }
+
+    fn create_recv_poll_request(&self) -> PollRequest {
+        PollRequest::new_for_recv(self.id)
+    }
+
+    fn on_two_way_device_step(&mut self, other: &mut SocketFacade, votes: Vec<(bool, bool)>) -> io::Result<()> {
+        let (self_can_recv,_) = votes[0];
+        let (other_can_recv,_) = votes[1];
+
+        if self_can_recv && other_can_recv {
+            let msg1 = try!(self.recv_msg());
+            let msg2 = try!(other.recv_msg());
+
+            try!(other.send_msg(msg1));
+            try!(self.send_msg(msg2));
+        } else if self_can_recv {
+            try!(self.forward_msg(other));
+        } else if other_can_recv {
+            try!(other.forward_msg(self));
+        }
+
+        Ok(())
+    }
+*/

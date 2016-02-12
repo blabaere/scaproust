@@ -529,3 +529,38 @@ fn check_readable_pipe_is_used_for_recv_when_receiving_two_messages_in_one_event
     let received2 = pull.recv().expect("Second pull failed");
     assert_eq!(vec![67, 66, 65], received2);
 }
+
+#[test]
+fn test_device_req_rep() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut d_req = session.create_socket(SocketType::Req).unwrap();
+    let mut d_rep = session.create_socket(SocketType::Rep).unwrap();
+    let mut req = session.create_socket(SocketType::Req).unwrap();
+    let mut rep = session.create_socket(SocketType::Rep).unwrap();
+    let timeout = time::Duration::from_millis(50);
+
+    d_req.bind("tcp://127.0.0.1:5475").unwrap();
+    d_rep.bind("tcp://127.0.0.1:5476").unwrap();
+
+    req.connect("tcp://127.0.0.1:5476").unwrap();
+    rep.connect("tcp://127.0.0.1:5475").unwrap();
+
+    req.set_send_timeout(timeout).unwrap();
+    rep.set_recv_timeout(timeout).unwrap();
+
+    thread::sleep(time::Duration::from_millis(500));
+
+    let device = session.create_bridge_device(d_req, d_rep).unwrap();
+    //let device_thread = thread::spawn(move || device.run());
+
+    /*req.send(vec![65, 66, 67]).unwrap();
+    let received = rep.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received);
+
+    let err = rep.recv().unwrap_err();
+    assert_eq!(io::ErrorKind::TimedOut, err.kind());
+
+    drop(session);
+    device_thread.join().unwrap().unwrap_err();*/
+}

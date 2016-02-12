@@ -26,6 +26,7 @@ mod pipe;
 mod send;
 mod recv;
 mod acceptor;
+mod probe;
 
 pub use session_facade::SessionFacade as Session;
 pub use socket_facade::SocketFacade as Socket;

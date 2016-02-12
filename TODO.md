@@ -1,31 +1,12 @@
+### Forgat that one !!!
+SocketFacade should tell the session when they are dropped !!!
+
 ### Current problem: REQ resend
 There can be only one operation in progress for a given socket but resend occurs in background.
 Resend must be scheduled when a regular send succeeds, and cancelled when the matching recv occurs.
 What if a user command is received is when a resend is in progress (a some bytes sent, but not all).
 
 BONUS: if the pipe that the request was sent to is removed, the request could be resent right away ...
-
-### Lots of renaming
-
-#### SocketEvtSignal::Connected : 
-Sent by a socket to the session to tell that a pipe has been added to a socket,
-so it can setup the socket <-> pipe mapping.
-Then the session fowards the evt signal to the socket.
-SHOULD BE CALLED ON_PIPE_ADDED
-AND THE MISSING ON_PIPE_REMOVED COUNTERPART SHOULD BE ADDED
-
-RENAME socket.handle_evt and avoid reusing the EvtSignal enum
-
-##### Protocol::register_pipe
-Used by a socket to tell the protocol the pipe can now be plugged in the IO evt system
- and perform the handshake.
-MAYBE OPEN_PIPE
-##### PipeEvtSignal::Opened
-Sent by a pipe to tell the socket that the handshake his done and it can be used to send and receive
-CAN STAY LIKE THIS IF THE PREVIOUS IS MENTIONING 'OPEN'
-##### Protocol::on_pipe_register
-Used by a socket to tell the protocol that the handshake his done ...
-ON_PIPE_OPENED
 
 ### Device
  - Devices should be created by the session and implement a 'Runnable' trait

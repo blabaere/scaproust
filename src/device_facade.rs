@@ -7,9 +7,11 @@
 use std::io;
 use std::thread;
 use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
 use std::time;
 
 use mio;
+use mio::Sender;
 
 use global::*;
 use event_loop_msg::*;
@@ -83,3 +85,25 @@ impl DeviceFacade for OneWayDevice {
 // TWO-WAY BRIDGE DEVICE                                                     //
 //                                                                           //
 ///////////////////////////////////////////////////////////////////////////////
+
+pub struct TwoWayDevice {
+    id: ProbeId,
+    cmd_sender: Sender<EventLoopSignal>,
+    evt_receiver: Receiver<PollResult>
+}
+
+impl TwoWayDevice {
+    pub fn new(id: ProbeId, cmd_tx: Sender<EventLoopSignal>, evt_tx: Receiver<PollResult>) -> TwoWayDevice {
+        TwoWayDevice {
+            id: id,
+            cmd_sender: cmd_tx,
+            evt_receiver: evt_tx
+        }
+    }
+}
+
+impl DeviceFacade for TwoWayDevice {
+    fn run(mut self: Box<Self>) -> io::Result<()> {
+        unimplemented!();
+    }
+}

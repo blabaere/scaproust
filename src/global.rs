@@ -61,6 +61,15 @@ impl fmt::Debug for SocketId {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct ProbeId(pub usize);
+
+impl fmt::Debug for ProbeId {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
 #[derive(Clone)]
 pub struct IdSequence {
     value: Rc<Cell<usize>>

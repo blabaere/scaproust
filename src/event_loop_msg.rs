@@ -46,6 +46,7 @@ impl CmdSignal {
 /// Commands sent to the session
 pub enum SessionCmdSignal {
     CreateSocket(SocketType),
+    CreateProbe(PollRequest),
     Shutdown
 }
 
@@ -53,6 +54,7 @@ impl SessionCmdSignal {
     pub fn name(&self) -> &'static str {
         match *self {
             SessionCmdSignal::CreateSocket(_) => "CreateSocket",
+            SessionCmdSignal::CreateProbe(_)  => "CreateProbe",
             SessionCmdSignal::Shutdown        => "Shutdown"
         }
     }
@@ -64,24 +66,7 @@ pub enum SocketCmdSignal {
     Bind(String),
     SendMsg(Message),
     RecvMsg,
-    SetOption(SocketOption),
-    CreateProbe(Vec<PollRequest>)
-}
-
-pub struct PollRequest {
-    socketId: SocketId,
-    recv: bool,
-    send: bool
-}
-
-impl PollRequest {
-    pub fn new_for_recv(socketId: SocketId) -> PollRequest {
-        PollRequest {
-            socketId: socketId,
-            recv: true,
-            send: false
-        }
-    }
+    SetOption(SocketOption)
 }
 
 impl SocketCmdSignal {
@@ -91,8 +76,7 @@ impl SocketCmdSignal {
             SocketCmdSignal::Bind(_)        => "Bind",
             SocketCmdSignal::SendMsg(_)     => "SendMsg",
             SocketCmdSignal::RecvMsg        => "RecvMsg",
-            SocketCmdSignal::SetOption(_)   => "SetOption",
-            SocketCmdSignal::CreateProbe(_) => "CreateProbe"
+            SocketCmdSignal::SetOption(_)   => "SetOption"
         }
     }
 }
@@ -165,7 +149,9 @@ pub enum EventLoopTimeout {
 
 /// Notifications sent by the *backend* session as reply to the commands sent by the facade session.
 pub enum SessionNotify {
-    SocketCreated(SocketId, mpsc::Receiver<SocketNotify>)
+    SocketCreated(SocketId, mpsc::Receiver<SocketNotify>),
+    ProbeCreated(ProbeId, mpsc::Receiver<PollResult>),
+    ProbeNotCreated(io::Error)
 }
 
 /// Notifications sent by the *backend* socket as reply to the commands sent by the facade socket.
@@ -179,9 +165,8 @@ pub enum SocketNotify {
     MsgRecv(Message),
     MsgNotRecv(io::Error),
     OptionSet,
-    OptionNotSet(io::Error),
-    ProbeCreated(mpsc::Receiver<PollResult>),
-    ProbeNotCreated(io::Error)
+    OptionNotSet(io::Error)
 }
 
-pub struct PollResult(pub Vec<(bool, bool)>);
+pub struct PollRequest(pub SocketId, pub SocketId);
+pub struct PollResult(pub bool, pub bool);

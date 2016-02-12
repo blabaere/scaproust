@@ -16,6 +16,7 @@ use event_loop_msg::*;
 
 use socket::Socket;
 use protocol;
+use probe::Probe;
 
 use EventLoop;
 
@@ -23,6 +24,7 @@ pub struct Session {
     event_sender: mpsc::Sender<SessionNotify>,
     sockets: HashMap<SocketId, Socket>,
     socket_ids: HashMap<mio::Token, SocketId>,
+    probes: HashMap<ProbeId, Probe>,
     id_seq: IdSequence
 }
 
@@ -33,6 +35,7 @@ impl Session {
             event_sender: event_tx,
             sockets: HashMap::new(),
             socket_ids: HashMap::new(),
+            probes: HashMap::new(),
             id_seq: IdSequence::new()
         }
     }
@@ -49,10 +52,10 @@ impl Session {
         debug!("session handle_session_cmd {}", cmd.name());
         match cmd {
             SessionCmdSignal::CreateSocket(t) => self.create_socket(event_loop, t),
+            SessionCmdSignal::CreateProbe(r)  => self.create_probe(event_loop, r),
             SessionCmdSignal::Shutdown        => {
-                // TODO clean up all the things !
-                // have each socket send a shutdown notify ?
-                // clear all sockets and token to id mapping
+                self.socket_ids.clear();
+                self.sockets.clear();
                 event_loop.shutdown();
             },
         }
@@ -109,6 +112,16 @@ impl Session {
         self.sockets.insert(id, socket);
 
         self.send_evt(SessionNotify::SocketCreated(id, rx));
+    }
+
+    fn create_probe(&mut self, event_loop: &mut EventLoop, poll_req: PollRequest) {
+        let id = ProbeId(self.id_seq.next());
+        let (tx, rx) = mpsc::channel();
+        let probe = Probe::new(poll_req.0, poll_req.1, tx);
+
+        self.probes.insert(id, probe);
+
+        self.send_evt(SessionNotify::ProbeCreated(id, rx));
     }
 
     fn on_socket_by_id<F>(&mut self, id: &SocketId, action: F) where F : FnOnce(&mut Socket) {
