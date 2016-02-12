@@ -72,7 +72,7 @@ impl Pipe {
     }
 
     pub fn on_open_ack(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.on_register(event_loop));
+        self.on_state_transition(|s: Box<PipeState>| s.on_open_ack(event_loop));
     }
 
     pub fn ready(&mut self, event_loop: &mut EventLoop, events: mio::EventSet) {
@@ -170,7 +170,7 @@ trait PipeState {
         Box::new(Dead)
     }
 
-    fn on_register(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+    fn on_open_ack(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
 
@@ -495,7 +495,7 @@ impl PipeState for Activable {
         "Handshaked"
     }
 
-    fn on_register(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+    fn on_open_ack(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         let res = reregister_live(self.as_ref(), event_loop);
 
         transition_if_ok::<Activable, Idle>(self, res, event_loop)
