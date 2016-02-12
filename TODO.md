@@ -1,4 +1,7 @@
-### Forgat that one !!!
+### Emergency !!!
+Move all protocols to priolist2 and apply required changes (like in Pull)
+
+### Forgot that one !!!
 SocketFacade should tell the session when they are dropped !!!
 
 ### Current problem: REQ resend
@@ -15,7 +18,6 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 ### Next problems
 - Handle accept error
 - Have pipe error forwarded to the session and the socket
-- Session shutdown should unblock current socket operations
 
 ### General:
 - write documentation
