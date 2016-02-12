@@ -76,18 +76,12 @@ impl Session {
         match evt {
             SocketEvtSignal::PipeAdded(tok) => {
                 self.socket_ids.insert(tok, id);
-
-                if let Some(socket) = self.sockets.get_mut(&id) {
-                    socket.handle_evt(event_loop, SocketEvtSignal::PipeAdded(tok));
-                }
+                self.on_socket_by_id(&id, |s| s.handle_evt(event_loop, SocketEvtSignal::PipeAdded(tok)));
             },
             SocketEvtSignal::AcceptorAdded(tok) => {
                 self.socket_ids.insert(tok, id);
-
-                if let Some(socket) = self.sockets.get_mut(&id) {
-                    socket.handle_evt(event_loop, SocketEvtSignal::AcceptorAdded(tok));
-                }
-            },
+                self.on_socket_by_id(&id, |s| s.handle_evt(event_loop, SocketEvtSignal::AcceptorAdded(tok)));
+            }
         }
     }
 
