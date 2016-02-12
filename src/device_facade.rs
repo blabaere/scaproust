@@ -16,24 +16,70 @@ use event_loop_msg::*;
 use socket_facade::*;
 
 
-pub trait DeviceFacade {
+pub trait DeviceFacade : Send {
     fn run(mut self: Box<Self>) -> io::Result<()>;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// RELAY DEVICE                                                              //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
+
 pub struct RelayDevice {
-    socket: SocketFacade
+    socket: Option<SocketFacade>
 }
 
 impl RelayDevice {
     pub fn new(s: SocketFacade) -> RelayDevice {
         RelayDevice {
-            socket: s
+            socket: Some(s)
         }
     }
 }
 
 impl DeviceFacade for RelayDevice {
     fn run(mut self: Box<Self>) -> io::Result<()> {
-        self.socket.run_relay_device()
+        let mut socket = self.socket.take().unwrap();
+        loop {
+            try!(socket.recv_msg().and_then(|msg| socket.send_msg(msg)));
+        }
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// ONE-WAY BRIDGE DEVICE                                                     //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
+
+pub struct OneWayDevice {
+    left: Option<SocketFacade>,
+    right: Option<SocketFacade>
+}
+
+impl OneWayDevice {
+    pub fn new(l: SocketFacade, r: SocketFacade) -> OneWayDevice {
+        OneWayDevice {
+            left: Some(l),
+            right: Some(r)
+        }
+    }
+}
+
+impl DeviceFacade for OneWayDevice {
+    fn run(mut self: Box<Self>) -> io::Result<()> {
+        let mut left = self.left.take().unwrap();
+        let mut right = self.right.take().unwrap();
+
+        loop {
+            try!(left.forward_msg(&mut right))
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+// TWO-WAY BRIDGE DEVICE                                                     //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////

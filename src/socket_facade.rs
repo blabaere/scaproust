@@ -131,33 +131,8 @@ impl SocketFacade {
         self.set_option(SocketOption::RecvTimeout(timeout))
     }
 
-    pub fn run_relay_device(mut self) -> io::Result<()> {
-        loop {
-            try!(self.recv_msg().and_then(|msg| self.send_msg(msg)));
-        }
-    }
-
-    pub fn run_bridge_device(self, other: SocketFacade) -> io::Result<()> {
-        if !self.socket_type.matches(other.socket_type) {
-            other_io_error("Socket types do not match");
-        }
-
-        match self.get_socket_type() {
-            SocketType::Pull | SocketType::Sub => self.run_one_way_device(other),
-            SocketType::Push | SocketType::Pub => other.run_one_way_device(self),
-            SocketType::Req        |
-            SocketType::Rep        |
-            SocketType::Respondent |
-            SocketType::Surveyor   |
-            SocketType::Bus        |
-            SocketType::Pair       => self.run_two_way_device(other)
-        }
-    }
-
-    fn run_one_way_device(mut self, mut other: SocketFacade) -> io::Result<()> {
-        loop {
-            try!(self.forward_msg(&mut other))
-        }
+    pub fn matches(&self, other: &SocketFacade) -> bool {
+        self.socket_type.matches(other.socket_type)
     }
 
     fn run_two_way_device(mut self, mut other: SocketFacade) -> io::Result<()> {
@@ -212,7 +187,7 @@ impl SocketFacade {
         Ok(())
     }
 
-    fn forward_msg(&mut self, other: &mut SocketFacade) -> io::Result<()> {
+    pub fn forward_msg(&mut self, other: &mut SocketFacade) -> io::Result<()> {
         self.recv_msg().and_then(|msg| other.send_msg(msg))
     }
 }

@@ -82,9 +82,30 @@ impl SessionFacade {
     }
 
     pub fn create_bridge_device(&self, left: SocketFacade, right: SocketFacade) -> io::Result<Box<DeviceFacade>> {
-        unimplemented!();
+        if !left.matches(&right) {
+            other_io_error("Socket types do not match");
+        }
+
+        match left.get_socket_type() {
+            SocketType::Pull | SocketType::Sub => Ok(create_one_way_device(left, right)),
+            SocketType::Push | SocketType::Pub => Ok(create_one_way_device(right, left)),
+            SocketType::Req        |
+            SocketType::Rep        |
+            SocketType::Respondent |
+            SocketType::Surveyor   |
+            SocketType::Bus        |
+            SocketType::Pair       => unimplemented!()
+        }
     }
 }
+
+fn create_one_way_device(left: SocketFacade, right: SocketFacade) -> Box<DeviceFacade> {
+    box OneWayDevice::new(left, right)
+}
+
+/*fn create_two_way_device(left: SocketFacade, right: SocketFacade) -> Box<DeviceFacade> {
+    box OneWayDevice::new(left, right)
+}*/
 
 impl Drop for SessionFacade {
     fn drop(&mut self) {

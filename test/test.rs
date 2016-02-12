@@ -417,7 +417,8 @@ fn test_device_bus() {
 
     thread::sleep(time::Duration::from_millis(500));
 
-    let device_thread = thread::spawn(move || server.run_relay_device());
+    let device = session.create_relay_device(server).unwrap();
+    let device_thread = thread::spawn(move || device.run());
 
     client1.send(vec![65, 66, 67]).unwrap();
     let received = client2.recv().unwrap();
@@ -451,7 +452,8 @@ fn test_device_pipeline() {
 
     thread::sleep(time::Duration::from_millis(500));
 
-    let device_thread = thread::spawn(move || d_pull.run_bridge_device(d_push));
+    let device = session.create_bridge_device(d_pull, d_push).unwrap();
+    let device_thread = thread::spawn(move || device.run());
 
     push.send(vec![65, 66, 67]).unwrap();
     let received = pull.recv().unwrap();
