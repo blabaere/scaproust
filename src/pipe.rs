@@ -68,7 +68,7 @@ impl Pipe {
     }
 
     pub fn open(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.register(event_loop));
+        self.on_state_transition(|s: Box<PipeState>| s.open(event_loop));
     }
 
     pub fn on_open_ack(&mut self, event_loop: &mut EventLoop) {
@@ -166,7 +166,7 @@ impl PipeBody {
 trait PipeState {
     fn name(&self) -> &'static str;
 
-    fn register(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+    fn open(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
 
@@ -301,7 +301,7 @@ impl PipeState for Initial {
         "Initial"
     }
 
-    fn register(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+    fn open(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         let res = self.body.register(event_loop, mio::EventSet::writable(), mio::PollOpt::level());
 
         transition_if_ok::<Initial, HandshakeTx>(self, res, event_loop)
