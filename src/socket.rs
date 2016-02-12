@@ -231,7 +231,7 @@ impl Socket {
 
     fn remove_pipe_and_schedule_reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         if let Some(mut pipe) = self.protocol.remove_pipe(tok) {
-            let _ = pipe.unregister(event_loop);
+            let _ = pipe.close(event_loop);
             if let Some(addr) = pipe.addr() {
                 self.schedule_reconnect(event_loop, tok, addr);
             }

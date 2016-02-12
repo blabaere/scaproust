@@ -67,7 +67,7 @@ impl Pipe {
         }
     }
 
-    pub fn register(&mut self, event_loop: &mut EventLoop) {
+    pub fn open(&mut self, event_loop: &mut EventLoop) {
         self.on_state_transition(|s: Box<PipeState>| s.register(event_loop));
     }
 
@@ -103,7 +103,7 @@ impl Pipe {
         self.on_state_transition(|s: Box<PipeState>| s.cancel_send(event_loop));
     }
 
-    pub fn unregister(&mut self, event_loop: &mut EventLoop) {
+    pub fn close(&mut self, event_loop: &mut EventLoop) {
         self.on_state_transition(|s: Box<PipeState>| s.unregister(event_loop));
     }
 
