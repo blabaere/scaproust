@@ -172,10 +172,7 @@ impl State {
     }
 
     fn send(self, body: &mut Body, _: &mut EventLoop, _: Rc<Message>, _: Option<mio::Timeout>) -> State {
-        let err = other_io_error("send not supported by protocol");
-        let ntf = SocketNotify::MsgNotSent(err);
-
-        body.send_notify(ntf);
+        body.send();
 
         self
     }
@@ -189,31 +186,23 @@ impl State {
     }
 
     fn recv(self, body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {
-        if let Some(pipe) = body.get_active_pipe() {
-            pipe.recv(event_loop);
-
-            return State::Receiving(timeout);
+        if body.recv(event_loop) {
+            State::Receiving(timeout)
         } else {
-            return State::RecvOnHold(timeout);
+            State::RecvOnHold(timeout)
         }
     }
 
     fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message) -> State {
         if let State::Receiving(timeout) = self {
-            body.send_notify(SocketNotify::MsgRecv(msg));
-            body.advance_pipe(event_loop);
-            clear_timeout(event_loop, timeout);
+            body.on_recv_by_pipe(event_loop, msg, timeout);
         }
 
         State::Idle
     }
 
     fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
-
-        body.send_notify(SocketNotify::MsgNotRecv(err));
-        body.get_active_pipe().map(|p| p.cancel_recv(event_loop));
-        body.advance_pipe(event_loop);
+        body.on_recv_timeout(event_loop);
 
         State::Idle
     }
@@ -286,12 +275,36 @@ impl Body {
 
         self.get_pipe(tok).map(|p| p.ready(event_loop, events));
     }
-}
-/*
-struct PipeCollection {
-    pipes: HashMap<mio::Token, Pipe>,
-    fairqueue: PrioList
-}
 
-impl PipeCollection {
-}*/
+    fn send(&self) {
+        let err = other_io_error("send not supported by protocol");
+        let ntf = SocketNotify::MsgNotSent(err);
+
+        self.send_notify(ntf);
+    }
+
+    fn recv(&mut self, event_loop: &mut EventLoop) -> bool {
+        if let Some(pipe) = self.get_active_pipe() {
+            pipe.recv(event_loop);
+
+            true
+        } else {
+            false
+        }
+    }
+
+    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
+        self.send_notify(SocketNotify::MsgRecv(msg));
+        self.advance_pipe(event_loop);
+
+        clear_timeout(event_loop, timeout);
+    }
+
+    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
+
+        self.send_notify(SocketNotify::MsgNotRecv(err));
+        self.get_active_pipe().map(|p| p.cancel_recv(event_loop));
+        self.advance_pipe(event_loop);
+    }
+}
