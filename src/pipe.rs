@@ -104,7 +104,7 @@ impl Pipe {
     }
 
     pub fn close(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.unregister(event_loop));
+        self.on_state_transition(|s: Box<PipeState>| s.close(event_loop));
     }
 
     pub fn addr(self) -> Option<String> {
@@ -202,7 +202,7 @@ trait PipeState {
         Box::new(Dead)
     }
 
-    fn unregister(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+    fn close(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
 
@@ -233,15 +233,15 @@ trait LivePipeState {
             mio::EventSet::readable() | mio::EventSet::writable(), 
             mio::PollOpt::edge())
     }
+
+    fn close(&self, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.unregister(event_loop);
+        Box::new(Dead)
+    }
 }
 
 fn reregister_live(state: &LivePipeState, event_loop: &mut EventLoop) -> io::Result<()> {
     state.reregister(event_loop)
-}
-
-fn unregister_live(state: &LivePipeState, event_loop: &mut EventLoop) -> Box<PipeState> {
-    let _ = state.unregister(event_loop);
-    Box::new(Dead)
 }
 
 fn transition<F, T>(f: Box<F>) -> Box<T> where
@@ -307,8 +307,8 @@ impl PipeState for Initial {
         transition_if_ok::<Initial, HandshakeTx>(self, res, event_loop)
     }
 
-    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        unregister_live(self.as_ref(), event_loop)
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.as_ref().close(event_loop)
     }
 }
 
@@ -384,8 +384,8 @@ impl PipeState for HandshakeTx {
         }
     }
 
-    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        unregister_live(self.as_ref(), event_loop)
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.as_ref().close(event_loop)
     }
 }
 
@@ -462,8 +462,8 @@ impl PipeState for HandshakeRx {
         }
     }
 
-    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        unregister_live(self.as_ref(), event_loop)
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.as_ref().close(event_loop)
     }
 }
 
@@ -505,8 +505,8 @@ impl PipeState for Activable {
         self
     }
 
-    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        unregister_live(self.as_ref(), event_loop)
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.as_ref().close(event_loop)
     }
 }
 
@@ -622,8 +622,8 @@ impl PipeState for Idle {
         no_transition_if_ok(self, res, event_loop)
     }
 
-    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        unregister_live(self.as_ref(), event_loop)
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.as_ref().close(event_loop)
     }
 }
 
@@ -690,8 +690,8 @@ impl PipeState for Receiving {
         transition::<Receiving, Idle>(self)
     }
 
-    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        unregister_live(self.as_ref(), event_loop)
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.as_ref().close(event_loop)
     }
 }
 
@@ -758,8 +758,8 @@ impl PipeState for Sending {
         transition::<Sending, Idle>(self)
     }
 
-    fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        unregister_live(self.as_ref(), event_loop)
+    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        self.as_ref().close(event_loop)
     }
 }
 
