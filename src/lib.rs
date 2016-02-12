@@ -14,7 +14,9 @@ extern crate time;
 
 mod global;
 mod event_loop_msg;
-mod facade;
+mod session_facade;
+mod socket_facade;
+mod device;
 mod session;
 mod socket;
 mod protocol;
@@ -24,10 +26,8 @@ mod send;
 mod recv;
 mod acceptor;
 
-pub use facade::{
-    SessionFacade as Session,
-    SocketFacade as Socket
-};
+pub use session_facade::SessionFacade as Session;
+pub use socket_facade::SocketFacade as Socket;
 
 pub use global::SocketType;
 pub use event_loop_msg::SocketOption;
