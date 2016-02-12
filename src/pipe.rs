@@ -100,7 +100,7 @@ impl Pipe {
     }
 
     pub fn resync_readiness(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.reregister(event_loop));
+        self.on_state_transition(|s: Box<PipeState>| s.resync_readiness(event_loop));
     }
 
     pub fn close(&mut self, event_loop: &mut EventLoop) {
@@ -174,10 +174,6 @@ trait PipeState {
         Box::new(Dead)
     }
 
-    fn reregister(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        Box::new(Dead)
-    }
-
     fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
         Box::new(Dead)
     }
@@ -199,6 +195,10 @@ trait PipeState {
     }
 
     fn cancel_send(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        Box::new(Dead)
+    }
+
+    fn resync_readiness(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         Box::new(Dead)
     }
 
@@ -576,12 +576,6 @@ impl PipeState for Idle {
         "Idle"
     }
 
-    fn reregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = reregister_live(self.as_ref(), event_loop);
-
-        no_transition_if_ok(self, res, event_loop)
-    }
-
     fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
         self
     }
@@ -620,6 +614,12 @@ impl PipeState for Idle {
 
     fn cancel_send(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         self
+    }
+
+    fn resync_readiness(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
+        let res = reregister_live(self.as_ref(), event_loop);
+
+        no_transition_if_ok(self, res, event_loop)
     }
 
     fn unregister(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
