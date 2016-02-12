@@ -6,7 +6,7 @@
 
 use std::io;
 
-pub trait Device {
+pub trait DeviceFacade {
     fn run(self: Box<Self>) -> io::Result<()>;
 }
 

@@ -7,19 +7,16 @@
 use std::io;
 use std::thread;
 use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
 use std::time;
 
 use mio;
-use mio::Sender;
 
 use global::*;
 use event_loop_msg::*;
 use socket_facade::*;
-use Message;
+use device_facade::*;
 use EventLoop;
 use session::Session;
-use device::Device;
 
 pub struct SessionFacade {
     cmd_sender: mio::Sender<EventLoopSignal>,
@@ -80,7 +77,7 @@ impl SessionFacade {
         SocketFacade::new(id, socket_type, self.cmd_sender.clone(), rx)
     }
 
-    pub fn create_loop_device(&self, socket: SocketFacade) -> io::Result<Box<Device>> {
+    pub fn create_loop_device(&self, socket: SocketFacade) -> io::Result<Box<DeviceFacade>> {
         unimplemented!();
     }
 }

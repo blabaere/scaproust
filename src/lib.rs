@@ -16,7 +16,7 @@ mod global;
 mod event_loop_msg;
 mod session_facade;
 mod socket_facade;
-mod device;
+mod device_facade;
 mod session;
 mod socket;
 mod protocol;
@@ -28,6 +28,7 @@ mod acceptor;
 
 pub use session_facade::SessionFacade as Session;
 pub use socket_facade::SocketFacade as Socket;
+pub use device_facade::DeviceFacade as Device;
 
 pub use global::SocketType;
 pub use event_loop_msg::SocketOption;
