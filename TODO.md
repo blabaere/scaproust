@@ -13,6 +13,9 @@ so it can setup the socket <-> pipe mapping.
 Then the session fowards the evt signal to the socket.
 SHOULD BE CALLED ON_PIPE_ADDED
 AND THE MISSING ON_PIPE_REMOVED COUNTERPART SHOULD BE ADDED
+
+RENAME socket.handle_evt and avoid reusing the EvtSignal enum
+
 ##### Protocol::register_pipe
 Used by a socket to tell the protocol the pipe can now be plugged in the IO evt system
  and perform the handshake.

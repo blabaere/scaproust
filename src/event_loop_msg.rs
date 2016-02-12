@@ -13,7 +13,7 @@ use mio;
 use global::*;
 use Message;
 
-/// information sent through the event loop channel so components can communicate with each others.
+/// Message flowing through the event loop channel so components can communicate with each others.
 pub enum EventLoopSignal {
     Cmd(CmdSignal),
     Evt(EvtSignal)
@@ -28,6 +28,7 @@ impl EventLoopSignal {
     }
 }
 
+/// Commands sent by facade components to *backend* components
 pub enum CmdSignal {
     Session(SessionCmdSignal),
     Socket(SocketId, SocketCmdSignal)
@@ -42,6 +43,7 @@ impl CmdSignal {
     }
 }
 
+/// Commands sent to the session
 pub enum SessionCmdSignal {
     CreateSocket(SocketType),
     Shutdown
@@ -56,7 +58,7 @@ impl SessionCmdSignal {
     }
 }
 
-
+/// Commands sent to a socket
 pub enum SocketCmdSignal {
     Connect(String),
     Bind(String),
@@ -104,11 +106,7 @@ pub enum SocketOption {
     ResendInterval(time::Duration)
 }
 
-// it is kind of ugly
-// both events are related to a pipe
-// maybe the socket id and the pipe token
-// should be exposed in the same way ?
-// maybe not, who knows ...
+/// Events raised by components living in the event loop, resulting from the execution of commands.
 pub enum EvtSignal {
     Socket(SocketId, SocketEvtSignal),
     Pipe(mio::Token, PipeEvtSignal)
@@ -123,20 +121,22 @@ impl EvtSignal {
     }
 }
 
+// Events raised by sockets
 pub enum SocketEvtSignal {
-    Connected(mio::Token),
-    Bound(mio::Token)
+    PipeAdded(mio::Token),
+    AcceptorAdded(mio::Token)
 }
 
 impl SocketEvtSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            SocketEvtSignal::Connected(_) => "Connected",
-            SocketEvtSignal::Bound(_)     => "Bound"
+            SocketEvtSignal::PipeAdded(_)     => "PipeAdded",
+            SocketEvtSignal::AcceptorAdded(_) => "AcceptorAdded"
         }
     }
 }
 
+/// Events raised by pipes
 pub enum PipeEvtSignal {
     Opened,
     MsgRcv(Message),
@@ -153,6 +153,7 @@ impl PipeEvtSignal {
     }
 }
 
+/// Events raised by a previoulsy configured timer
 pub enum EventLoopTimeout {
     Reconnect(mio::Token, String),
     Rebind(mio::Token, String),
@@ -162,10 +163,12 @@ pub enum EventLoopTimeout {
     Resend(SocketId)
 }
 
+/// Notifications sent by the *backend* session as reply to the commands sent by the facade session.
 pub enum SessionNotify {
     SocketCreated(SocketId, mpsc::Receiver<SocketNotify>)
 }
 
+/// Notifications sent by the *backend* socket as reply to the commands sent by the facade socket.
 pub enum SocketNotify {
     Connected,
     NotConnected(io::Error),

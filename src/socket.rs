@@ -92,8 +92,8 @@ impl Socket {
     pub fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: SocketEvtSignal) {
         debug!("[{:?}] handle_evt {}", self.id, evt.name());
         match evt {
-            SocketEvtSignal::Connected(tok) => self.protocol.register_pipe(event_loop, tok),
-            SocketEvtSignal::Bound(tok)     => self.open_acceptor(event_loop, tok)
+            SocketEvtSignal::PipeAdded(tok)     => self.protocol.register_pipe(event_loop, tok),
+            SocketEvtSignal::AcceptorAdded(tok) => self.open_acceptor(event_loop, tok)
         }
     }
 
@@ -151,7 +151,7 @@ impl Socket {
         let sig_sender = self.sig_sender.clone();
         let pipe = Pipe::new(token, addr, protocol_ids, conn, sig_sender);
 
-        self.protocol.add_pipe(token, pipe).map(|_|self.send_event(SocketEvtSignal::Connected(token)))
+        self.protocol.add_pipe(token, pipe).map(|_|self.send_event(SocketEvtSignal::PipeAdded(token)))
     }
 
     pub fn bind(&mut self, addr: String) {
@@ -185,7 +185,7 @@ impl Socket {
         let acceptor = Acceptor::new(tok, addr, listener);
 
         self.add_acceptor(tok, acceptor);
-        self.send_event(SocketEvtSignal::Bound(tok));
+        self.send_event(SocketEvtSignal::AcceptorAdded(tok));
     }
 
     fn add_acceptor(&mut self, token: mio::Token, acceptor: Acceptor) {

@@ -287,3 +287,11 @@ impl Body {
         self.get_pipe(tok).map(|p| p.ready(event_loop, events));
     }
 }
+/*
+struct PipeCollection {
+    pipes: HashMap<mio::Token, Pipe>,
+    fairqueue: PrioList
+}
+
+impl PipeCollection {
+}*/

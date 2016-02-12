@@ -74,18 +74,18 @@ impl Session {
     fn handle_socket_evt(&mut self, event_loop: &mut EventLoop, id: SocketId, evt: SocketEvtSignal) {
         debug!("session handle_socket_evt {}", evt.name());
         match evt {
-            SocketEvtSignal::Connected(tok) => {
+            SocketEvtSignal::PipeAdded(tok) => {
                 self.socket_ids.insert(tok, id);
 
                 if let Some(socket) = self.sockets.get_mut(&id) {
-                    socket.handle_evt(event_loop, SocketEvtSignal::Connected(tok));
+                    socket.handle_evt(event_loop, SocketEvtSignal::PipeAdded(tok));
                 }
             },
-            SocketEvtSignal::Bound(tok) => {
+            SocketEvtSignal::AcceptorAdded(tok) => {
                 self.socket_ids.insert(tok, id);
 
                 if let Some(socket) = self.sockets.get_mut(&id) {
-                    socket.handle_evt(event_loop, SocketEvtSignal::Bound(tok));
+                    socket.handle_evt(event_loop, SocketEvtSignal::AcceptorAdded(tok));
                 }
             },
         }
