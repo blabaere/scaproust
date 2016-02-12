@@ -55,8 +55,8 @@ pub trait Protocol {
     fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) -> io::Result<()>;
     fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
 
-    fn register_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token);
-    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, token: mio::Token);
+    fn open_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token);
+    fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, token: mio::Token);
 
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet);
 

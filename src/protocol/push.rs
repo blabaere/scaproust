@@ -96,12 +96,12 @@ impl Protocol for Push {
         pipe
     }
 
-    fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.on_state_transition(|s, body| s.register_pipe(body, event_loop, tok));
+    fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.on_state_transition(|s, body| s.open_pipe(body, event_loop, tok));
     }
 
-    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.on_state_transition(|s, body| s.on_pipe_register(body, event_loop, tok));
+    fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.on_state_transition(|s, body| s.on_pipe_opened(body, event_loop, tok));
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
@@ -159,14 +159,14 @@ impl State {
         }
     }
 
-    fn register_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
-        body.register_pipe(event_loop, tok);
+    fn open_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+        body.open_pipe(event_loop, tok);
 
         self
     }
 
-    fn on_pipe_register(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
-        body.on_pipe_register(event_loop, tok);
+    fn on_pipe_opened(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+        body.on_pipe_opened(event_loop, tok);
 
         match self {
             State::SendOnHold(msg, t) => State::Idle.send(body, event_loop, msg, t),
@@ -250,12 +250,12 @@ impl Body {
         self.pipes.remove(&tok)
     }
 
-    fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+    fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         self.lb.insert(tok, 8);
         self.pipes.get_mut(&tok).map(|p| p.register(event_loop));
     }
 
-    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+    fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         self.lb.activate(tok);
         self.pipes.get_mut(&tok).map(|p| p.on_register(event_loop));
     }

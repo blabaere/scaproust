@@ -67,11 +67,11 @@ impl Protocol for Pub {
         self.pipes.remove(&tok)
     }
 
-    fn register_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+    fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         self.pipes.get_mut(&tok).map(|p| p.register(event_loop));
     }
 
-    fn on_pipe_register(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+    fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         self.dist.insert(tok);
         self.pipes.get_mut(&tok).map(|p| p.on_register(event_loop));
     }
