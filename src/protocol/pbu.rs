@@ -41,8 +41,16 @@ impl Pub {
         }
     }
 
-    fn get_pipe<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
+    fn get_pipe<'a>(&'a mut self, tok: &mio::Token) -> Option<&'a mut Pipe> {
         self.pipes.get_mut(&tok)
+    }
+
+    fn broadcast(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
+        for tok in self.dist.iter() {
+            let msg = msg.clone();
+
+            self.pipes.get_mut(tok).map(|p| p.send_nb(event_loop, msg));
+        }
     }
 }
 
@@ -77,14 +85,7 @@ impl Protocol for Pub {
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, _: Timeout) {
-        let msg = Rc::new(msg);
-
-        for (tok, mut pipe) in self.pipes.iter_mut() {
-            if self.dist.contains(tok) {
-                pipe.send_nb(event_loop, msg.clone());
-            }
-        }
-
+        self.broadcast(event_loop, Rc::new(msg));
         self.send_notify(SocketNotify::MsgSent);
     }
 
@@ -108,6 +109,6 @@ impl Protocol for Pub {
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        self.get_pipe(tok).map(|p| p.ready(event_loop, events));
+        self.get_pipe(&tok).map(|p| p.ready(event_loop, events));
     }
 }

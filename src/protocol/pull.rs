@@ -53,7 +53,7 @@ impl Pull {
         }
     }
 
-    fn on_state_transition<F>(&mut self, transition: F) where F : FnOnce(State, &mut Body) -> State {
+    fn apply<F>(&mut self, transition: F) where F : FnOnce(State, &mut Body) -> State {
         if let Some(old_state) = self.state.take() {
             let old_name = old_state.name();
             let new_state = transition(old_state, &mut self.body);
@@ -80,7 +80,7 @@ impl Protocol for Pull {
         let res = self.body.add_pipe(tok, pipe);
 
         if res.is_ok() {
-            self.on_state_transition(|s, body| s.on_pipe_added(body, tok));
+            self.apply(|s, body| s.on_pipe_added(body, tok));
         }
 
         res
@@ -90,46 +90,46 @@ impl Protocol for Pull {
         let pipe = self.body.remove_pipe(tok);
 
         if pipe.is_some() {
-            self.on_state_transition(|s, body| s.on_pipe_removed(body, tok));
+            self.apply(|s, body| s.on_pipe_removed(body, tok));
         }
 
         pipe
     }
 
     fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.on_state_transition(|s, body| s.open_pipe(body, event_loop, tok));
+        self.apply(|s, body| s.open_pipe(body, event_loop, tok));
     }
 
     fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.on_state_transition(|s, body| s.on_pipe_opened(body, event_loop, tok));
+        self.apply(|s, body| s.on_pipe_opened(body, event_loop, tok));
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
-        self.on_state_transition(|s, body| s.send(body, event_loop, Rc::new(msg), timeout));
+        self.apply(|s, body| s.send(body, event_loop, Rc::new(msg), timeout));
     }
 
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.on_state_transition(|s, body| s.on_send_by_pipe(body, event_loop, tok));
+        self.apply(|s, body| s.on_send_by_pipe(body, event_loop, tok));
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s, body| s.on_send_timeout(body, event_loop));
+        self.apply(|s, body| s.on_send_timeout(body, event_loop));
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
-        self.on_state_transition(|s, body| s.recv(body, event_loop, timeout));
+        self.apply(|s, body| s.recv(body, event_loop, timeout));
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) {
-        self.on_state_transition(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
+        self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s, body| s.on_recv_timeout(body, event_loop));
+        self.apply(|s, body| s.on_recv_timeout(body, event_loop));
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        self.on_state_transition(|s, body| s.ready(body, event_loop, tok, events));
+        self.apply(|s, body| s.ready(body, event_loop, tok, events));
     }
 }
 
@@ -235,7 +235,7 @@ impl Body {
     }
 
     fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
-        self.fq.remove(tok);
+        self.fq.remove(&tok);
         self.pipes.remove(&tok)
     }
 
@@ -267,7 +267,7 @@ impl Body {
     fn get_pipe<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
         self.pipes.get_mut(&tok)
     }
-            
+
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         if events.is_readable() {
             self.fq.activate(tok);
@@ -284,13 +284,7 @@ impl Body {
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop) -> bool {
-        if let Some(pipe) = self.get_active_pipe() {
-            pipe.recv(event_loop);
-
-            true
-        } else {
-            false
-        }
+        self.get_active_pipe().map(|p| p.recv(event_loop)).is_some()
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {

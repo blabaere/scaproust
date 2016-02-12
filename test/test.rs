@@ -107,6 +107,7 @@ fn test_recv_while_not_connected() {
         thread::sleep(time::Duration::from_millis(50));
         push.connect("tcp://127.0.0.1:5458").unwrap();
         push.send(vec![65, 66, 67]).unwrap();
+        thread::sleep(timeout);
     });
 
     let received = pull.recv().unwrap();

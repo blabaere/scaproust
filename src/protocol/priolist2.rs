@@ -69,9 +69,9 @@ impl PrioList {
         self.items.push(PrioListItem::new(tok, priority));
     }
 
-    pub fn remove(&mut self, tok: mio::Token) {
+    pub fn remove(&mut self, tok: &mio::Token) {
         let all = self.full_range();
-        if let Some(index) = self.find_item_index(all, &|item| item.token == tok) {
+        if let Some(index) = self.find_item_index(all, &|item| item.token == *tok) {
             self.remove_index(index);
         }
     }
