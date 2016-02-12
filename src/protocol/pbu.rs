@@ -73,7 +73,7 @@ impl Protocol for Pub {
 
     fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         self.dist.insert(tok);
-        self.pipes.get_mut(&tok).map(|p| p.on_register(event_loop));
+        self.pipes.get_mut(&tok).map(|p| p.on_open_ack(event_loop));
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, _: Timeout) {

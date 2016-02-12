@@ -256,7 +256,7 @@ impl Body {
 
     fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         self.fq.insert(tok, 8);
-        self.pipes.get_mut(&tok).map(|p| p.on_register(event_loop));
+        self.pipes.get_mut(&tok).map(|p| p.on_open_ack(event_loop));
     }
 
     fn get_active_pipe<'a>(&'a mut self) -> Option<&'a mut Pipe> {

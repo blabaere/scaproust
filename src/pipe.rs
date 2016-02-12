@@ -19,9 +19,9 @@ use event_loop_msg::*;
 use send;
 use recv;
 
-// A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
-// That means send/receive size prefix and then message payload
-// according to the connection readiness and the requested operation progress if any
+/// A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
+/// That means send/receive size prefix and then message payload.
+/// This is done according to the connection readiness and the operation progress.
 pub struct Pipe {
     token: mio::Token,
     addr: Option<String>,
@@ -71,11 +71,7 @@ impl Pipe {
         self.on_state_transition(|s: Box<PipeState>| s.register(event_loop));
     }
 
-    pub fn resync_readiness(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s: Box<PipeState>| s.reregister(event_loop));
-    }
-
-    pub fn on_register(&mut self, event_loop: &mut EventLoop) {
+    pub fn on_open_ack(&mut self, event_loop: &mut EventLoop) {
         self.on_state_transition(|s: Box<PipeState>| s.on_register(event_loop));
     }
 
@@ -101,6 +97,10 @@ impl Pipe {
 
     pub fn cancel_send(&mut self, event_loop: &mut EventLoop) {
         self.on_state_transition(|s: Box<PipeState>| s.cancel_send(event_loop));
+    }
+
+    pub fn resync_readiness(&mut self, event_loop: &mut EventLoop) {
+        self.on_state_transition(|s: Box<PipeState>| s.reregister(event_loop));
     }
 
     pub fn close(&mut self, event_loop: &mut EventLoop) {
