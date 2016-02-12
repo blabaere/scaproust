@@ -34,9 +34,9 @@ pub trait Listener {
 
 pub fn create_transport(name: &str) -> io::Result<Box<Transport>> {
     match name {
-        "tcp" => Ok(Box::new(tcp::Tcp)),
+        "tcp" => Ok(box tcp::Tcp),
         #[cfg(not(windows))]
-        "ipc" => Ok(Box::new(ipc::Ipc)),
+        "ipc" => Ok(box ipc::Ipc),
         _     => Err(io::Error::new(io::ErrorKind::InvalidData, format!("'{}' is not a supported protocol (tcp or ipc)", name)))
     }
     

@@ -5,6 +5,7 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 #![crate_name = "scaproust"]
+#![feature(box_syntax)]
 
 #[macro_use]
 extern crate log;

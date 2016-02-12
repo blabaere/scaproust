@@ -37,14 +37,14 @@ impl Tcp {
         let tcp_stream = try!(tcp::TcpStream::connect(&addr));
         let connection = TcpConnection { stream: tcp_stream };
 
-        Ok(Box::new(connection))
+        Ok(box connection)
     }
     
     fn bind(&self, addr: net::SocketAddr) -> Result<Box<Listener>, io::Error> {
         let tcp_listener = try!(tcp::TcpListener::bind(&addr));
         let listener = TcpListener { listener: tcp_listener };
 
-        Ok(Box::new(listener))
+        Ok(box listener)
     }
     
 }
@@ -88,7 +88,7 @@ impl Listener for TcpListener {
 
         loop {
             match try!(self.listener.accept()) {
-                Some((s, _)) => conns.push(Box::new(TcpConnection { stream: s })),
+                Some((s, _)) => conns.push(box TcpConnection { stream: s }),
                 None    => break
             }
         }

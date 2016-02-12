@@ -35,16 +35,16 @@ pub mod bus;
 
 pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<mpsc::Sender<SocketNotify>>) -> Box<Protocol> {
     match socket_type {
-        SocketType::Push       => Box::new(push::Push::new(socket_id, evt_tx)),
-        SocketType::Pull       => Box::new(pull::Pull::new(socket_id, evt_tx)),
-        SocketType::Pair       => Box::new(pair::Pair::new(socket_id, evt_tx)),
-        SocketType::Req        => Box::new(req::Req::new(socket_id, evt_tx)),
-        SocketType::Rep        => Box::new(rep::Rep::new(socket_id, evt_tx)),
-        SocketType::Pub        => Box::new(pbu::Pub::new(socket_id, evt_tx)),
-        SocketType::Sub        => Box::new(sub::Sub::new(socket_id, evt_tx)),
-        SocketType::Bus        => Box::new(bus::Bus::new(socket_id, evt_tx)),
-        SocketType::Surveyor   => Box::new(surv::Surv::new(socket_id, evt_tx)),
-        SocketType::Respondent => Box::new(resp::Resp::new(socket_id, evt_tx))
+        SocketType::Push       => box push::Push::new(socket_id, evt_tx),
+        SocketType::Pull       => box pull::Pull::new(socket_id, evt_tx),
+        SocketType::Pair       => box pair::Pair::new(socket_id, evt_tx),
+        SocketType::Req        => box req::Req::new(socket_id, evt_tx),
+        SocketType::Rep        => box rep::Rep::new(socket_id, evt_tx),
+        SocketType::Pub        => box pbu::Pub::new(socket_id, evt_tx),
+        SocketType::Sub        => box sub::Sub::new(socket_id, evt_tx),
+        SocketType::Bus        => box bus::Bus::new(socket_id, evt_tx),
+        SocketType::Surveyor   => box surv::Surv::new(socket_id, evt_tx),
+        SocketType::Respondent => box resp::Resp::new(socket_id, evt_tx)
     }
 }
 

@@ -51,7 +51,7 @@ impl Pipe {
         Pipe {
             token: tok,
             addr: addr,
-            state: Some(Box::new(state))
+            state: Some(box state)
         }
     }
 
@@ -163,48 +163,48 @@ trait PipeState {
     fn name(&self) -> &'static str;
 
     fn open(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        Box::new(Dead)
+        box Dead
     }
 
     fn on_open_ack(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        Box::new(Dead)
+        box Dead
     }
 
     fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
-        Box::new(Dead)
+        box Dead
     }
 
     fn recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        Box::new(Dead)
+        box Dead
     }
 
     fn cancel_recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        Box::new(Dead)
+        box Dead
     }
 
     fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
-        Box::new(Dead)
+        box Dead
     }
 
     fn send_nb(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
-        Box::new(Dead)
+        box Dead
     }
 
     fn cancel_send(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        Box::new(Dead)
+        box Dead
     }
 
     fn resync_readiness(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        Box::new(Dead)
+        box Dead
     }
 
     fn close(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        Box::new(Dead)
+        box Dead
     }
 
     fn on_error(self: Box<Self>, _: &mut EventLoop, err: io::Error) -> Box<PipeState> {
         debug!("State '{}' failed: {:?}", self.name(), err);
-        Box::new(Dead)
+        box Dead
     }
 }
 
@@ -228,7 +228,7 @@ trait LivePipeState {
 
     fn close(&self, event_loop: &mut EventLoop) -> Box<PipeState> {
         let _ = self.body().unsubscribe(event_loop);
-        Box::new(Dead)
+        box Dead
     }
 }
 
@@ -237,9 +237,7 @@ fn transition<F, T>(f: Box<F>) -> Box<T> where
     T : From<F>,
     T : PipeState
 {
-    let t: T = From::from(*f);
-
-    Box::new(t)
+    box From::from(*f)
 }
 
 fn transition_if_ok<F, T : 'static>(f: Box<F>, res: io::Result<()>, event_loop: &mut EventLoop) -> Box<PipeState> where
@@ -545,7 +543,7 @@ impl Idle {
     }
 
     fn receiving_msg(self: Box<Self>, _: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
-        Box::new(Receiving::from(*self, op))
+        box Receiving::from(*self, op)
     }
 
     fn sent_msg(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
@@ -555,7 +553,7 @@ impl Idle {
     }
 
     fn sending_msg(self: Box<Self>, _: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
-        Box::new(Sending::from(*self, op))
+        box Sending::from(*self, op)
     }
 }
 
@@ -659,7 +657,7 @@ impl PipeState for Receiving {
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
 
         if self.operation.is_none() {
-            return Box::new(Idle { body: self.body });
+            return box Idle { body: self.body };
         }
 
         if events.is_readable() == false {
@@ -727,7 +725,7 @@ impl PipeState for Sending {
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
 
         if self.operation.is_none() {
-            return Box::new(Idle { body: self.body });
+            return box Idle { body: self.body };
         }
 
         if events.is_writable() == false {

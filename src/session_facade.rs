@@ -77,7 +77,11 @@ impl SessionFacade {
         SocketFacade::new(id, socket_type, self.cmd_sender.clone(), rx)
     }
 
-    pub fn create_loop_device(&self, socket: SocketFacade) -> io::Result<Box<DeviceFacade>> {
+    pub fn create_relay_device(&self, socket: SocketFacade) -> io::Result<Box<DeviceFacade>> {
+        Ok(box RelayDevice::new(socket))
+    }
+
+    pub fn create_bridge_device(&self, left: SocketFacade, right: SocketFacade) -> io::Result<Box<DeviceFacade>> {
         unimplemented!();
     }
 }
@@ -85,35 +89,5 @@ impl SessionFacade {
 impl Drop for SessionFacade {
     fn drop(&mut self) {
         let _ = self.send_cmd(SessionCmdSignal::Shutdown);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::SessionFacade;
-    use global::SocketType;
-
-    #[test]
-    fn session_can_create_a_socket() {
-        let session = SessionFacade::new().unwrap();
-        let socket = session.create_socket(SocketType::Push).unwrap();
-
-        drop(socket);
-    }
-
-    #[test]
-    fn can_connect_socket() {
-        let session = SessionFacade::new().unwrap();
-        let mut socket = session.create_socket(SocketType::Pair).unwrap();
-
-        socket.connect("tcp://127.0.0.1:5454").unwrap();
-    }
-
-    #[test]
-    fn can_try_connect_socket() {
-        let session = SessionFacade::new().unwrap();
-        let mut socket = session.create_socket(SocketType::Push).unwrap();
-
-        assert!(socket.connect("tcp://this should not work").is_err());
     }
 }

@@ -82,7 +82,7 @@ impl Listener for IpcListener {
 
         loop {
             match try!(self.listener.accept()) {
-                Some(s) => conns.push(Box::new(IpcConnection { stream: s })),
+                Some(s) => conns.push(box IpcConnection { stream: s }),
                 None    => break
             }
         }
