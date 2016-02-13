@@ -1,8 +1,9 @@
-### Emergency !!!
-Move all protocols to priolist2 and apply required changes (like in Pull)
-
-### Forgot that one !!!
+### Emergency: Forgot that one !!!
 SocketFacade should tell the session when they are dropped !!!
+
+### WIP: Device
+ - Devices should be created by the session and implement a 'Runnable' trait
+ - Poll !!!
 
 ### Current problem: REQ resend
 There can be only one operation in progress for a given socket but resend occurs in background.
@@ -10,10 +11,6 @@ Resend must be scheduled when a regular send succeeds, and cancelled when the ma
 What if a user command is received is when a resend is in progress (a some bytes sent, but not all).
 
 BONUS: if the pipe that the request was sent to is removed, the request could be resent right away ...
-
-### Device
- - Devices should be created by the session and implement a 'Runnable' trait
- - Poll !!!
 
 ### Next problems
 - Handle accept error
