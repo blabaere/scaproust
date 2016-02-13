@@ -18,7 +18,7 @@ use byteorder::*;
 
 use super::{ Protocol, Timeout };
 use super::clear_timeout;
-use super::priolist2::*;
+use super::priolist::*;
 use pipe::*;
 use global::*;
 use event_loop_msg::{ SocketNotify, EventLoopTimeout };
@@ -257,11 +257,7 @@ impl State {
 
     fn recv(self, body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {
         if let State::WaitingReply(p) = self {
-            if body.recv(event_loop, p.peer) {
-                State::Receiving(p, timeout)
-            } else {
-                State::RecvOnHold(p, timeout)
-            }
+            try_recv(body, event_loop, timeout, p)
         } else {
             let err = other_io_error("Can't recv: currently no pending request");
             body.send_notify(SocketNotify::MsgNotRecv(err));
@@ -273,10 +269,16 @@ impl State {
 
     fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message, req_id: u32) -> State {
         if let State::Receiving(p, timeout) = self {
-            body.on_recv_by_pipe(event_loop, msg, req_id, p, timeout);
-        }
+            if req_id == body.cur_req_id() {
+                body.on_recv_by_pipe(event_loop, msg, p, timeout);
 
-        State::Idle
+                State::Idle
+            } else {
+                try_recv(body, event_loop, timeout, p)
+            }
+        } else {
+            State::Idle
+        }
     }
 
     fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
@@ -296,6 +298,14 @@ impl State {
             State::SendOnHold(msg, t) => State::Idle.send(body, event_loop, msg, t),
             other @ _                 => other
         }
+    }
+}
+
+fn try_recv(body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>, p: PendingRequest) -> State {
+    if body.recv(event_loop, p.peer) {
+        State::Receiving(p, timeout)
+    } else {
+        State::RecvOnHold(p, timeout)
     }
 }
 
@@ -403,10 +413,8 @@ impl Body {
         self.get_pipe(tok).map(|p| p.recv(event_loop)).is_some()
     }
 
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, req_id: u32, pending_request: PendingRequest, timeout: Timeout) {
-        if req_id == self.cur_req_id() {
-            self.send_notify(SocketNotify::MsgRecv(msg));
-        }
+    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, pending_request: PendingRequest, timeout: Timeout) {
+        self.send_notify(SocketNotify::MsgRecv(msg));
         
         clear_timeout(event_loop, timeout);
         clear_timeout(event_loop, pending_request.timeout);

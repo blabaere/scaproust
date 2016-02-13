@@ -20,7 +20,6 @@ pub type Timeout = Option<mio::Timeout>;
 
 pub mod excl;
 pub mod priolist;
-pub mod priolist2;
 
 pub mod push;
 pub mod pull;
