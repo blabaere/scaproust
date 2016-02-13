@@ -291,11 +291,9 @@ impl State {
 
     fn ready(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) -> State {
         body.ready(event_loop, tok, events);
-        body.get_pipe(tok).map(|p| p.ready(event_loop, events));
 
         match self {
             State::SendOnHold(msg, t) => State::Idle.send(body, event_loop, msg, t),
-            State::RecvOnHold(_, t)   => State::Idle.recv(body, event_loop, t),
             other @ _                 => other
         }
     }
