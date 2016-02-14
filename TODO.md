@@ -5,6 +5,11 @@ SocketFacade should tell the session when they are dropped !!!
  - Devices should be created by the session and implement a 'Runnable' trait
  - Poll !!!
 
+### Avoid code duplication
+ - Define several ProtocolBody traits at protocol module levels:
+ - BodyWithFairQueue, BodyWithLoadBalancing, BodyWithBroadcast, BodyWithReturnToSender ...
+ - Have each body extends the appropriate traits
+
 ### Current problem: REQ resend
 There can be only one operation in progress for a given socket but resend occurs in background.
 Resend must be scheduled when a regular send succeeds, and cancelled when the matching recv occurs.

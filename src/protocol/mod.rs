@@ -21,6 +21,12 @@ pub type Timeout = Option<mio::Timeout>;
 pub mod excl;
 pub mod priolist;
 
+mod with_notify;
+mod with_fair_queue;
+mod with_load_balancing;
+mod without_send;
+mod without_recv;
+
 pub mod push;
 pub mod pull;
 pub mod pair;
