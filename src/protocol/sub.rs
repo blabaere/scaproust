@@ -195,19 +195,21 @@ impl State {
     }
 
     fn recv(self, body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {
-        if body.recv(event_loop) {
-            State::Receiving(timeout)
-        } else {
-            State::RecvOnHold(timeout)
-        }
+        try_recv(body, event_loop, timeout)
     }
 
     fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message) -> State {
         if let State::Receiving(timeout) = self {
-            body.on_recv_by_pipe(event_loop, msg, timeout);
-        }
+            if body.accept(&msg) {
+                body.on_recv_by_pipe(event_loop, msg, timeout);
 
-        State::Idle
+                State::Idle
+            } else {
+                try_recv(body, event_loop, timeout)
+            }
+        } else {
+            State::Idle
+        }
     }
 
     fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
@@ -224,6 +226,14 @@ impl State {
             other @ _            => other
         }
     }
+}
+
+fn try_recv(body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {
+        if body.recv(event_loop) {
+            State::Receiving(timeout)
+        } else {
+            State::RecvOnHold(timeout)
+        }
 }
 
 impl Body {
@@ -297,13 +307,10 @@ impl Body {
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
-        if self.accept(&msg) {
-            self.send_notify(SocketNotify::MsgRecv(msg));
-
-            clear_timeout(event_loop, timeout);
-        }
-        
+        self.send_notify(SocketNotify::MsgRecv(msg));
         self.advance_pipe(event_loop);
+
+        clear_timeout(event_loop, timeout);
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
