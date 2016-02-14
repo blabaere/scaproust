@@ -12,7 +12,6 @@ use std::io;
 use mio;
 
 use super::{ Protocol, Timeout };
-use super::clear_timeout;
 use super::priolist::*;
 use super::with_load_balancing::WithLoadBalancing;
 use super::without_recv::WithoutRecv;
