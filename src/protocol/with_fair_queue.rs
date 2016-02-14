@@ -4,7 +4,6 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::collections::HashMap;
 use std::io;
 
 use mio;
@@ -17,11 +16,9 @@ use global::*;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
 use Message;
-use super::with_notify::WithNotify;
+use super::with_pipes::WithPipes;
 
-pub trait WithFairQueue : WithNotify {
-    fn get_pipes<'a>(&'a self) -> &'a HashMap<mio::Token, Pipe>;
-    fn get_pipes_mut<'a>(&'a mut self) -> &'a mut HashMap<mio::Token, Pipe>;
+pub trait WithFairQueue : WithPipes {
     fn get_fair_queue<'a>(&'a self) -> &'a PrioList;
     fn get_fair_queue_mut<'a>(&'a mut self) -> &'a mut PrioList;
     
@@ -60,10 +57,6 @@ pub trait WithFairQueue : WithNotify {
     fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
         self.get_active_pipe().map(|p| p.resync_readiness(event_loop));
         self.get_fair_queue_mut().deactivate_and_advance();
-    }
-
-    fn get_pipe<'a>(&'a mut self, tok: &mio::Token) -> Option<&'a mut Pipe> {
-        self.get_pipes_mut().get_mut(tok)
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {

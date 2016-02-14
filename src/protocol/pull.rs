@@ -15,6 +15,7 @@ use super::{ Protocol, Timeout };
 use super::priolist::*;
 use super::with_fair_queue::WithFairQueue;
 use super::without_send::WithoutSend;
+use super::with_pipes::WithPipes;
 use super::with_notify::WithNotify;
 use pipe::*;
 use global::*;
@@ -225,7 +226,7 @@ impl WithNotify for Body {
     }
 }
 
-impl WithFairQueue for Body {
+impl WithPipes for Body {
     fn get_pipes<'a>(&'a self) -> &'a HashMap<mio::Token, Pipe> {
         &self.pipes
     }
@@ -233,7 +234,9 @@ impl WithFairQueue for Body {
     fn get_pipes_mut<'a>(&'a mut self) -> &'a mut HashMap<mio::Token, Pipe> {
         &mut self.pipes
     }
+}
 
+impl WithFairQueue for Body {
     fn get_fair_queue<'a>(&'a self) -> &'a PrioList {
         &self.fq
     }

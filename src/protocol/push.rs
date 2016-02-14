@@ -15,6 +15,7 @@ use super::{ Protocol, Timeout };
 use super::priolist::*;
 use super::with_load_balancing::WithLoadBalancing;
 use super::without_recv::WithoutRecv;
+use super::with_pipes::WithPipes;
 use super::with_notify::WithNotify;
 use pipe::*;
 use global::*;
@@ -225,7 +226,7 @@ impl WithNotify for Body {
     }
 }
 
-impl WithLoadBalancing for Body {
+impl WithPipes for Body {
     fn get_pipes<'a>(&'a self) -> &'a HashMap<mio::Token, Pipe> {
         &self.pipes
     }
@@ -233,7 +234,9 @@ impl WithLoadBalancing for Body {
     fn get_pipes_mut<'a>(&'a mut self) -> &'a mut HashMap<mio::Token, Pipe> {
         &mut self.pipes
     }
+}
 
+impl WithLoadBalancing for Body {
     fn get_load_balancer<'a>(&'a self) -> &'a PrioList {
         &self.lb
     }

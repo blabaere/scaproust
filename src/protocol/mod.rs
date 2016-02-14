@@ -22,10 +22,13 @@ pub mod excl;
 pub mod priolist;
 
 mod with_notify;
+mod with_pipes;
 mod with_fair_queue;
 mod with_load_balancing;
+mod with_unicast;
 mod without_send;
 mod without_recv;
+mod with_backtrace;
 
 pub mod push;
 pub mod pull;
