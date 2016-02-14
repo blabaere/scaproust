@@ -6,8 +6,6 @@
 
 use std::sync::mpsc::Sender;
 
-use global::*;
-
 use event_loop_msg::{ SocketNotify };
 
 pub trait WithNotify {
