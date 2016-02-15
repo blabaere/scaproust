@@ -100,6 +100,7 @@ impl Socket {
         debug!("[{:?}] on_pipe_evt [{:?}]: {}", self.id, tok.as_usize(), evt.name());
         match evt {
             PipeEvtSignal::Opened      => self.protocol.on_pipe_opened(event_loop, tok),
+            PipeEvtSignal::Closed      => {},
             PipeEvtSignal::MsgRcv(msg) => self.protocol.on_recv_by_pipe(event_loop, tok, msg),
             PipeEvtSignal::MsgSnd      => self.protocol.on_send_by_pipe(event_loop, tok)
         }

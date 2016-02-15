@@ -91,7 +91,15 @@ impl Session {
 
     fn handle_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
         debug!("session handle_pipe_evt {}", evt.name());
-        self.on_socket_by_token(&tok, |s| s.on_pipe_evt(event_loop, tok, evt));
+
+        match evt {
+            PipeEvtSignal::Closed => {
+                self.socket_ids.remove(&tok);
+            },
+            other @ _ => {
+                self.on_socket_by_token(&tok, |s| s.on_pipe_evt(event_loop, tok, other));
+            }
+        };
     }
 
     fn send_evt(&self, evt: SessionNotify) {

@@ -125,6 +125,7 @@ impl SocketEvtSignal {
 /// Events raised by pipes
 pub enum PipeEvtSignal {
     Opened,
+    Closed,
     MsgRcv(Message),
     MsgSnd
 }
@@ -133,6 +134,7 @@ impl PipeEvtSignal {
     pub fn name(&self) -> &'static str {
         match *self {
             PipeEvtSignal::Opened    => "Opened",
+            PipeEvtSignal::Closed    => "Closed",
             PipeEvtSignal::MsgRcv(_) => "MsgRcv",
             PipeEvtSignal::MsgSnd    => "MsgSnd"
         }

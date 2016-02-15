@@ -227,6 +227,7 @@ trait LivePipeState {
     }
 
     fn close(&self, event_loop: &mut EventLoop) -> Box<PipeState> {
+        let _ = self.send_sig(PipeEvtSignal::Closed);
         let _ = self.body().unsubscribe(event_loop);
         box Dead
     }
