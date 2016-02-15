@@ -17,8 +17,7 @@ use std::time;
 
 use byteorder::*;
 
-use super::{ Protocol, Timeout };
-use super::clear_timeout;
+use super::{ Protocol, Timeout, clear_timeout };
 use super::priolist::*;
 use super::with_fair_queue::WithFairQueue;
 use super::without_send::WithoutSend;
@@ -43,7 +42,8 @@ struct Body {
     dist: HashSet<mio::Token>,
     fq: PrioList,
     survey_id_seq: u32,
-    deadline_ms: u64
+    deadline_ms: u64,
+    is_device_item: bool
 }
 
 struct PendingSurvey {
@@ -66,7 +66,8 @@ impl Surv {
             dist: HashSet::new(),
             fq: PrioList::new(),
             survey_id_seq: ext_time::get_time().nsec as u32,
-            deadline_ms: 1_000
+            deadline_ms: 1_000,
+            is_device_item: false
         };
 
         Surv {
@@ -123,10 +124,11 @@ impl Protocol for Surv {
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
-        let survey_id = self.body.next_survey_id();
-        let msg = encode(msg, survey_id);
+        //let survey_id = self.body.next_survey_id();
+        //let msg = encode(msg, survey_id);
+        let raw_msg = self.body.msg_to_raw_msg(msg);
 
-        self.apply(|s, body| s.send(body, event_loop, Rc::new(msg), timeout));
+        self.apply(|s, body| s.send(body, event_loop, Rc::new(raw_msg), timeout));
     }
 
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
@@ -142,7 +144,7 @@ impl Protocol for Surv {
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
-        if let Some((msg, survey_id)) = decode(raw_msg, tok) {
+        if let Some((msg, survey_id)) = self.body.raw_msg_to_msg(raw_msg, tok) {
             self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg, survey_id));
         }
     }
@@ -159,10 +161,15 @@ impl Protocol for Surv {
         self.apply(|s, body| s.on_survey_timeout(body, event_loop));
     }
 
+    fn can_recv(&self) -> bool { 
+        self.body.can_recv()
+    }
+
     fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
         match option {
             SocketOption::SurveyDeadline(timeout) => self.body.set_deadline(timeout),
-            _ => Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
+            SocketOption::DeviceItem(value)       => self.body.set_device_item(value),
+            _ => Err(invalid_input_io_error("option not supported by protocol"))
         }
     }
 
@@ -210,10 +217,11 @@ impl State {
         self
     }
 
-    fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, _: Option<mio::Timeout>) -> State {
+    fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, timeout: Option<mio::Timeout>) -> State {
         if let State::Active(p) = self {
             clear_timeout(event_loop, p.timeout);
         }
+        clear_timeout(event_loop, timeout);
 
         State::Active(body.send(event_loop, msg))
     }
@@ -286,6 +294,11 @@ fn try_recv(body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Ti
 
 impl Body {
 
+    fn set_device_item(&mut self, value: bool) -> io::Result<()> {
+        self.is_device_item = value;
+        Ok(())
+    }
+
     fn set_deadline(&mut self, deadline: time::Duration) -> io::Result<()> {
         let deadline_ms = deadline.to_millis();
 
@@ -330,6 +343,22 @@ impl Body {
             let msg = msg.clone();
 
             self.pipes.get_mut(tok).map(|p| p.send_nb(event_loop, msg));
+        }
+    }
+
+    fn raw_msg_to_msg(&self, raw_msg: Message, tok: mio::Token) -> Option<(Message, u32)> {
+        if self.is_device_item {
+            Some((raw_msg, self.cur_survey_id()))
+        } else {
+            decode(raw_msg, tok)
+        }
+    }
+
+    fn msg_to_raw_msg(&mut self, msg: Message) -> Message {
+        if self.is_device_item {
+            msg
+        } else {
+            encode(msg, self.next_survey_id())
         }
     }
 

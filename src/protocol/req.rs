@@ -385,7 +385,7 @@ impl Body {
             encode(msg, self.next_req_id())
         }
     }
-    
+
     fn cur_req_id(&self) -> u32 {
         self.req_id_seq | 0x80000000
     }

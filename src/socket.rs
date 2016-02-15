@@ -232,9 +232,11 @@ impl Socket {
 
             let is_readable = self.protocol.can_recv();
 
-            if !was_readable && is_readable{
+            if !was_readable && is_readable {
+            //if is_readable {
                 self.send_event(SocketEvtSignal::Readable);
             }
+            debug!("[{:?}] pipe [{:?}] ready: '{:?}' {} {}", self.id, tok.as_usize(), events, was_readable, is_readable);
         }
     }
 

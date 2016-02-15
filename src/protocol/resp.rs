@@ -36,7 +36,8 @@ struct Body {
     pipes: HashMap<mio::Token, Pipe>,
     fq: PrioList,
     ttl: u8,
-    backtrace: Vec<u8>
+    backtrace: Vec<u8>,
+    is_device_item: bool
 }
 
 enum State {
@@ -55,7 +56,8 @@ impl Resp {
             pipes: HashMap::new(),
             fq: PrioList::new(),
             ttl: 8,
-            backtrace: Vec::with_capacity(64)
+            backtrace: Vec::with_capacity(64),
+            is_device_item: false
         };
 
         Resp {
@@ -112,7 +114,7 @@ impl Protocol for Resp {
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
-        let raw_msg = encode(msg, self.body.backtrace());
+        let raw_msg = self.body.msg_to_raw_msg(msg);
 
         self.apply(|s, body| s.send(body, event_loop, Rc::new(raw_msg), timeout));
     }
@@ -132,7 +134,7 @@ impl Protocol for Resp {
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
-        if let Some(msg) = decode(raw_msg, tok, self.body.ttl) {
+        if let Some(msg) = self.body.raw_msg_to_msg(raw_msg, tok) {
             self.body.set_backtrace(&msg.header);
 
             self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
@@ -145,6 +147,15 @@ impl Protocol for Resp {
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         self.apply(|s, body| s.ready(body, event_loop, tok, events));
+    }
+
+    fn can_recv(&self) -> bool { 
+        self.body.can_recv()
+    }
+
+    fn set_device_item(&mut self, value: bool) -> io::Result<()> {
+        self.body.is_device_item = value;
+        Ok(())
     }
 
     fn destroy(&mut self, event_loop: &mut EventLoop) {
@@ -205,14 +216,18 @@ impl State {
         }
     }
 
-    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token) -> State {
+    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
         match self {
             State::Sending(_, timeout, _)    => body.on_send_by_pipe(event_loop, timeout),
             State::SendOnHold(_, timeout, _) => body.on_send_by_pipe(event_loop, timeout),
             _ => {}
         }
 
-        State::Idle
+        if body.is_device_item {
+            State::Active(tok)
+        } else {
+            State::Idle
+        }
     }
 
     fn on_send_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
@@ -302,6 +317,24 @@ impl WithFairQueue for Body {
 }
 
 impl WithUnicastSend for Body {
+}
+
+impl Body {
+    fn raw_msg_to_msg(&self, raw_msg: Message, tok: mio::Token) -> Option<Message> {
+        if self.is_device_item {
+            Some(raw_msg)
+        } else {
+            decode(raw_msg, tok, self.ttl)
+        }
+    }
+
+    fn msg_to_raw_msg(&self, msg: Message) -> Message {
+        if self.is_device_item {
+            msg
+        } else {
+            encode(msg, self.get_backtrace())
+        }
+    }
 }
 
 fn decode(raw_msg: Message, _: mio::Token, ttl: u8) -> Option<Message> {

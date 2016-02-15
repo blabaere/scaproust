@@ -11,7 +11,7 @@ use std::io;
 
 use mio;
 
-use super::{ Protocol, Timeout };
+use super::{ Protocol, Timeout, clear_timeout };
 use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify };
@@ -80,9 +80,10 @@ impl Protocol for Pub {
         self.pipes.get_mut(&tok).map(|p| p.on_open_ack(event_loop));
     }
 
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, _: Timeout) {
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
         self.broadcast(event_loop, Rc::new(msg));
         self.send_notify(SocketNotify::MsgSent);
+        clear_timeout(event_loop, timeout);
     }
 
     fn on_send_by_pipe(&mut self, _: &mut EventLoop, _: mio::Token) {
