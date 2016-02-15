@@ -330,6 +330,11 @@ impl Socket {
     pub fn resend(&mut self, event_loop: &mut EventLoop) {
         self.protocol.resend(event_loop);
     }
+
+    pub fn destroy(&mut self, event_loop: &mut EventLoop) {
+        let _: Vec<_> = self.acceptors.drain().map(|(_, mut a)| a.close(event_loop)).collect();
+        self.protocol.destroy(event_loop);
+    }
 }
 
 struct SocketImplOptions {

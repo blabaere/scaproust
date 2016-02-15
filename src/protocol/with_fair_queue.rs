@@ -11,7 +11,7 @@ use mio;
 use super::{ Protocol, Timeout };
 use super::clear_timeout;
 use super::priolist::*;
-use pipe::*;
+use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;

@@ -19,7 +19,11 @@ use byteorder::*;
 use super::{ Protocol, Timeout };
 use super::clear_timeout;
 use super::priolist::*;
-use pipe::*;
+use super::with_unicast_recv::WithUnicastRecv;
+use super::with_load_balancing::WithLoadBalancing;
+use super::with_pipes::WithPipes;
+use super::with_notify::WithNotify;
+use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify, EventLoopTimeout };
 use EventLoop;
@@ -87,13 +91,8 @@ impl Req {
 }
 
 impl Protocol for Req {
-
-    fn id(&self) -> u16 {
-        SocketType::Req.id()
-    }
-
-    fn peer_id(&self) -> u16 {
-        SocketType::Rep.id()
+    fn get_type(&self) -> SocketType {
+        SocketType::Req
     }
 
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
@@ -159,6 +158,10 @@ impl Protocol for Req {
 
     fn resend(&mut self, event_loop: &mut EventLoop) {
         self.apply(|s, body| s.resend(body, event_loop));
+    }
+
+    fn destroy(&mut self, event_loop: &mut EventLoop) {
+        self.body.destroy_pipes(event_loop);
     }
 }
 
@@ -324,72 +327,8 @@ impl Body {
         }
     }
 
-    fn send_notify(&self, evt: SocketNotify) {
-        let send_res = self.notify_sender.send(evt);
-
-        if send_res.is_err() {
-            error!("Failed to send notify to the facade: '{:?}'", send_res.err());
-        }
-    }
-    
-    fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
-        match self.pipes.insert(tok, pipe) {
-            None    => Ok(()),
-            Some(_) => Err(invalid_data_io_error("A pipe has already been added with that token"))
-        }
-    }
-
-    fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
-        self.lb.remove(&tok);
-        self.pipes.remove(&tok)
-    }
-
-    fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.pipes.get_mut(&tok).map(|p| p.open(event_loop));
-    }
-
-    fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.lb.insert(tok, 8);
-        self.pipes.get_mut(&tok).map(|p| p.on_open_ack(event_loop));
-    }
-
-    fn get_active_pipe<'a>(&'a mut self) -> Option<&'a mut Pipe> {
-        match self.lb.get() {
-            Some(tok) => self.pipes.get_mut(&tok),
-            None      => None
-        }
-    }
-
-    fn is_active_pipe(&self, tok: mio::Token) -> bool {
-        self.lb.get() == Some(tok)
-    }
-
-    fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.get_active_pipe().map(|p| p.resync_readiness(event_loop));
-        self.lb.deactivate_and_advance();
-    }
-
-    fn get_pipe<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
-        self.pipes.get_mut(&tok)
-    }
-
-    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        if events.is_writable() {
-            self.lb.activate(tok);
-        }
-        
-        self.get_pipe(tok).map(|p| p.ready(event_loop, events));
-    }
-
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> bool {
-        self.get_active_pipe().map(|p| p.send(event_loop, msg)).is_some()
-    }
-
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Rc<Message>, timeout: Timeout) -> PendingRequest {
-        self.send_notify(SocketNotify::MsgSent);
-        self.advance_pipe(event_loop);
-
-        clear_timeout(event_loop, timeout);
+        WithLoadBalancing::on_send_by_pipe(self, event_loop, timeout);
 
         let resend_timeout = self.schedule_resend(event_loop);
         let pending_request = PendingRequest {
@@ -401,31 +340,13 @@ impl Body {
         pending_request
     }
 
-    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
-
-        self.send_notify(SocketNotify::MsgNotSent(err));
-        self.get_active_pipe().map(|p| p.cancel_send(event_loop));
-        self.advance_pipe(event_loop);
-    }
-
-    fn recv(&mut self, event_loop: &mut EventLoop, tok: mio::Token) -> bool {
-        self.get_pipe(tok).map(|p| p.recv(event_loop)).is_some()
-    }
-
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, pending_request: PendingRequest, timeout: Timeout) {
-        self.send_notify(SocketNotify::MsgRecv(msg));
-        
-        clear_timeout(event_loop, timeout);
+        WithUnicastRecv::on_recv_by_pipe(self, event_loop, msg, timeout);
         clear_timeout(event_loop, pending_request.timeout);
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, pending_request: PendingRequest) {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
-
-        self.send_notify(SocketNotify::MsgNotRecv(err));
-        self.get_pipe(pending_request.peer).map(|p| p.cancel_recv(event_loop));
-
+        WithUnicastRecv::on_recv_timeout(self, event_loop, pending_request.peer);
         clear_timeout(event_loop, pending_request.timeout);
     }
 
@@ -437,6 +358,35 @@ impl Body {
         self.req_id_seq += 1;
         self.req_id_seq | 0x80000000
     }
+}
+
+impl WithNotify for Body {
+    fn get_notify_sender<'a>(&'a self) -> &'a Sender<SocketNotify> {
+        &self.notify_sender
+    }
+}
+
+impl WithPipes for Body {
+    fn get_pipes<'a>(&'a self) -> &'a HashMap<mio::Token, Pipe> {
+        &self.pipes
+    }
+
+    fn get_pipes_mut<'a>(&'a mut self) -> &'a mut HashMap<mio::Token, Pipe> {
+        &mut self.pipes
+    }
+}
+
+impl WithLoadBalancing for Body {
+    fn get_load_balancer<'a>(&'a self) -> &'a PrioList {
+        &self.lb
+    }
+
+    fn get_load_balancer_mut<'a>(&'a mut self) -> &'a mut PrioList {
+        &mut self.lb
+    }
+}
+
+impl WithUnicastRecv for Body {
 }
 
 fn encode(msg: Message, req_id: u32) -> Message {

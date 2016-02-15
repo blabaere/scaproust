@@ -8,7 +8,8 @@ use std::collections::HashMap;
 
 use mio;
 
-use pipe::*;
+use EventLoop;
+use pipe::Pipe;
 use super::with_notify::WithNotify;
 
 pub trait WithPipes : WithNotify {
@@ -17,5 +18,9 @@ pub trait WithPipes : WithNotify {
 
     fn get_pipe<'a>(&'a mut self, tok: &mio::Token) -> Option<&'a mut Pipe> {
         self.get_pipes_mut().get_mut(tok)
+    }
+
+    fn destroy_pipes(&mut self, event_loop: &mut EventLoop) {
+        let _: Vec<_> = self.get_pipes_mut().drain().map(|(_, mut p)| p.close(event_loop)).collect();
     }
 }

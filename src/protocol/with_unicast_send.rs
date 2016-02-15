@@ -16,7 +16,7 @@ use EventLoop;
 use Message;
 use super::with_pipes::WithPipes;
 
-pub trait WithUnicast : WithPipes {
+pub trait WithUnicastSend : WithPipes {
     fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>, tok: mio::Token) -> bool {
         self.get_pipe(&tok).map(|p| p.send(event_loop, msg)).is_some()
     }

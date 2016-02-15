@@ -12,7 +12,7 @@ use std::io;
 use mio;
 
 use super::{ Protocol, Timeout };
-use pipe::*;
+use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
@@ -55,12 +55,8 @@ impl Pub {
 }
 
 impl Protocol for Pub {
-    fn id(&self) -> u16 {
-        SocketType::Pub.id()
-    }
-
-    fn peer_id(&self) -> u16 {
-        SocketType::Sub.id()
+    fn get_type(&self) -> SocketType {
+        SocketType::Pub
     }
 
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
@@ -110,5 +106,13 @@ impl Protocol for Pub {
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         self.get_pipe(&tok).map(|p| p.ready(event_loop, events));
+    }
+
+    fn destroy(&mut self, event_loop: &mut EventLoop) {
+        for (_, pipe) in self.pipes.iter_mut() {
+            pipe.close(event_loop);
+        }
+
+        self.pipes.clear();
     }
 }

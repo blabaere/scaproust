@@ -6,7 +6,7 @@
 
 use mio;
 
-use pipe::*;
+use pipe::Pipe;
 
 pub struct Excl {
     token: Option<mio::Token>,
@@ -71,5 +71,9 @@ impl Excl {
         } else {
             None
         }
+    }
+
+    pub fn get_pipe<'a>(&'a mut self) -> Option<&'a mut Pipe> {
+        self.pipe.as_mut()
     }
 }

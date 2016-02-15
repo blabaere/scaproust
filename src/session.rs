@@ -51,9 +51,10 @@ impl Session {
     fn handle_session_cmd(&mut self, event_loop: &mut EventLoop, cmd: SessionCmdSignal) {
         debug!("session handle_session_cmd {}", cmd.name());
         match cmd {
-            SessionCmdSignal::CreateSocket(t) => self.create_socket(event_loop, t),
-            SessionCmdSignal::CreateProbe(r)  => self.create_probe(event_loop, r),
-            SessionCmdSignal::Shutdown        => {
+            SessionCmdSignal::CreateSocket(t)   => self.create_socket(event_loop, t),
+            SessionCmdSignal::DestroySocket(id) => self.destroy_socket(event_loop, id),
+            SessionCmdSignal::CreateProbe(r)    => self.create_probe(event_loop, r),
+            SessionCmdSignal::Shutdown          => {
                 self.socket_ids.clear();
                 self.sockets.clear();
                 event_loop.shutdown();
@@ -114,7 +115,13 @@ impl Session {
         self.send_evt(SessionNotify::SocketCreated(id, rx));
     }
 
-    fn create_probe(&mut self, event_loop: &mut EventLoop, poll_req: PollRequest) {
+    fn destroy_socket(&mut self, event_loop: &mut EventLoop, id: SocketId) {
+        if let Some(mut socket) = self.sockets.remove(&id) {
+            socket.destroy(event_loop);
+        }
+    }
+
+    fn create_probe(&mut self, _: &mut EventLoop, poll_req: PollRequest) {
         let id = ProbeId(self.id_seq.next());
         let (tx, rx) = mpsc::channel();
         let probe = Probe::new(poll_req.0, poll_req.1, tx);

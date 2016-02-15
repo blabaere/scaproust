@@ -13,7 +13,7 @@ use mio;
 use super::{ Protocol, Timeout };
 use super::clear_timeout;
 use super::excl::*;
-use pipe::*;
+use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
@@ -66,13 +66,8 @@ impl Pair {
 }
 
 impl Protocol for Pair {
-
-    fn id(&self) -> u16 {
-        SocketType::Pair.id()
-    }
-
-    fn peer_id(&self) -> u16 {
-        SocketType::Pair.id()
+    fn get_type(&self) -> SocketType {
+        SocketType::Pair
     }
 
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
@@ -129,6 +124,10 @@ impl Protocol for Pair {
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         self.on_state_transition(|s, body| s.ready(body, event_loop, tok, events));
+    }
+
+    fn destroy(&mut self, event_loop: &mut EventLoop) {
+        self.body.destroy(event_loop);
     }
 }
 
@@ -271,5 +270,9 @@ impl Body {
 
     fn get_pipe<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
         self.excl.get(tok)
+    }
+
+    fn destroy(&mut self, event_loop: &mut EventLoop) {
+        self.excl.get_pipe().map(|p| p.close(event_loop));
     }
 }

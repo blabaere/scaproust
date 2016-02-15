@@ -16,10 +16,10 @@ use super::clear_timeout;
 use super::priolist::*;
 use super::with_fair_queue::WithFairQueue;
 use super::with_pipes::WithPipes;
-use super::with_unicast::WithUnicast;
+use super::with_unicast_send::WithUnicastSend;
 use super::with_notify::WithNotify;
 use super::with_backtrace::WithBacktrace;
-use pipe::*;
+use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
@@ -79,12 +79,8 @@ impl Resp {
 }
 
 impl Protocol for Resp {
-    fn id(&self) -> u16 {
-        SocketType::Respondent.id()
-    }
-
-    fn peer_id(&self) -> u16 {
-        SocketType::Surveyor.id()
+    fn get_type(&self) -> SocketType {
+        SocketType::Respondent
     }
 
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
@@ -149,6 +145,10 @@ impl Protocol for Resp {
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         self.apply(|s, body| s.ready(body, event_loop, tok, events));
+    }
+
+    fn destroy(&mut self, event_loop: &mut EventLoop) {
+        self.body.destroy_pipes(event_loop);
     }
 }
 
@@ -301,7 +301,7 @@ impl WithFairQueue for Body {
     }
 }
 
-impl WithUnicast for Body {
+impl WithUnicastSend for Body {
 }
 
 fn decode(raw_msg: Message, _: mio::Token, ttl: u8) -> Option<Message> {

@@ -46,6 +46,7 @@ impl CmdSignal {
 /// Commands sent to the session
 pub enum SessionCmdSignal {
     CreateSocket(SocketType),
+    DestroySocket(SocketId),
     CreateProbe(PollRequest),
     Shutdown
 }
@@ -53,9 +54,10 @@ pub enum SessionCmdSignal {
 impl SessionCmdSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            SessionCmdSignal::CreateSocket(_) => "CreateSocket",
-            SessionCmdSignal::CreateProbe(_)  => "CreateProbe",
-            SessionCmdSignal::Shutdown        => "Shutdown"
+            SessionCmdSignal::CreateSocket(_)  => "CreateSocket",
+            SessionCmdSignal::DestroySocket(_) => "DestroySocket",
+            SessionCmdSignal::CreateProbe(_)   => "CreateProbe",
+            SessionCmdSignal::Shutdown         => "Shutdown"
         }
     }
 }

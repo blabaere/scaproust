@@ -18,7 +18,7 @@ use super::priolist::*;
 use super::with_fair_queue::WithFairQueue;
 use super::with_pipes::WithPipes;
 use super::with_notify::WithNotify;
-use pipe::*;
+use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
@@ -73,12 +73,8 @@ impl Bus {
 }
 
 impl Protocol for Bus {
-    fn id(&self) -> u16 {
-        SocketType::Bus.id()
-    }
-
-    fn peer_id(&self) -> u16 {
-        SocketType::Bus.id()
+    fn get_type(&self) -> SocketType {
+        SocketType::Bus
     }
 
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
@@ -140,6 +136,10 @@ impl Protocol for Bus {
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         self.apply(|s, body| s.ready(body, event_loop, tok, events));
+    }
+
+    fn destroy(&mut self, event_loop: &mut EventLoop) {
+        self.body.destroy_pipes(event_loop);
     }
 }
 

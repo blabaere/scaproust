@@ -142,3 +142,13 @@ impl SocketFacade {
         self.recv_msg().and_then(|msg| other.send_msg(msg))
     }
 }
+
+impl Drop for SocketFacade {
+    fn drop(&mut self) {
+        let cmd = SessionCmdSignal::DestroySocket(self.id);
+        let cmd_sig = CmdSignal::Session(cmd);
+        let loop_sig = EventLoopSignal::Cmd(cmd_sig);
+
+        let _ = self.cmd_sender.send(loop_sig);
+    }
+}

@@ -17,7 +17,7 @@ use super::with_fair_queue::WithFairQueue;
 use super::without_send::WithoutSend;
 use super::with_pipes::WithPipes;
 use super::with_notify::WithNotify;
-use pipe::*;
+use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify, SocketOption };
 use EventLoop;
@@ -72,12 +72,8 @@ impl Sub {
 }
 
 impl Protocol for Sub {
-    fn id(&self) -> u16 {
-        SocketType::Sub.id()
-    }
-
-    fn peer_id(&self) -> u16 {
-        SocketType::Pub.id()
+    fn get_type(&self) -> SocketType {
+        SocketType::Sub
     }
 
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
@@ -142,6 +138,10 @@ impl Protocol for Sub {
             SocketOption::Unsubscribe(subscription) => Ok(self.body.unsubscribe(subscription)),
             _ => Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
         }
+    }
+
+    fn destroy(&mut self, event_loop: &mut EventLoop) {
+        self.body.destroy_pipes(event_loop);
     }
 }
 

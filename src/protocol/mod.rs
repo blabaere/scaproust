@@ -25,7 +25,8 @@ mod with_notify;
 mod with_pipes;
 mod with_fair_queue;
 mod with_load_balancing;
-mod with_unicast;
+mod with_unicast_send;
+mod with_unicast_recv;
 mod without_send;
 mod without_recv;
 mod with_backtrace;
@@ -57,8 +58,15 @@ pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<
 }
 
 pub trait Protocol {
-    fn id(&self) -> u16;
-    fn peer_id(&self) -> u16;
+
+    fn get_type(&self) -> SocketType;
+
+    fn id(&self) -> u16 {
+        self.get_type().id()
+    }
+    fn peer_id(&self) -> u16 {
+        self.get_type().peer().id()
+    }
 
     fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) -> io::Result<()>;
     fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
@@ -82,6 +90,8 @@ pub trait Protocol {
 
     fn on_survey_timeout(&mut self, _: &mut EventLoop) {}
     fn resend(&mut self, _: &mut EventLoop) {}
+
+    fn destroy(&mut self, event_loop: &mut EventLoop);
 }
 
 fn clear_timeout(event_loop: &mut EventLoop, handle: Option<mio::Timeout>) {
