@@ -695,28 +695,6 @@ fn device_pair_right_to_left() {
     device_thread.join().unwrap().unwrap_err();
 }
 
-#[test]
-fn sub_can_skip_crap_and_keep_crop() {
-    let _ = env_logger::init();
-    let session = Session::new().unwrap();
-    let mut server = session.create_socket(SocketType::Pub).unwrap();
-    let mut client = session.create_socket(SocketType::Sub).unwrap();
-    let timeout = time::Duration::from_millis(50);
-
-    server.bind("tcp://127.0.0.1:5482").unwrap();
-    client.connect("tcp://127.0.0.1:5482").unwrap();
-    client.set_recv_timeout(timeout).unwrap();
-    client.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
-    client.set_option(SocketOption::Subscribe("B".to_string())).unwrap();
-
-    thread::sleep(time::Duration::from_millis(250));
-
-    server.send(vec![99, 99, 99]).unwrap();
-    server.send(vec![65, 66, 67]).unwrap();
-
-    let received = client.recv().unwrap();
-    assert_eq!(vec![65, 66, 67], received);
-}
 
 //#[test]
 fn device_surv_resp_with_parallel_reply() {
@@ -767,4 +745,27 @@ fn device_surv_resp_with_parallel_reply() {
 
     drop(session);
     device_thread.join().unwrap().unwrap_err();
+}
+
+#[test]
+fn sub_can_skip_crap_and_keep_crop() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut server = session.create_socket(SocketType::Pub).unwrap();
+    let mut client = session.create_socket(SocketType::Sub).unwrap();
+    let timeout = time::Duration::from_millis(50);
+
+    server.bind("tcp://127.0.0.1:5485").unwrap();
+    client.connect("tcp://127.0.0.1:5485").unwrap();
+    client.set_recv_timeout(timeout).unwrap();
+    client.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
+    client.set_option(SocketOption::Subscribe("B".to_string())).unwrap();
+
+    thread::sleep(time::Duration::from_millis(250));
+
+    server.send(vec![99, 99, 99]).unwrap();
+    server.send(vec![65, 66, 67]).unwrap();
+
+    let received = client.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received);
 }
