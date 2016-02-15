@@ -1,14 +1,9 @@
-### Emergency: Forgot that one !!!
-SocketFacade should tell the session when they are dropped !!!
-
 ### WIP: Device
  - Devices should be created by the session and implement a 'Runnable' trait
  - Poll !!!
 
-### Avoid code duplication
- - Define several ProtocolBody traits at protocol module levels:
- - BodyWithFairQueue, BodyWithLoadBalancing, BodyWithBroadcast, BodyWithReturnToSender ...
- - Have each body extends the appropriate traits
+### Problem ?
+When a protocol receives a "malformed" message, the message is dropped, but the facade is not notified of anything and no pipe is asked to recv again
 
 ### Current problem: REQ resend
 There can be only one operation in progress for a given socket but resend occurs in background.

@@ -32,8 +32,7 @@ use Message;
 pub struct Req {
     id: SocketId,
     body: Body,
-    state: Option<State>,
-    is_device_item: bool
+    state: Option<State>
 }
 
 struct Body {
@@ -42,7 +41,8 @@ struct Body {
     pipes: HashMap<mio::Token, Pipe>,
     lb: PrioList,
     req_id_seq: u32,
-    resend_interval: u64
+    resend_interval: u64,
+    is_device_item: bool
 }
 
 enum State {
@@ -68,14 +68,14 @@ impl Req {
             pipes: HashMap::new(),
             lb: PrioList::new(),
             req_id_seq: time::get_time().nsec as u32,
-            resend_interval: 60_000
+            resend_interval: 60_000,
+            is_device_item: false
         };
 
         Req {
             id: socket_id,
             body: body,
-            state: Some(State::Idle),
-            is_device_item: false
+            state: Some(State::Idle)
         }
     }
 
@@ -126,11 +126,7 @@ impl Protocol for Req {
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
-        let raw_msg = if self.is_device_item {
-            msg
-        } else {
-            encode(msg, self.body.next_req_id())
-        };
+        let raw_msg = self.body.msg_to_raw_msg(msg);
 
         self.apply(|s, body| s.send(body, event_loop, Rc::new(raw_msg), timeout));
     }
@@ -148,12 +144,8 @@ impl Protocol for Req {
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
-        if self.is_device_item {
-            self.apply(|s, body| s.on_recv_by_pipe_raw(body, event_loop, tok, raw_msg));
-        } else {
-            if let Some((msg, req_id)) = decode(raw_msg, tok) {
-                self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg, req_id));
-            }
+        if let Some((msg, req_id)) = self.body.raw_msg_to_msg(raw_msg, tok) {
+            self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg, req_id));
         }
     }
 
@@ -165,8 +157,15 @@ impl Protocol for Req {
         self.apply(|s, body| s.ready(body, event_loop, tok, events));
     }
 
+    fn can_recv(&self) -> bool { 
+        match self.state.as_ref() {
+            Some(state) => state.can_recv(&self.body),
+            None => false
+        }
+    }
+
     fn set_device_item(&mut self, value: bool) -> io::Result<()> {
-        self.is_device_item = value;
+        self.body.is_device_item = value;
         Ok(())
     }
 
@@ -272,6 +271,13 @@ impl State {
         }
     }
 
+    fn can_recv(&self, body: &Body) -> bool {
+        match *self {
+            State::WaitingReply(ref p) => body.can_recv(p.peer),
+            _ => false
+        }
+    }
+
     fn recv(self, body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {
         if let State::WaitingReply(p) = self {
             try_recv(body, event_loop, timeout, p)
@@ -296,14 +302,6 @@ impl State {
         } else {
             State::Idle
         }
-    }
-
-    fn on_recv_by_pipe_raw(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message) -> State {
-        if let State::Receiving(p, timeout) = self {
-            body.on_recv_by_pipe(event_loop, msg, p, timeout);
-        }
-
-        State::Idle
     }
 
     fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
@@ -372,6 +370,22 @@ impl Body {
         clear_timeout(event_loop, pending_request.timeout);
     }
 
+    fn raw_msg_to_msg(&self, raw_msg: Message, tok: mio::Token) -> Option<(Message, u32)> {
+        if self.is_device_item {
+            Some((raw_msg, self.cur_req_id()))
+        } else {
+            decode(raw_msg, tok)
+        }
+    }
+
+    fn msg_to_raw_msg(&mut self, msg: Message) -> Message {
+        if self.is_device_item {
+            msg
+        } else {
+            encode(msg, self.next_req_id())
+        }
+    }
+    
     fn cur_req_id(&self) -> u32 {
         self.req_id_seq | 0x80000000
     }

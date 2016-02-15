@@ -556,10 +556,12 @@ fn test_device_req_rep() {
     let device_thread = thread::spawn(move || device.run());
 
     req.send(vec![65, 66, 67]).unwrap();
-    let received = rep.recv().unwrap();
-    assert_eq!(vec![65, 66, 67], received);
+    let request = rep.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], request);
 
-    // TODO have rep send the reply and req receive it ...
+    rep.send(vec![99, 66, 88]).unwrap();
+    let reply = req.recv().unwrap();
+    assert_eq!(vec![99, 66, 88], reply);
 
     drop(session);
     device_thread.join().unwrap().unwrap_err();

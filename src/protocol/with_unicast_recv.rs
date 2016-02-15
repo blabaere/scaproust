@@ -16,6 +16,12 @@ use Message;
 use super::with_pipes::WithPipes;
 
 pub trait WithUnicastRecv : WithPipes {
+    fn can_recv(&self, tok: mio::Token) -> bool {
+        match self.get_pipe(&tok) {
+            Some(pipe) => pipe.can_recv(),
+            None => false
+        }
+    }
 
     fn recv(&mut self, event_loop: &mut EventLoop, tok: mio::Token) -> bool {
         self.get_pipe_mut(&tok).map(|p| p.recv(event_loop)).is_some()
