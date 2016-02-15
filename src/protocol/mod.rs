@@ -10,7 +10,7 @@ use std::io;
 
 use mio;
 
-use global::{ SocketType, SocketId };
+use global::{ SocketType, SocketId, invalid_input_io_error };
 use event_loop_msg::{ SocketNotify, SocketOption };
 use pipe::Pipe;
 use EventLoop;
@@ -85,8 +85,15 @@ pub trait Protocol {
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message);
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop);
 
-    fn set_option(&mut self, _: &mut EventLoop, _: SocketOption) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::InvalidData, "option not supported by protocol"))
+    fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
+        match option {
+            SocketOption::DeviceItem(value) => self.set_device_item(value),
+            _ => Err(invalid_input_io_error("option not supported by protocol"))
+        }
+    }
+
+    fn set_device_item(&mut self, _: bool) -> io::Result<()> {
+        Ok(())
     }
 
     fn on_survey_timeout(&mut self, _: &mut EventLoop) {}

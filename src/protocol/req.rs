@@ -32,7 +32,8 @@ use Message;
 pub struct Req {
     id: SocketId,
     body: Body,
-    state: Option<State>
+    state: Option<State>,
+    is_device_item: bool
 }
 
 struct Body {
@@ -73,7 +74,8 @@ impl Req {
         Req {
             id: socket_id,
             body: body,
-            state: Some(State::Idle)
+            state: Some(State::Idle),
+            is_device_item: false
         }
     }
 
@@ -124,10 +126,13 @@ impl Protocol for Req {
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
-        let req_id = self.body.next_req_id();
-        let msg = encode(msg, req_id);
+        let raw_msg = if self.is_device_item {
+            msg
+        } else {
+            encode(msg, self.body.next_req_id())
+        };
 
-        self.apply(|s, body| s.send(body, event_loop, Rc::new(msg), timeout));
+        self.apply(|s, body| s.send(body, event_loop, Rc::new(raw_msg), timeout));
     }
 
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
@@ -143,8 +148,12 @@ impl Protocol for Req {
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
-        if let Some((msg, req_id)) = decode(raw_msg, tok) {
-            self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg, req_id));
+        if self.is_device_item {
+            self.apply(|s, body| s.on_recv_by_pipe_raw(body, event_loop, tok, raw_msg));
+        } else {
+            if let Some((msg, req_id)) = decode(raw_msg, tok) {
+                self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg, req_id));
+            }
         }
     }
 
@@ -154,6 +163,11 @@ impl Protocol for Req {
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         self.apply(|s, body| s.ready(body, event_loop, tok, events));
+    }
+
+    fn set_device_item(&mut self, value: bool) -> io::Result<()> {
+        self.is_device_item = value;
+        Ok(())
     }
 
     fn resend(&mut self, event_loop: &mut EventLoop) {
@@ -282,6 +296,14 @@ impl State {
         } else {
             State::Idle
         }
+    }
+
+    fn on_recv_by_pipe_raw(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message) -> State {
+        if let State::Receiving(p, timeout) = self {
+            body.on_recv_by_pipe(event_loop, msg, p, timeout);
+        }
+
+        State::Idle
     }
 
     fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {

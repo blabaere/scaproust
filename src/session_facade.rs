@@ -103,7 +103,9 @@ impl SessionFacade {
         Ok(box OneWayDevice::new(left, right))
     }
 
-    fn create_two_way_device(&self, left: SocketFacade, right: SocketFacade) -> io::Result<Box<DeviceFacade>> {
+    fn create_two_way_device(&self, mut left: SocketFacade, mut right: SocketFacade) -> io::Result<Box<DeviceFacade>> {
+        try!(left.set_option(SocketOption::DeviceItem(true)));
+        try!(right.set_option(SocketOption::DeviceItem(true)));
         let cmd = SessionCmdSignal::CreateProbe(left.get_id(), right.get_id());
 
         try!(self.send_cmd(cmd));

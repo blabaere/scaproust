@@ -557,7 +557,7 @@ fn test_device_req_rep() {
 
     req.send(vec![65, 66, 67]).unwrap();
     let received = rep.recv().unwrap();
-    //assert_eq!(vec![65, 66, 67], received);
+    assert_eq!(vec![65, 66, 67], received);
 
     // TODO have rep send the reply and req receive it ...
 

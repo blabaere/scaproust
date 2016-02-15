@@ -88,6 +88,7 @@ impl SocketCmdSignal {
 }
 
 pub enum SocketOption {
+    DeviceItem(bool),
     SendTimeout(time::Duration),
     RecvTimeout(time::Duration),
     Subscribe(String),
