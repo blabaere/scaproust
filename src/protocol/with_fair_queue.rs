@@ -35,18 +35,32 @@ pub trait WithFairQueue : WithPipes {
     }
 
     fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.get_pipe(&tok).map(|p| p.open(event_loop));
+        self.get_pipe_mut(&tok).map(|p| p.open(event_loop));
     }
 
     fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         self.get_fair_queue_mut().insert(tok, 8);
-        self.get_pipe(&tok).map(|p| p.on_open_ack(event_loop));
+        self.get_pipe_mut(&tok).map(|p| p.on_open_ack(event_loop));
     }
 
-    fn get_active_pipe<'a>(&'a mut self) -> Option<&'a mut Pipe> {
+    fn get_active_pipe<'a>(&'a self) -> Option<&'a Pipe> {
         match self.get_fair_queue().get() {
             Some(tok) => self.get_pipe(&tok),
             None      => None
+        }
+    }
+
+    fn get_active_pipe_mut<'a>(&'a mut self) -> Option<&'a mut Pipe> {
+        match self.get_fair_queue().get() {
+            Some(tok) => self.get_pipe_mut(&tok),
+            None      => None
+        }
+    }
+
+    fn has_active_pipe(&self) -> bool {
+        match self.get_fair_queue().get() {
+            Some(tok) => self.get_pipes().get(&tok).is_some(),
+            None      => false
         }
     }
 
@@ -55,7 +69,7 @@ pub trait WithFairQueue : WithPipes {
     }
 
     fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.get_active_pipe().map(|p| p.resync_readiness(event_loop));
+        self.get_active_pipe_mut().map(|p| p.resync_readiness(event_loop));
         self.get_fair_queue_mut().deactivate_and_advance();
     }
 
@@ -64,11 +78,11 @@ pub trait WithFairQueue : WithPipes {
             self.get_fair_queue_mut().activate(tok);
         }
 
-        self.get_pipe(&tok).map(|p| p.ready(event_loop, events));
+        self.get_pipe_mut(&tok).map(|p| p.ready(event_loop, events));
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop) -> bool {
-        self.get_active_pipe().map(|p| p.recv(event_loop)).is_some()
+        self.get_active_pipe_mut().map(|p| p.recv(event_loop)).is_some()
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
@@ -82,7 +96,14 @@ pub trait WithFairQueue : WithPipes {
         let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
 
         self.send_notify(SocketNotify::MsgNotRecv(err));
-        self.get_active_pipe().map(|p| p.cancel_recv(event_loop));
+        self.get_active_pipe_mut().map(|p| p.cancel_recv(event_loop));
         self.advance_pipe(event_loop);
+    }
+
+    fn can_recv(&self) -> bool {
+        match self.get_active_pipe() {
+            Some(pipe) => pipe.can_recv(),
+            None       => false,
+        }
     }
 }

@@ -147,6 +147,10 @@ impl Protocol for Rep {
         self.apply(|s, body| s.ready(body, event_loop, tok, events));
     }
 
+    fn can_recv(&self) -> bool { 
+        self.body.can_recv()
+    }
+
     fn destroy(&mut self, event_loop: &mut EventLoop) {
         self.body.destroy_pipes(event_loop);
     }

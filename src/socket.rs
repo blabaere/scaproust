@@ -92,7 +92,8 @@ impl Socket {
         debug!("[{:?}] handle_evt {}", self.id, evt.name());
         match evt {
             SocketEvtSignal::PipeAdded(tok)     => self.open_pipe(event_loop, tok),
-            SocketEvtSignal::AcceptorAdded(tok) => self.open_acceptor(event_loop, tok)
+            SocketEvtSignal::AcceptorAdded(tok) => self.open_acceptor(event_loop, tok),
+            _ => {}
         }
     }
 
@@ -225,7 +226,15 @@ impl Socket {
         } else if events.is_error() {
             self.remove_pipe_and_schedule_reconnect(event_loop, tok);
         } else {
+            let was_readable = self.protocol.can_recv();
+
             self.protocol.ready(event_loop, tok, events);
+
+            let is_readable = self.protocol.can_recv();
+
+            if !was_readable && is_readable{
+                self.send_event(SocketEvtSignal::Readable);
+            }
         }
     }
 

@@ -36,17 +36,17 @@ pub trait WithLoadBalancing : WithPipes {
     }
 
     fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.get_pipe(&tok).map(|p| p.open(event_loop));
+        self.get_pipe_mut(&tok).map(|p| p.open(event_loop));
     }
 
     fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         self.get_load_balancer_mut().insert(tok, 8);
-        self.get_pipe(&tok).map(|p| p.on_open_ack(event_loop));
+        self.get_pipe_mut(&tok).map(|p| p.on_open_ack(event_loop));
     }
 
     fn get_active_pipe<'a>(&'a mut self) -> Option<&'a mut Pipe> {
         match self.get_load_balancer().get() {
-            Some(tok) => self.get_pipe(&tok),
+            Some(tok) => self.get_pipe_mut(&tok),
             None      => None
         }
     }
@@ -65,7 +65,7 @@ pub trait WithLoadBalancing : WithPipes {
             self.get_load_balancer_mut().activate(tok);
         }
         
-        self.get_pipe(&tok).map(|p| p.ready(event_loop, events));
+        self.get_pipe_mut(&tok).map(|p| p.ready(event_loop, events));
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> bool {

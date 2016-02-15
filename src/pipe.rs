@@ -55,6 +55,14 @@ impl Pipe {
         }
     }
 
+    pub fn can_recv(&self) -> bool {
+        match self.state.as_ref().map(|s| s.can_recv()) {
+            Some(true)  => true,
+            Some(false) => false,
+            None        => false
+        }
+    }
+
     fn apply<F>(&mut self, transition: F) where F : FnOnce(Box<PipeState>) -> Box<PipeState> {
         if let Some(old_state) = self.state.take() {
             let old_name = old_state.name();
@@ -200,6 +208,10 @@ trait PipeState {
 
     fn close(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         box Dead
+    }
+
+    fn can_recv(&self) -> bool {
+        false
     }
 
     fn on_error(self: Box<Self>, _: &mut EventLoop, err: io::Error) -> Box<PipeState> {
@@ -509,13 +521,15 @@ impl LivePipeState for Activable {
 //                                                                           //
 ///////////////////////////////////////////////////////////////////////////////
 struct Idle {
-    body: PipeBody
+    body: PipeBody,
+    readable: bool
 }
 
 impl From<Activable> for Idle {
     fn from(state: Activable) -> Idle {
         Idle {
-            body: state.body
+            body: state.body,
+            readable: false
         }
     }
 }
@@ -523,7 +537,8 @@ impl From<Activable> for Idle {
 impl From<Receiving> for Idle {
     fn from(state: Receiving) -> Idle {
         Idle {
-            body: state.body
+            body: state.body,
+            readable: false
         }
     }
 }
@@ -531,7 +546,8 @@ impl From<Receiving> for Idle {
 impl From<Sending> for Idle {
     fn from(state: Sending) -> Idle {
         Idle {
-            body: state.body
+            body: state.body,
+            readable: state.readable
         }
     }
 }
@@ -563,7 +579,11 @@ impl PipeState for Idle {
         "Idle"
     }
 
-    fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
+    fn ready(mut self: Box<Self>, _: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
+        if events.is_readable() {
+            self.readable = true;
+        }
+
         self
     }
 
@@ -607,6 +627,10 @@ impl PipeState for Idle {
         let res = self.as_ref().resync_readiness(event_loop);
 
         no_transition_if_ok(self, res, event_loop)
+    }
+
+    fn can_recv(&self) -> bool {
+        self.readable
     }
 
     fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
@@ -658,7 +682,10 @@ impl PipeState for Receiving {
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
 
         if self.operation.is_none() {
-            return box Idle { body: self.body };
+            return box Idle { 
+                body: self.body, 
+                readable: events.is_readable()
+            };
         }
 
         if events.is_readable() == false {
@@ -695,14 +722,16 @@ impl LivePipeState for Receiving {
 ///////////////////////////////////////////////////////////////////////////////
 struct Sending {
     body: PipeBody,
-    operation: Option<send::SendOperation>
+    operation: Option<send::SendOperation>,
+    readable: bool
 }
 
 impl Sending {
     fn from(state: Idle, op: send::SendOperation) -> Sending {
         Sending {
             body: state.body,
-            operation: Some(op)
+            operation: Some(op),
+            readable: state.readable
         }
     }
 
@@ -726,7 +755,14 @@ impl PipeState for Sending {
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
 
         if self.operation.is_none() {
-            return box Idle { body: self.body };
+            return box Idle { 
+                readable: self.readable || events.is_readable(),
+                body: self.body,
+            };
+        }
+
+        if events.is_readable() {
+            self.readable = true
         }
 
         if events.is_writable() == false {
@@ -743,6 +779,10 @@ impl PipeState for Sending {
 
     fn cancel_send(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         transition::<Sending, Idle>(self)
+    }
+
+    fn can_recv(&self) -> bool {
+        self.readable
     }
 
     fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {

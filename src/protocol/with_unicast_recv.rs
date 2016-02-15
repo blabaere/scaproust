@@ -18,7 +18,7 @@ use super::with_pipes::WithPipes;
 pub trait WithUnicastRecv : WithPipes {
 
     fn recv(&mut self, event_loop: &mut EventLoop, tok: mio::Token) -> bool {
-        self.get_pipe(&tok).map(|p| p.recv(event_loop)).is_some()
+        self.get_pipe_mut(&tok).map(|p| p.recv(event_loop)).is_some()
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
@@ -31,6 +31,6 @@ pub trait WithUnicastRecv : WithPipes {
         let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
 
         self.send_notify(SocketNotify::MsgNotRecv(err));
-        self.get_pipe(&tok).map(|p| p.cancel_recv(event_loop));
+        self.get_pipe_mut(&tok).map(|p| p.cancel_recv(event_loop));
     }
 }

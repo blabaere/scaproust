@@ -5,12 +5,8 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::io;
-use std::thread;
-use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
-use std::time;
 
-use mio;
 use mio::Sender;
 
 use global::*;
@@ -89,21 +85,64 @@ impl DeviceFacade for OneWayDevice {
 pub struct TwoWayDevice {
     id: ProbeId,
     cmd_sender: Sender<EventLoopSignal>,
-    evt_receiver: Receiver<PollResult>
+    evt_receiver: Receiver<ProbeNotify>,
+    left: Option<SocketFacade>,
+    right: Option<SocketFacade>
 }
 
 impl TwoWayDevice {
-    pub fn new(id: ProbeId, cmd_tx: Sender<EventLoopSignal>, evt_tx: Receiver<PollResult>) -> TwoWayDevice {
+    pub fn new(
+        id: ProbeId,
+        cmd_tx: Sender<EventLoopSignal>,
+        evt_tx: Receiver<ProbeNotify>,
+        l: SocketFacade,
+        r: SocketFacade) -> TwoWayDevice {
         TwoWayDevice {
             id: id,
             cmd_sender: cmd_tx,
-            evt_receiver: evt_tx
+            evt_receiver: evt_tx,
+            left: Some(l),
+            right: Some(r)
         }
+    }
+
+    fn send_cmd(&self, cmd: ProbeCmdSignal) -> Result<(), io::Error> {
+        let cmd_sig = CmdSignal::Probe(self.id, cmd);
+        let loop_sig = EventLoopSignal::Cmd(cmd_sig);
+
+        self.cmd_sender.send(loop_sig).map_err(|e| convert_notify_err(e))
     }
 }
 
 impl DeviceFacade for TwoWayDevice {
     fn run(mut self: Box<Self>) -> io::Result<()> {
-        unimplemented!();
+        let mut left = self.left.take().unwrap();
+        let mut right = self.right.take().unwrap();
+
+        loop {
+            try!(self.send_cmd(ProbeCmdSignal::PollReadable));
+
+            match self.evt_receiver.recv() {
+                Ok(ProbeNotify::Ok(l, r)) => {
+                    if l {
+                        try!(left.forward_msg(&mut right));
+                    }
+                    if r {
+                        try!(right.forward_msg(&mut left));
+                    }
+                },
+                Err(_) => return Err(other_io_error("evt channel closed"))
+            };
+        }
+    }
+}
+
+impl Drop for TwoWayDevice {
+    fn drop(&mut self) {
+        let cmd = SessionCmdSignal::DestroyProbe(self.id);
+        let cmd_sig = CmdSignal::Session(cmd);
+        let loop_sig = EventLoopSignal::Cmd(cmd_sig);
+
+        let _ = self.cmd_sender.send(loop_sig);
     }
 }

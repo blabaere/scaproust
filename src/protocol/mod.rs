@@ -80,6 +80,7 @@ pub trait Protocol {
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token);
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop);
 
+    fn can_recv(&self) -> bool { false }
     fn recv(&mut self, event_loop: &mut EventLoop, timeout_handle: Option<mio::Timeout>);
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message);
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop);

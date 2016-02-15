@@ -550,20 +550,19 @@ fn test_device_req_rep() {
     req.set_send_timeout(timeout).unwrap();
     rep.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(500));
+    thread::sleep(time::Duration::from_millis(250));
 
-    let device = session.create_bridge_device(d_req, d_rep).unwrap();
-    //let device_thread = thread::spawn(move || device.run());
+    let device = session.create_bridge_device(d_rep, d_req).unwrap();
+    let device_thread = thread::spawn(move || device.run());
 
-    /*req.send(vec![65, 66, 67]).unwrap();
+    req.send(vec![65, 66, 67]).unwrap();
     let received = rep.recv().unwrap();
-    assert_eq!(vec![65, 66, 67], received);
+    //assert_eq!(vec![65, 66, 67], received);
 
-    let err = rep.recv().unwrap_err();
-    assert_eq!(io::ErrorKind::TimedOut, err.kind());
+    // TODO have rep send the reply and req receive it ...
 
     drop(session);
-    device_thread.join().unwrap().unwrap_err();*/
+    device_thread.join().unwrap().unwrap_err();
 }
 
 #[test]

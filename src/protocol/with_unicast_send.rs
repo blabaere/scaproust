@@ -18,7 +18,7 @@ use super::with_pipes::WithPipes;
 
 pub trait WithUnicastSend : WithPipes {
     fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>, tok: mio::Token) -> bool {
-        self.get_pipe(&tok).map(|p| p.send(event_loop, msg)).is_some()
+        self.get_pipe_mut(&tok).map(|p| p.send(event_loop, msg)).is_some()
     }
 
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
@@ -31,6 +31,6 @@ pub trait WithUnicastSend : WithPipes {
         let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
 
         self.send_notify(SocketNotify::MsgNotSent(err));
-        self.get_pipe(&tok).map(|p| p.cancel_send(event_loop));
+        self.get_pipe_mut(&tok).map(|p| p.cancel_send(event_loop));
     }
 }

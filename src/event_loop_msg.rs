@@ -31,14 +31,16 @@ impl EventLoopSignal {
 /// Commands sent by facade components to *backend* components
 pub enum CmdSignal {
     Session(SessionCmdSignal),
-    Socket(SocketId, SocketCmdSignal)
+    Socket(SocketId, SocketCmdSignal),
+    Probe(ProbeId, ProbeCmdSignal)
 }
 
 impl CmdSignal {
     pub fn name(&self) -> &'static str {
         match *self {
             CmdSignal::Session(_)  => "Session",
-            CmdSignal::Socket(_,_) => "Socket"
+            CmdSignal::Socket(_,_) => "Socket",
+            CmdSignal::Probe(_,_)  => "Probe"
         }
     }
 }
@@ -47,7 +49,8 @@ impl CmdSignal {
 pub enum SessionCmdSignal {
     CreateSocket(SocketType),
     DestroySocket(SocketId),
-    CreateProbe(PollRequest),
+    CreateProbe(SocketId, SocketId),
+    DestroyProbe(ProbeId),
     Shutdown
 }
 
@@ -56,7 +59,8 @@ impl SessionCmdSignal {
         match *self {
             SessionCmdSignal::CreateSocket(_)  => "CreateSocket",
             SessionCmdSignal::DestroySocket(_) => "DestroySocket",
-            SessionCmdSignal::CreateProbe(_)   => "CreateProbe",
+            SessionCmdSignal::CreateProbe(_,_) => "CreateProbe",
+            SessionCmdSignal::DestroyProbe(_)  => "DestroyProbe",
             SessionCmdSignal::Shutdown         => "Shutdown"
         }
     }
@@ -92,6 +96,19 @@ pub enum SocketOption {
     ResendInterval(time::Duration)
 }
 
+/// Commands sent to a probe
+pub enum ProbeCmdSignal {
+    PollReadable
+}
+
+impl ProbeCmdSignal {
+    pub fn name(&self) -> &'static str {
+        match *self {
+            ProbeCmdSignal::PollReadable => "PollReadable"
+        }
+    }
+}
+
 /// Events raised by components living in the event loop, resulting from the execution of commands.
 pub enum EvtSignal {
     Socket(SocketId, SocketEvtSignal),
@@ -110,14 +127,16 @@ impl EvtSignal {
 // Events raised by sockets
 pub enum SocketEvtSignal {
     PipeAdded(mio::Token),
-    AcceptorAdded(mio::Token)
+    AcceptorAdded(mio::Token),
+    Readable
 }
 
 impl SocketEvtSignal {
     pub fn name(&self) -> &'static str {
         match *self {
             SocketEvtSignal::PipeAdded(_)     => "PipeAdded",
-            SocketEvtSignal::AcceptorAdded(_) => "AcceptorAdded"
+            SocketEvtSignal::AcceptorAdded(_) => "AcceptorAdded",
+            SocketEvtSignal::Readable         => "Readable"
         }
     }
 }
@@ -154,7 +173,7 @@ pub enum EventLoopTimeout {
 /// Notifications sent by the *backend* session as reply to the commands sent by the facade session.
 pub enum SessionNotify {
     SocketCreated(SocketId, mpsc::Receiver<SocketNotify>),
-    ProbeCreated(ProbeId, mpsc::Receiver<PollResult>),
+    ProbeCreated(ProbeId, mpsc::Receiver<ProbeNotify>),
     ProbeNotCreated(io::Error)
 }
 
@@ -172,5 +191,7 @@ pub enum SocketNotify {
     OptionNotSet(io::Error)
 }
 
-pub struct PollRequest(pub SocketId, pub SocketId);
-pub struct PollResult(pub bool, pub bool);
+/// Notifications sent by the probe as reply to the commands sent by the facade device.
+pub enum ProbeNotify {
+    Ok(bool, bool)
+}

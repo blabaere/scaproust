@@ -104,20 +104,20 @@ impl SessionFacade {
     }
 
     fn create_two_way_device(&self, left: SocketFacade, right: SocketFacade) -> io::Result<Box<DeviceFacade>> {
-        let req = PollRequest(left.get_id(), right.get_id());
-        let cmd = SessionCmdSignal::CreateProbe(req);
+        let cmd = SessionCmdSignal::CreateProbe(left.get_id(), right.get_id());
 
         try!(self.send_cmd(cmd));
 
         match self.evt_receiver.recv() {
-            Ok(SessionNotify::ProbeCreated(id, rx)) => Ok(self.new_device(id, rx)),
+            Ok(SessionNotify::ProbeCreated(id, rx)) => Ok(self.new_device(id, rx, left, right)),
+            Ok(SessionNotify::ProbeNotCreated(e))   => Err(e),
             Ok(_)                                   => Err(other_io_error("unexpected evt")),
             Err(_)                                  => Err(other_io_error("evt channel closed"))
         }
     }
 
-    fn new_device(&self, id: ProbeId, rx: mpsc::Receiver<PollResult>) -> Box<DeviceFacade> {
-        box TwoWayDevice::new(id, self.cmd_sender.clone(), rx)
+    fn new_device(&self, id: ProbeId, rx: mpsc::Receiver<ProbeNotify>, left: SocketFacade, right: SocketFacade) -> Box<DeviceFacade> {
+        box TwoWayDevice::new(id, self.cmd_sender.clone(), rx, left, right)
     }
 }
 

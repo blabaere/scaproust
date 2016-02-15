@@ -25,6 +25,7 @@ pub struct Session {
     sockets: HashMap<SocketId, Socket>,
     socket_ids: HashMap<mio::Token, SocketId>,
     probes: HashMap<ProbeId, Probe>,
+    probe_ids: HashMap<SocketId, ProbeId>,
     id_seq: IdSequence
 }
 
@@ -36,6 +37,7 @@ impl Session {
             sockets: HashMap::new(),
             socket_ids: HashMap::new(),
             probes: HashMap::new(),
+            probe_ids: HashMap::new(),
             id_seq: IdSequence::new()
         }
     }
@@ -44,7 +46,8 @@ impl Session {
         debug!("session handle_cmd {}", cmd.name());
         match cmd {
             CmdSignal::Session(c)    => self.handle_session_cmd(event_loop, c),
-            CmdSignal::Socket(id, c) => self.handle_socket_cmd(event_loop, id, c)
+            CmdSignal::Socket(id, c) => self.handle_socket_cmd(event_loop, id, c),
+            CmdSignal::Probe(id, c) =>  self.handle_probe_cmd(event_loop, id, c)
         }
     }
 
@@ -53,7 +56,8 @@ impl Session {
         match cmd {
             SessionCmdSignal::CreateSocket(t)   => self.create_socket(event_loop, t),
             SessionCmdSignal::DestroySocket(id) => self.destroy_socket(event_loop, id),
-            SessionCmdSignal::CreateProbe(r)    => self.create_probe(event_loop, r),
+            SessionCmdSignal::CreateProbe(l,r)  => self.create_probe(event_loop, l, r),
+            SessionCmdSignal::DestroyProbe(id)  => self.destroy_probe(event_loop, id),
             SessionCmdSignal::Shutdown          => {
                 self.socket_ids.clear();
                 self.sockets.clear();
@@ -65,6 +69,10 @@ impl Session {
     fn handle_socket_cmd(&mut self, event_loop: &mut EventLoop, id: SocketId, cmd: SocketCmdSignal) {
         debug!("session handle_socket_cmd {}", cmd.name());
         self.on_socket_by_id(&id, |s| s.handle_cmd(event_loop, cmd));
+    }
+
+    fn handle_probe_cmd(&mut self, event_loop: &mut EventLoop, id: ProbeId, cmd: ProbeCmdSignal) {
+        debug!("session handle_probe_cmd {}", cmd.name());
     }
 
     fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: EvtSignal) {
@@ -85,6 +93,13 @@ impl Session {
             SocketEvtSignal::AcceptorAdded(tok) => {
                 self.socket_ids.insert(tok, id);
                 self.on_socket_by_id(&id, |s| s.handle_evt(event_loop, SocketEvtSignal::AcceptorAdded(tok)));
+            },
+            SocketEvtSignal::Readable => {
+                if let Some(probe_id) = self.probe_ids.get(&id) {
+                    if let Some(probe) = self.probes.get_mut(probe_id) {
+                        probe.on_socket_readable(id);
+                    }
+                }
             }
         }
     }
@@ -129,14 +144,29 @@ impl Session {
         }
     }
 
-    fn create_probe(&mut self, _: &mut EventLoop, poll_req: PollRequest) {
-        let id = ProbeId(self.id_seq.next());
-        let (tx, rx) = mpsc::channel();
-        let probe = Probe::new(poll_req.0, poll_req.1, tx);
+    fn create_probe(&mut self, _: &mut EventLoop, left_id: SocketId, right_id: SocketId) {
+        if self.sockets.contains_key(&left_id) && self.sockets.contains_key(&right_id) {
+            let id = ProbeId(self.id_seq.next());
+            let (tx, rx) = mpsc::channel();
+            let probe = Probe::new(left_id, right_id, tx);
 
-        self.probes.insert(id, probe);
+            self.probes.insert(id, probe);
+            self.probe_ids.insert(left_id, id);
+            self.probe_ids.insert(right_id, id);
 
-        self.send_evt(SessionNotify::ProbeCreated(id, rx));
+            self.send_evt(SessionNotify::ProbeCreated(id, rx));
+        } else {
+            let e = invalid_input_io_error("no matching sockets");
+
+            self.send_evt(SessionNotify::ProbeNotCreated(e));
+        }
+
+    }
+
+    fn destroy_probe(&mut self, _: &mut EventLoop, id: ProbeId) {
+        if let Some(probe) = self.probes.remove(&id) {
+            drop(probe);
+        }
     }
 
     fn on_socket_by_id<F>(&mut self, id: &SocketId, action: F) where F : FnOnce(&mut Socket) {
