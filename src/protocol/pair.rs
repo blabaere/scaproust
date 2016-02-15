@@ -126,6 +126,10 @@ impl Protocol for Pair {
         self.on_state_transition(|s, body| s.ready(body, event_loop, tok, events));
     }
 
+    fn can_recv(&self) -> bool { 
+        self.body.can_recv()
+    }
+
     fn destroy(&mut self, event_loop: &mut EventLoop) {
         self.body.destroy(event_loop);
     }
@@ -265,11 +269,18 @@ impl Body {
     }
 
     fn get_active_pipe<'a>(&'a mut self) -> Option<&'a mut Pipe> {
-        self.excl.get_active()
+        self.excl.get_active_mut()
     }
 
     fn get_pipe<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
         self.excl.get(tok)
+    }
+
+    fn can_recv(&self) -> bool {
+        match self.excl.get_active() {
+            Some(pipe) => pipe.can_recv(),
+            None       => false
+        }
     }
 
     fn destroy(&mut self, event_loop: &mut EventLoop) {

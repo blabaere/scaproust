@@ -65,9 +65,17 @@ impl Excl {
         }
     }
 
-    pub fn get_active<'a>(&'a mut self) -> Option<&'a mut Pipe> {
+    pub fn get_active_mut<'a>(&'a mut self) -> Option<&'a mut Pipe> {
         if self.active {
             self.pipe.as_mut()
+        } else {
+            None
+        }
+    }
+
+    pub fn get_active<'a>(&'a self) -> Option<&'a Pipe> {
+        if self.active {
+            self.pipe.as_ref()
         } else {
             None
         }

@@ -532,7 +532,7 @@ fn check_readable_pipe_is_used_for_recv_when_receiving_two_messages_in_one_event
 }
 
 #[test]
-fn test_device_req_rep() {
+fn device_req_rep() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut d_req = session.create_socket(SocketType::Req).unwrap();
@@ -548,6 +548,8 @@ fn test_device_req_rep() {
     rep.connect("tcp://127.0.0.1:5475").unwrap();
 
     req.set_send_timeout(timeout).unwrap();
+    req.set_recv_timeout(timeout).unwrap();
+    rep.set_send_timeout(timeout).unwrap();
     rep.set_recv_timeout(timeout).unwrap();
 
     thread::sleep(time::Duration::from_millis(250));
@@ -588,4 +590,83 @@ fn sub_can_skip_crap_and_keep_crop() {
 
     let received = client.recv().unwrap();
     assert_eq!(vec![65, 66, 67], received);
+}
+
+//device_surv_resp
+//
+
+#[test]
+fn device_pair_left_to_right() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut d_left = session.create_socket(SocketType::Pair).unwrap();
+    let mut d_right = session.create_socket(SocketType::Pair).unwrap();
+    let mut left = session.create_socket(SocketType::Pair).unwrap();
+    let mut right = session.create_socket(SocketType::Pair).unwrap();
+    let timeout = time::Duration::from_millis(50);
+
+    d_left.bind("tcp://127.0.0.1:5479").unwrap();
+    d_right.bind("tcp://127.0.0.1:5480").unwrap();
+
+    left.connect("tcp://127.0.0.1:5480").unwrap();
+    right.connect("tcp://127.0.0.1:5479").unwrap();
+
+    left.set_send_timeout(timeout).unwrap();
+    left.set_recv_timeout(timeout).unwrap();
+    right.set_send_timeout(timeout).unwrap();
+    right.set_recv_timeout(timeout).unwrap();
+
+    thread::sleep(time::Duration::from_millis(250));
+
+    let device = session.create_bridge_device(d_left, d_right).unwrap();
+    let device_thread = thread::spawn(move || device.run());
+
+    left.send(vec![65, 66, 67]).unwrap();
+    let request = right.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], request);
+
+    right.send(vec![99, 66, 88]).unwrap();
+    let reply = left.recv().unwrap();
+    assert_eq!(vec![99, 66, 88], reply);
+
+    drop(session);
+    device_thread.join().unwrap().unwrap_err();
+}
+
+#[test]
+fn device_pair_right_to_left() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut d_left = session.create_socket(SocketType::Pair).unwrap();
+    let mut d_right = session.create_socket(SocketType::Pair).unwrap();
+    let mut left = session.create_socket(SocketType::Pair).unwrap();
+    let mut right = session.create_socket(SocketType::Pair).unwrap();
+    let timeout = time::Duration::from_millis(50);
+
+    d_left.bind("tcp://127.0.0.1:5481").unwrap();
+    d_right.bind("tcp://127.0.0.1:5482").unwrap();
+
+    left.connect("tcp://127.0.0.1:5482").unwrap();
+    right.connect("tcp://127.0.0.1:5481").unwrap();
+
+    left.set_send_timeout(timeout).unwrap();
+    left.set_recv_timeout(timeout).unwrap();
+    right.set_send_timeout(timeout).unwrap();
+    right.set_recv_timeout(timeout).unwrap();
+
+    thread::sleep(time::Duration::from_millis(250));
+
+    let device = session.create_bridge_device(d_left, d_right).unwrap();
+    let device_thread = thread::spawn(move || device.run());
+
+    right.send(vec![65, 66, 67]).unwrap();
+    let request = left.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], request);
+
+    left.send(vec![99, 66, 88]).unwrap();
+    let reply = right.recv().unwrap();
+    assert_eq!(vec![99, 66, 88], reply);
+
+    drop(session);
+    device_thread.join().unwrap().unwrap_err();
 }
