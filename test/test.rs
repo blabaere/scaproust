@@ -775,3 +775,4 @@ fn sub_can_skip_crap_and_keep_crop() {
     let received = client.recv().unwrap();
     assert_eq!(vec![65, 66, 67], received);
 }
+

@@ -29,7 +29,10 @@ git = "https://github.com/carllerche/mio"
 
 [dev-dependencies]
 env_logger = "0.3.2"
+bytes  = "0.3.0"
+slab   = "0.1.0"
 
 [[test]]
 name = "test"
-path = "test/test.rs"
+path = "test/test_special.rs"
+
