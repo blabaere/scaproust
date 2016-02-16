@@ -231,17 +231,11 @@ trait LivePipeState {
         self.body().send_sig(sig)
     }
 
-    #[cfg(not(windows))]
     fn resync_readiness(&self, event_loop: &mut EventLoop) -> io::Result<()> {
         self.body().resubscribe(
             event_loop, 
             mio::EventSet::readable() | mio::EventSet::writable(), 
             mio::PollOpt::edge())
-    }
-
-    #[cfg(windows)]
-    fn resync_readiness(&self, event_loop: &mut EventLoop) -> io::Result<()> {
-        Ok(())
     }
 
     fn close(&self, event_loop: &mut EventLoop) -> Box<PipeState> {
@@ -501,11 +495,7 @@ impl PipeState for Activable {
     }
 
     fn on_open_ack(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        //let res = self.as_ref().resync_readiness(event_loop);
-        let res = self.body().resubscribe(
-            event_loop, 
-            mio::EventSet::readable() | mio::EventSet::writable(), 
-            mio::PollOpt::edge());
+        let res = self.as_ref().resync_readiness(event_loop);
 
         transition_if_ok::<Activable, Idle>(self, res, event_loop)
     }
