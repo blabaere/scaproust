@@ -57,13 +57,13 @@ pub trait WithLoadBalancing : WithPipes {
 
     #[cfg(not(windows))]
     fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.get_active_pipe_mut().map(|p| p.resync_readiness(event_loop));
+        self.get_active_pipe().map(|p| p.resync_readiness(event_loop));
         self.get_load_balancer_mut().advance();
     }
 
     #[cfg(windows)]
     fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.get_active_pipe_mut().map(|p| p.resync_readiness(event_loop));
+        self.get_active_pipe().map(|p| p.resync_readiness(event_loop));
         self.get_load_balancer_mut().deactivate_and_advance();
     }
 
