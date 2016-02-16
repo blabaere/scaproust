@@ -270,6 +270,7 @@ fn test_survey() {
     client2.connect("tcp://127.0.0.1:5465").unwrap();
     client1.set_recv_timeout(timeout).unwrap();
     client2.set_recv_timeout(timeout).unwrap();
+    server.set_recv_timeout(timeout).unwrap();
 
     thread::sleep(time::Duration::from_millis(500));
 
@@ -503,6 +504,11 @@ fn check_readable_pipe_is_used_for_recv() {
     push1.send(vec![66, 67, 65]).unwrap();
     let received3 = pull.recv().unwrap();
     assert_eq!(vec![66, 67, 65], received3);
+
+    // Make sure the socket will try to read from the newest correct pipe
+    push3.send(vec![66, 67, 68]).unwrap();
+    let received3 = pull.recv().unwrap();
+    assert_eq!(vec![66, 67, 68], received3);
 }
 
 #[test]

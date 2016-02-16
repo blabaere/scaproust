@@ -121,6 +121,24 @@ impl PrioList {
         }
     }
 
+    pub fn deactivate(&mut self, tok: mio::Token) {
+        let deactivable_index = self.find_deactivable_index(tok);
+
+        if let Some(index) = deactivable_index {
+            self.deactivate_index(index);
+        }
+    }
+
+    fn deactivate_index(&mut self, index: usize) {
+        self.items[index].active = false;
+
+        if let Some(current) = self.current {
+            if current == index {
+                self.deactivate_index_and_advance(index);
+            }
+        }
+    }
+
     pub fn advance(&mut self) {
         if let Some(index) = self.current {
             let priority = self.items[index].priority;
@@ -135,6 +153,11 @@ impl PrioList {
     fn find_activable_index(&self, tok: mio::Token) -> Option<usize> {
         let all = self.full_range();
         self.find_item_index(all, &|item|item.token == tok && item.active == false)
+    }
+
+    fn find_deactivable_index(&self, tok: mio::Token) -> Option<usize> {
+        let all = self.full_range();
+        self.find_item_index(all, &|item|item.token == tok && item.active == true)
     }
 
     fn find_active_index_after(&self, pivot: usize, priority: u8) -> Option<usize> {
