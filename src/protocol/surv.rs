@@ -146,6 +146,8 @@ impl Protocol for Surv {
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
         if let Some((msg, survey_id)) = self.body.raw_msg_to_msg(raw_msg, tok) {
             self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg, survey_id));
+        } else {
+            // TODO notify a recv failure, or restart recv
         }
     }
 

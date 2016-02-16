@@ -146,6 +146,8 @@ impl Protocol for Req {
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
         if let Some((msg, req_id)) = self.body.raw_msg_to_msg(raw_msg, tok) {
             self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg, req_id));
+        } else {
+            // TODO notify a recv failure, or restart recv
         }
     }
 

@@ -15,12 +15,9 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
 * Idiomatic rust API first, mimic the original C API second.
 
 ## Maybe
-* Zero-copy, minimal allocations.
 * Polling on several sockets.
-* Low-latency (current design use channels between user facing functions and system functions).
 * Other transports (Inproc, TLS, WebSockets).
-* Async API, using future/promise to represent send/recv results.
-* Efficient nonblocking operations (difficult due to the above mentioned use of channels).
+* Nonblocking operations.
 
 ## Non goals
 * Ability to use a socket as a raw file descriptor with system level functions.
@@ -51,24 +48,21 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
   - [x] IPC (*nix only)
   - [ ] INPROC  
 
-- [ ] Basic features
+- [x] Basic features
   - [x] Send (buffer only)
   - [x] Recv (buffer only)
   - [x] Connect 
   - [x] Reconnect on failure
   - [x] Bind
   - [x] Rebind on failure
-  - [ ] Device
-  - [ ] Logs
+  - [x] Device
+  - [x] Logs
 
 - [ ] Advanced features
   - [x] Fair queuing
   - [x] Load balancing
   - [ ] Send priority
   - [ ] Recv priority
-  - [ ] Send (scatter array + control header)
-  - [ ] Recv (scatter array + control header)
-  - [ ] Statistics
 
 - [ ] Socket options
   - [ ] Linger

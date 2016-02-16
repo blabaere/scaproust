@@ -138,6 +138,8 @@ impl Protocol for Rep {
             self.body.set_backtrace(&msg.header);
 
             self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
+        } else {
+            // TODO notify a recv failure, or restart recv
         }
     }
 
