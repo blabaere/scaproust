@@ -9,5 +9,5 @@ build_script:
   - cargo build
 
 test_script:
-  - SET RUST_LOG=scaproust,test,test_special & SET RUST_TEST_THREADS=1& cargo test --verbose
-  - REM cargo test
+  - REM SET RUST_LOG=scaproust,test,test_special & SET RUST_TEST_THREADS=1& cargo test --verbose
+  - cargo test
