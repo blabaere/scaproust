@@ -226,17 +226,11 @@ impl Socket {
         } else if events.is_error() {
             self.remove_pipe_and_schedule_reconnect(event_loop, tok);
         } else {
-            let was_readable = self.protocol.can_recv();
-
             self.protocol.ready(event_loop, tok, events);
 
-            let is_readable = self.protocol.can_recv();
-
-            if !was_readable && is_readable {
-            //if is_readable {
+            if self.options.is_device_item && self.protocol.can_recv() {
                 self.send_event(SocketEvtSignal::Readable);
             }
-            debug!("[{:?}] pipe [{:?}] ready: '{:?}' {} {}", self.id, tok.as_usize(), events, was_readable, is_readable);
         }
     }
 
@@ -325,6 +319,7 @@ impl Socket {
         let set_res = match option {
             SocketOption::SendTimeout(timeout) => self.options.set_send_timeout(timeout),
             SocketOption::RecvTimeout(timeout) => self.options.set_recv_timeout(timeout),
+            SocketOption::DeviceItem(value)    => self.set_device_item(value),
             o @ _ => self.protocol.set_option(event_loop, o)
         };
         let evt = match set_res {
@@ -333,6 +328,11 @@ impl Socket {
         };
 
         self.send_notify(evt);
+    }
+
+    fn set_device_item(&mut self, value: bool) -> io::Result<()> {
+        self.options.set_device_item(value);
+        self.protocol.set_device_item(value)
     }
 
     pub fn on_survey_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -351,14 +351,16 @@ impl Socket {
 
 struct SocketImplOptions {
     pub send_timeout_ms: Option<u64>,
-    pub recv_timeout_ms: Option<u64>
+    pub recv_timeout_ms: Option<u64>,
+    pub is_device_item: bool
 }
 
 impl SocketImplOptions {
     fn new() -> SocketImplOptions {
         SocketImplOptions {
             send_timeout_ms: None,
-            recv_timeout_ms: None
+            recv_timeout_ms: None,
+            is_device_item: false
         }
     }
 
@@ -372,6 +374,10 @@ impl SocketImplOptions {
         self.recv_timeout_ms = duration_to_timeout(timeout);
 
         Ok(())
+    }
+
+    fn set_device_item(&mut self, value: bool) {
+        self.is_device_item = value;
     }
 }
 

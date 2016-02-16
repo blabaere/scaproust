@@ -119,9 +119,9 @@ impl DeviceFacade for TwoWayDevice {
         let mut left = self.left.take().unwrap();
         let mut right = self.right.take().unwrap();
 
-        loop {
-            try!(self.send_cmd(ProbeCmdSignal::PollReadable));
+        try!(self.send_cmd(ProbeCmdSignal::PollReadable));
 
+        loop {
             match self.evt_receiver.recv() {
                 Ok(ProbeNotify::Ok(l, r)) => {
                     if l {

@@ -696,7 +696,7 @@ fn device_pair_right_to_left() {
 }
 
 
-//#[test]
+#[test]
 fn device_surv_resp_with_parallel_reply() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();

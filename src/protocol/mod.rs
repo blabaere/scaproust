@@ -87,7 +87,6 @@ pub trait Protocol {
 
     fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
         match option {
-            SocketOption::DeviceItem(value) => self.set_device_item(value),
             _ => Err(invalid_input_io_error("option not supported by protocol"))
         }
     }

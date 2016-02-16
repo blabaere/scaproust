@@ -168,9 +168,12 @@ impl Protocol for Surv {
     fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
         match option {
             SocketOption::SurveyDeadline(timeout) => self.body.set_deadline(timeout),
-            SocketOption::DeviceItem(value)       => self.body.set_device_item(value),
             _ => Err(invalid_input_io_error("option not supported by protocol"))
         }
+    }
+
+    fn set_device_item(&mut self, value: bool) -> io::Result<()> {
+        self.body.set_device_item(value)
     }
 
     fn destroy(&mut self, event_loop: &mut EventLoop) {
