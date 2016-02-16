@@ -68,18 +68,12 @@ pub trait WithFairQueue : WithPipes {
         self.get_fair_queue().get() == Some(tok)
     }
 
+    fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
+        self.get_active_pipe_mut().map(|p| p.resync_readiness(event_loop));
+        self.get_fair_queue_mut().advance();
+    }
+
     #[cfg(not(windows))]
-    fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.get_active_pipe_mut().map(|p| p.resync_readiness(event_loop));
-        self.get_fair_queue_mut().advance();
-    }
-
-    #[cfg(windows)]
-    fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.get_active_pipe_mut().map(|p| p.resync_readiness(event_loop));
-        self.get_fair_queue_mut().advance();
-    }
-
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         if events.is_readable() {
             self.get_fair_queue_mut().activate(tok);
@@ -90,6 +84,15 @@ pub trait WithFairQueue : WithPipes {
         self.get_pipe_mut(&tok).map(|p| p.ready(event_loop, events));
     }
 
+    #[cfg(windows)]
+    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+        if events.is_readable() {
+            self.get_fair_queue_mut().activate(tok);
+        }
+
+        self.get_pipe_mut(&tok).map(|p| p.ready(event_loop, events));
+    }
+    
     fn recv(&mut self, event_loop: &mut EventLoop) -> bool {
         self.get_active_pipe_mut().map(|p| p.recv(event_loop)).is_some()
     }
