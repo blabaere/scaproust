@@ -9,6 +9,8 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 **Experimental work !** For working stuff, please see [nanomsg-rs](https://github.com/blabaere/nanomsg.rs).  
 Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IPC on MS Windows is not yet supported.
 
+[API Documentation](https://blabaere.github.io/scaproust/scaproust/index.html)
+
 ## Goals
 * Support for all of nanomsg's protocols.
 * Support for TCP and IPC transports.
