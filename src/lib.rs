@@ -5,6 +5,8 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 #![crate_name = "scaproust"]
+#![doc(html_root_url = "https://blabaere.github.io/scaproust/")]
+
 #![feature(box_syntax)]
 
 #[macro_use]
