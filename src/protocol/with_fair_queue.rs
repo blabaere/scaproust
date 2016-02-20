@@ -98,6 +98,8 @@ pub trait WithFairQueue : WithPipes {
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         if events.is_readable() {
             self.get_fair_queue_mut().activate(tok);
+        } else {
+            self.get_fair_queue_mut().deactivate(tok);
         }
 
         self.get_pipe_mut(&tok).map(|p| p.ready(event_loop, events));
