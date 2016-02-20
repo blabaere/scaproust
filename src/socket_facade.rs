@@ -27,6 +27,8 @@ pub struct SocketFacade {
 }
 
 impl SocketFacade {
+
+    #[doc(hidden)]
     pub fn new(
         id: SocketId,
         socket_type: SocketType, 
@@ -40,10 +42,12 @@ impl SocketFacade {
         }
     }
 
+    #[doc(hidden)]
     pub fn get_id(&self) -> SocketId {
         self.id
     }
 
+    #[doc(hidden)]
     pub fn get_socket_type(&self) -> SocketType {
         self.socket_type
     }
@@ -148,10 +152,12 @@ impl SocketFacade {
         self.set_option(SocketOption::RecvPriority(priority))
     }
 
+    #[doc(hidden)]
     pub fn matches(&self, other: &SocketFacade) -> bool {
         self.socket_type.matches(other.socket_type)
     }
 
+    #[doc(hidden)]
     pub fn forward_msg(&mut self, other: &mut SocketFacade) -> io::Result<()> {
         self.recv_msg().and_then(|msg| other.send_msg(msg))
     }
