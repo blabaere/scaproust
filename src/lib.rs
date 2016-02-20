@@ -20,6 +20,7 @@ mod event_loop_msg;
 mod session_facade;
 mod socket_facade;
 mod device_facade;
+mod endpoint_facade;
 mod session;
 mod socket;
 mod protocol;
@@ -33,6 +34,7 @@ mod probe;
 pub use session_facade::SessionFacade as Session;
 pub use socket_facade::SocketFacade as Socket;
 pub use device_facade::DeviceFacade as Device;
+pub use endpoint_facade::EndpointFacade as Endpoint;
 
 pub use global::SocketType;
 pub use event_loop_msg::SocketOption;

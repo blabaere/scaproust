@@ -82,6 +82,7 @@ impl Socket {
         match cmd {
             SocketCmdSignal::Connect(addr)  => self.connect(addr),
             SocketCmdSignal::Bind(addr)     => self.bind(addr),
+            SocketCmdSignal::Shutdown(tok)  => self.shutdown(event_loop, tok),
             SocketCmdSignal::SendMsg(msg)   => self.send(event_loop, msg),
             SocketCmdSignal::RecvMsg        => self.recv(event_loop),
             SocketCmdSignal::SetOption(opt) => self.set_option(event_loop, opt)
@@ -123,7 +124,7 @@ impl Socket {
 
         self.create_connection(&addr).
             and_then(|conn| self.on_connection_created(Some(addr), conn, None)).
-            map(|()| self.send_notify(SocketNotify::Connected)).
+            map(|t| self.send_notify(SocketNotify::Connected(t))).
             unwrap_or_else(|err| self.send_notify(SocketNotify::NotConnected(err)));
     }
 
@@ -132,10 +133,9 @@ impl Socket {
 
         let conn_addr = addr.clone();
         let reconn_addr = addr.clone();
-
-        self.create_connection(&addr).
+        let _ = self.create_connection(&addr).
             and_then(|conn| self.on_connection_created(Some(conn_addr), conn, Some(tok))).
-            unwrap_or_else(|_| self.schedule_reconnect(event_loop, tok, reconn_addr));
+            map_err(|_| self.schedule_reconnect(event_loop, tok, reconn_addr));
     }
 
     fn create_connection(&self, addr: &str) -> io::Result<Box<Connection>> {
@@ -149,7 +149,7 @@ impl Socket {
         transport.connect(specific_addr)
     }
 
-    fn on_connection_created(&mut self, addr: Option<String>, conn: Box<Connection>, token: Option<mio::Token>) -> io::Result<()> {
+    fn on_connection_created(&mut self, addr: Option<String>, conn: Box<Connection>, token: Option<mio::Token>) -> io::Result<mio::Token> {
         debug!("[{:?}] on_connection_created: '{:?}'", self.id, addr);
         let token = token.unwrap_or_else(|| self.next_token());
         let protocol_ids = (self.protocol.id(), self.protocol.peer_id());
@@ -157,7 +157,9 @@ impl Socket {
         let sig_sender = self.sig_sender.clone();
         let pipe = Pipe::new(token, addr, protocol_ids, priorities, conn, sig_sender);
 
-        self.protocol.add_pipe(token, pipe).map(|_|self.send_event(SocketEvtSignal::PipeAdded(token)))
+        self.protocol.add_pipe(token, pipe).
+            map(|_|self.send_event(SocketEvtSignal::PipeAdded(token))).
+            map(|()| token)
     }
 
     pub fn bind(&mut self, addr: String) {
@@ -165,16 +167,16 @@ impl Socket {
 
         self.create_listener(&addr).
             map(|lst| self.on_listener_created(addr, lst, None)).
-            map(|()| self.send_notify(SocketNotify::Bound)).
+            map(|t| self.send_notify(SocketNotify::Bound(t))).
             unwrap_or_else(|err| self.send_notify(SocketNotify::NotBound(err)));
     }
 
     pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
         debug!("[{:?}] acceptor [{:?}] rebind: '{}'", self.id, tok.as_usize(), addr);
 
-        self.create_listener(&addr).
+        let _ = self.create_listener(&addr).
             map(|lst| self.on_listener_created(addr.clone(), lst, Some(tok))).
-            unwrap_or_else(|_| self.schedule_rebind(event_loop, tok, addr.clone()));
+            map_err(|_| self.schedule_rebind(event_loop, tok, addr.clone()));
     }
 
     fn create_listener(&self, addr: &str) -> io::Result<Box<Listener>> {
@@ -186,12 +188,14 @@ impl Socket {
         transport.bind(specific_addr)
     }
 
-    fn on_listener_created(&mut self, addr: String, listener: Box<Listener>, tok: Option<mio::Token>) {
+    fn on_listener_created(&mut self, addr: String, listener: Box<Listener>, tok: Option<mio::Token>) -> mio::Token {
         let tok = tok.unwrap_or_else(|| self.next_token());
         let acceptor = Acceptor::new(tok, addr, listener);
 
         self.add_acceptor(tok, acceptor);
         self.send_event(SocketEvtSignal::AcceptorAdded(tok));
+
+        tok
     }
 
     fn add_acceptor(&mut self, token: mio::Token, acceptor: Acceptor) {
@@ -200,6 +204,22 @@ impl Socket {
 
     fn remove_acceptor(&mut self, token: mio::Token) -> Option<Acceptor> {
         self.acceptors.remove(&token)
+    }
+
+    fn shutdown(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        if self.acceptors.contains_key(&tok) {
+            self.shutdown_acceptor(event_loop, tok)
+        } else {
+            self.shutdown_pipe(event_loop, tok)
+        }
+    }
+
+    fn shutdown_acceptor(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.remove_acceptor(tok).map(|mut a| a.close(event_loop));
+    }
+
+    fn shutdown_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.protocol.remove_pipe(tok).map(|mut p| p.close(event_loop));
     }
 
     pub fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {

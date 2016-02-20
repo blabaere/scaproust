@@ -8,11 +8,13 @@ use std::io;
 use std::sync::mpsc::Receiver;
 use std::time;
 
+use mio;
 use mio::Sender;
 
 use global::*;
 use event_loop_msg::*;
 use Message;
+use endpoint_facade::EndpointFacade;
 
 pub struct SocketFacade {
     id: SocketId,
@@ -53,30 +55,34 @@ impl SocketFacade {
         self.cmd_sender.send(loop_sig).map_err(|e| convert_notify_err(e))
     }
 
-    pub fn connect(&mut self, addr: &str) -> Result<(), io::Error> {
+    pub fn connect(&mut self, addr: &str) -> Result<EndpointFacade, io::Error> {
         let cmd = SocketCmdSignal::Connect(addr.to_owned());
         
         try!(self.send_cmd(cmd));
 
         match self.evt_receiver.recv() {
-            Ok(SocketNotify::Connected)       => Ok(()),
+            Ok(SocketNotify::Connected(t))    => Ok(self.new_endpoint(t)),
             Ok(SocketNotify::NotConnected(e)) => Err(e),
             Ok(_)                             => Err(other_io_error("unexpected evt")),
             Err(_)                            => Err(other_io_error("evt channel closed"))
         }
     }
 
-    pub fn bind(&mut self, addr: &str) -> Result<(), io::Error> {
+    pub fn bind(&mut self, addr: &str) -> Result<EndpointFacade, io::Error> {
         let cmd = SocketCmdSignal::Bind(addr.to_owned());
         
         try!(self.send_cmd(cmd));
 
         match self.evt_receiver.recv() {
-            Ok(SocketNotify::Bound)       => Ok(()),
+            Ok(SocketNotify::Bound(t))    => Ok(self.new_endpoint(t)),
             Ok(SocketNotify::NotBound(e)) => Err(e),
-            Ok(_)                      => Err(other_io_error("unexpected evt")),
-            Err(_)                     => Err(other_io_error("evt channel closed"))
+            Ok(_)                         => Err(other_io_error("unexpected evt")),
+            Err(_)                        => Err(other_io_error("evt channel closed"))
         }
+    }
+
+    fn new_endpoint(&self, tok: mio::Token) -> EndpointFacade {
+        EndpointFacade::new(self.id, tok, self.cmd_sender.clone())
     }
 
     pub fn send(&mut self, buffer: Vec<u8>) -> Result<(), io::Error> {

@@ -803,3 +803,52 @@ fn load_balancing_chooses_the_highest_priority() {
 
     assert_eq!(vec![65, 66, 67], received)
 }
+
+#[test]
+fn can_shutdown_connect_endpoint() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut server = session.create_socket(SocketType::Pub).unwrap();
+    let mut client1 = session.create_socket(SocketType::Sub).unwrap();
+    let mut client2 = session.create_socket(SocketType::Sub).unwrap();
+    let mut client3 = session.create_socket(SocketType::Sub).unwrap();
+    let timeout = time::Duration::from_millis(50);
+
+    server.bind("tcp://127.0.0.1:5488").unwrap();
+    let ep1 = client1.connect("tcp://127.0.0.1:5488").unwrap();
+    client1.set_recv_timeout(timeout).unwrap();
+    client1.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
+    let ep2 = client2.connect("tcp://127.0.0.1:5488").unwrap();
+    client2.set_recv_timeout(timeout).unwrap();
+    client2.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
+    let ep3 = client3.connect("tcp://127.0.0.1:5488").unwrap();
+    client3.set_recv_timeout(timeout).unwrap();
+    client3.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
+
+    thread::sleep(time::Duration::from_millis(250));
+
+    server.send(vec![65, 66, 67]).unwrap();
+
+    let received_a = client1.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received_a);
+
+    let received_b = client2.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received_b);
+
+    let received_c = client3.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received_c);
+
+    ep1.shutdown();
+    ep3.shutdown();
+
+    server.send(vec![65, 66, 88]).unwrap();
+
+    let not_received_a = client1.recv().unwrap_err();
+    assert_eq!(io::ErrorKind::TimedOut, not_received_a.kind());
+
+    let received_d = client2.recv().unwrap();
+    assert_eq!(vec![65, 66, 88], received_d);
+
+    let not_received_b = client3.recv().unwrap_err();
+    assert_eq!(io::ErrorKind::TimedOut, not_received_b.kind());
+}

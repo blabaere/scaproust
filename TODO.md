@@ -23,7 +23,6 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 - Use a pool for payloads and buffers (if any)
 
 ### Features:
-- Have Socket::connect & bind return an Endpoint that can be shut down
 - Implement nanocat
 - Expose the event loop configuration ?
 

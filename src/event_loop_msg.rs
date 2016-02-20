@@ -72,7 +72,8 @@ pub enum SocketCmdSignal {
     Bind(String),
     SendMsg(Message),
     RecvMsg,
-    SetOption(SocketOption)
+    SetOption(SocketOption),
+    Shutdown(mio::Token)
 }
 
 impl SocketCmdSignal {
@@ -82,7 +83,8 @@ impl SocketCmdSignal {
             SocketCmdSignal::Bind(_)        => "Bind",
             SocketCmdSignal::SendMsg(_)     => "SendMsg",
             SocketCmdSignal::RecvMsg        => "RecvMsg",
-            SocketCmdSignal::SetOption(_)   => "SetOption"
+            SocketCmdSignal::SetOption(_)   => "SetOption",
+            SocketCmdSignal::Shutdown(_)    => "Shutdown"
         }
     }
 }
@@ -182,9 +184,9 @@ pub enum SessionNotify {
 
 /// Notifications sent by the *backend* socket as reply to the commands sent by the facade socket.
 pub enum SocketNotify {
-    Connected,
+    Connected(mio::Token),
     NotConnected(io::Error),
-    Bound,
+    Bound(mio::Token),
     NotBound(io::Error),
     MsgSent,
     MsgNotSent(io::Error),
