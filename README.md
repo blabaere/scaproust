@@ -58,8 +58,8 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
   - [x] Recv timeout
   - [ ] Reconnect interval
   - [ ] Reconnect interval max
-  - [ ] Send priority
-  - [ ] Recv priority
+  - [x] Send priority
+  - [x] Recv priority
   - [ ] IPV4 only
   - [ ] Socket name
 
