@@ -57,19 +57,11 @@ pub trait WithLoadBalancing : WithPipes {
         self.get_load_balancer().get() == Some(tok)
     }
 
-    #[cfg(not(windows))]
     fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
         self.get_active_pipe().map(|p| p.resync_readiness(event_loop));
         self.get_load_balancer_mut().advance();
     }
 
-    #[cfg(windows)]
-    fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.get_active_pipe().map(|p| p.resync_readiness(event_loop));
-        self.get_load_balancer_mut().deactivate_and_advance();
-    }
-
-    #[cfg(not(windows))]
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         if events.is_writable() {
             self.get_load_balancer_mut().activate(tok);
@@ -77,15 +69,6 @@ pub trait WithLoadBalancing : WithPipes {
             self.get_load_balancer_mut().deactivate(tok);
         }
         
-        self.get_pipe_mut(&tok).map(|p| p.ready(event_loop, events));
-    }
-
-    #[cfg(windows)]
-    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        if events.is_writable() {
-            self.get_load_balancer_mut().activate(tok);
-        }
-
         self.get_pipe_mut(&tok).map(|p| p.ready(event_loop, events));
     }
 

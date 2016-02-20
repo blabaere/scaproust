@@ -70,31 +70,11 @@ pub trait WithFairQueue : WithPipes {
         self.get_fair_queue().get() == Some(tok)
     }
 
-    #[cfg(not(windows))]
     fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
         self.get_active_pipe_mut().map(|p| p.resync_readiness(event_loop));
         self.get_fair_queue_mut().advance();
     }
 
-    #[cfg(windows)]
-    fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.get_active_pipe_mut().map(|p| p.resync_readiness(event_loop));
-        //self.get_fair_queue_mut().deactivate_and_advance();
-        self.get_fair_queue_mut().advance();
-    }
-
-    #[cfg(not(windows))]
-    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        if events.is_readable() {
-            self.get_fair_queue_mut().activate(tok);
-        } else {
-            self.get_fair_queue_mut().deactivate(tok);
-        }
-
-        self.get_pipe_mut(&tok).map(|p| p.ready(event_loop, events));
-    }
-
-    #[cfg(windows)]
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         if events.is_readable() {
             self.get_fair_queue_mut().activate(tok);
