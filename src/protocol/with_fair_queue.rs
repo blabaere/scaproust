@@ -79,7 +79,8 @@ pub trait WithFairQueue : WithPipes {
     #[cfg(windows)]
     fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
         self.get_active_pipe_mut().map(|p| p.resync_readiness(event_loop));
-        self.get_fair_queue_mut().deactivate_and_advance();
+        //self.get_fair_queue_mut().deactivate_and_advance();
+        self.get_fair_queue_mut().advance();
     }
 
     #[cfg(not(windows))]

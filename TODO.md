@@ -15,7 +15,6 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 ### General:
 - write documentation
 - adds embedded code example to the front page
-- setup documentation generation and site and github pages
 
 ### Refactors:
 - Rename session into something less oriented ? (context, environment ...)
