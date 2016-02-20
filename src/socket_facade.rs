@@ -134,6 +134,14 @@ impl SocketFacade {
         self.set_option(SocketOption::RecvTimeout(timeout))
     }
 
+    pub fn set_send_priority(&mut self, priority: u8) -> io::Result<()> {
+        self.set_option(SocketOption::SendPriority(priority))
+    }
+
+    pub fn set_recv_priority(&mut self, priority: u8) -> io::Result<()> {
+        self.set_option(SocketOption::RecvPriority(priority))
+    }
+
     pub fn matches(&self, other: &SocketFacade) -> bool {
         self.socket_type.matches(other.socket_type)
     }

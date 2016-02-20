@@ -68,7 +68,7 @@ pub trait Protocol {
         self.get_type().peer().id()
     }
 
-    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe) -> io::Result<()>;
+    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe, ) -> io::Result<()>;
     fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
 
     fn open_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token);

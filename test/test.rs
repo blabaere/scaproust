@@ -776,3 +776,30 @@ fn sub_can_skip_crap_and_keep_crop() {
     assert_eq!(vec![65, 66, 67], received);
 }
 
+#[test]
+fn load_balancing_chooses_the_highest_priority() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut push = session.create_socket(SocketType::Push).unwrap();
+    let mut pull1 = session.create_socket(SocketType::Pull).unwrap();
+    let mut pull2 = session.create_socket(SocketType::Pull).unwrap();
+    let timeout = time::Duration::from_millis(50);
+
+    pull1.bind("tcp://127.0.0.1:5486").unwrap();
+    pull2.bind("tcp://127.0.0.1:5487").unwrap();
+    pull1.set_recv_timeout(timeout).unwrap();
+    pull2.set_recv_timeout(timeout).unwrap();
+
+    push.set_send_priority(14).unwrap();
+    push.connect("tcp://127.0.0.1:5486").unwrap();
+    push.set_send_priority(2).unwrap();
+    push.connect("tcp://127.0.0.1:5487").unwrap();
+
+    thread::sleep(timeout);
+
+    let sent = vec![65, 66, 67];
+    push.send(sent).unwrap();
+    let received = pull2.recv().unwrap();
+
+    assert_eq!(vec![65, 66, 67], received)
+}

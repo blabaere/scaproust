@@ -50,26 +50,10 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
   - [x] IPC (*nix only)
   - [ ] INPROC  
 
-- [x] Basic features
-  - [x] Send (buffer only)
-  - [x] Recv (buffer only)
-  - [x] Connect 
-  - [x] Reconnect on failure
-  - [x] Bind
-  - [x] Rebind on failure
-  - [x] Device
-  - [x] Logs
-
-- [ ] Advanced features
-  - [x] Fair queuing
-  - [x] Load balancing
-  - [ ] Send priority
-  - [ ] Recv priority
-
 - [ ] Socket options
   - [ ] Linger
-  - [ ] Send buffer size
-  - [ ] Recv buffer size
+  - [x] Send buffer size
+  - [x] Recv buffer size
   - [x] Send timeout
   - [x] Recv timeout
   - [ ] Reconnect interval
@@ -80,13 +64,13 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
   - [ ] Socket name
 
 - [ ] Protocol options
-    - [ ] REQ resend interval
-    - [x] SURVEYOR deadline
-    - [x] SUB subscribe
-    - [x] SUB unsubscribe
+  - [ ] REQ resend interval
+  - [x] SURVEYOR deadline
+  - [x] SUB subscribe
+  - [x] SUB unsubscribe
 
 - [ ] Transport options
-    - [ ] TCP no delay
+  - [ ] TCP no delay
 
 ## License
 

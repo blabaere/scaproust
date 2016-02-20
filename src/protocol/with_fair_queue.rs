@@ -39,7 +39,9 @@ pub trait WithFairQueue : WithPipes {
     }
 
     fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.get_fair_queue_mut().insert(tok, 8);
+        let priority = self.get_pipe(&tok).map(|p| p.get_recv_priority()).unwrap_or(8);
+
+        self.get_fair_queue_mut().insert(tok, priority);
         self.get_pipe_mut(&tok).map(|p| p.on_open_ack(event_loop));
     }
 

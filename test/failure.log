@@ -1,0 +1,197 @@
+[00:07:17] test check_readable_pipe_is_used_for_recv_when_receiving_two_messages_in_one_event ... 
+[00:07:17] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:17] DEBUG:scaproust::session: session handle_cmd Session
+[00:07:17] DEBUG:scaproust::session: session handle_session_cmd CreateSocket
+[00:07:17] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:17] DEBUG:scaproust::session: session handle_cmd Session
+[00:07:17] DEBUG:scaproust::session: session handle_session_cmd CreateSocket
+[00:07:17] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:17] DEBUG:scaproust::session: session handle_cmd Socket
+[00:07:17] DEBUG:scaproust::session: session handle_socket_cmd Bind
+[00:07:17] DEBUG:scaproust::socket: [0] handle_cmd Bind
+[00:07:17] DEBUG:scaproust::socket: [0] bind: 'tcp://127.0.0.1:5474'
+[00:07:17] DEBUG:scaproust::session: session received a Evt signal
+[00:07:17] DEBUG:scaproust::session: session handle_evt Socket
+[00:07:17] DEBUG:scaproust::session: session handle_socket_evt AcceptorAdded
+[00:07:17] DEBUG:scaproust::socket: [0] handle_evt AcceptorAdded
+[00:07:17] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:17] DEBUG:scaproust::session: session handle_cmd Socket
+[00:07:17] DEBUG:scaproust::session: session handle_socket_cmd Connect
+[00:07:17] DEBUG:scaproust::socket: [1] handle_cmd Connect
+[00:07:17] DEBUG:scaproust::socket: [1] connect: 'tcp://127.0.0.1:5474'
+[00:07:17] DEBUG:scaproust::socket: [1] create_connection: 'tcp://127.0.0.1:5474'
+[00:07:17] DEBUG:scaproust::socket: [1] on_connection_created: 'Some("tcp://127.0.0.1:5474")'
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: session received a Evt signal
+[00:07:17] DEBUG:scaproust::session: session handle_evt Socket
+[00:07:17] DEBUG:scaproust::session: session handle_socket_evt PipeAdded
+[00:07:17] DEBUG:scaproust::socket: [1] handle_evt PipeAdded
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Initial' to 'Send handshake'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:17] DEBUG:scaproust::session: session handle_cmd Socket
+[00:07:17] DEBUG:scaproust::session: session handle_socket_cmd SetOption
+[00:07:17] DEBUG:scaproust::socket: [1] handle_cmd SetOption
+[00:07:17] DEBUG:scaproust::session: ready: [2] 'Readable'
+[00:07:17] DEBUG:scaproust::socket: [0] acceptor [2] ready: 'Readable'
+[00:07:17] DEBUG:scaproust::socket: [0] on_connection_created: 'None'
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: ready: [3] 'Writable'
+[00:07:17] DEBUG:scaproust::socket: [1] pipe [3] ready: 'Writable'
+[00:07:17] DEBUG:scaproust::pipe: [3] handshake sent.
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Send handshake' to 'Recv handshake'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:17] DEBUG:scaproust::session: session handle_cmd Socket
+[00:07:17] DEBUG:scaproust::session: session handle_socket_cmd SetOption
+[00:07:17] DEBUG:scaproust::socket: [0] handle_cmd SetOption
+[00:07:17] DEBUG:scaproust::session: session received a Evt signal
+[00:07:17] DEBUG:scaproust::session: session handle_evt Socket
+[00:07:17] DEBUG:scaproust::session: session handle_socket_evt PipeAdded
+[00:07:17] DEBUG:scaproust::socket: [0] handle_evt PipeAdded
+[00:07:17] DEBUG:scaproust::pipe: [4] switch from 'Initial' to 'Send handshake'.
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: ready: [4] 'Writable'
+[00:07:17] DEBUG:scaproust::socket: [0] pipe [4] ready: 'Writable'
+[00:07:17] DEBUG:scaproust::pipe: [4] handshake sent.
+[00:07:17] DEBUG:scaproust::pipe: [4] switch from 'Send handshake' to 'Recv handshake'.
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: ready: [4] 'Readable'
+[00:07:17] DEBUG:scaproust::socket: [0] pipe [4] ready: 'Readable'
+[00:07:17] DEBUG:scaproust::pipe: [4] handshake received.
+[00:07:17] DEBUG:scaproust::pipe: [4] switch from 'Recv handshake' to 'Handshaked'.
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: ready: [3] 'Readable'
+[00:07:17] DEBUG:scaproust::socket: [1] pipe [3] ready: 'Readable'
+[00:07:17] DEBUG:scaproust::pipe: [3] handshake received.
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Recv handshake' to 'Handshaked'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: session received a Evt signal
+[00:07:17] DEBUG:scaproust::session: session handle_evt Pipe
+[00:07:17] DEBUG:scaproust::session: session handle_pipe_evt Opened
+[00:07:17] DEBUG:scaproust::socket: [0] on_pipe_evt [4]: Opened
+[00:07:17] DEBUG:scaproust::pipe: [4] switch from 'Handshaked' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: session received a Evt signal
+[00:07:17] DEBUG:scaproust::session: session handle_evt Pipe
+[00:07:17] DEBUG:scaproust::session: session handle_pipe_evt Opened
+[00:07:17] DEBUG:scaproust::socket: [1] on_pipe_evt [3]: Opened
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Handshaked' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: ready: [4] 'Writable'
+[00:07:17] DEBUG:scaproust::socket: [0] pipe [4] ready: 'Writable'
+[00:07:17] DEBUG:scaproust::pipe: [4] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: ready: [3] 'Writable'
+[00:07:17] DEBUG:scaproust::socket: [1] pipe [3] ready: 'Writable'
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:17] DEBUG:scaproust::session: session handle_cmd Socket
+[00:07:17] DEBUG:scaproust::session: session handle_socket_cmd SendMsg
+[00:07:17] DEBUG:scaproust::socket: [1] handle_cmd SendMsg
+[00:07:17] DEBUG:scaproust::socket: [1] send
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Send'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Sending'.
+[00:07:17] DEBUG:scaproust::session: ready: [4] 'Readable'
+[00:07:17] DEBUG:scaproust::socket: [0] pipe [4] ready: 'Readable'
+[00:07:17] DEBUG:scaproust::pipe: [4] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: ready: [3] 'Writable'
+[00:07:17] DEBUG:scaproust::socket: [1] pipe [3] ready: 'Writable'
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Send' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Sending' to 'Sending'.
+[00:07:17] DEBUG:scaproust::session: ready: [3] 'Writable'
+[00:07:17] DEBUG:scaproust::socket: [1] pipe [3] ready: 'Writable'
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Sending' to 'Sending'.
+[00:07:17] DEBUG:scaproust::session: session received a Evt signal
+[00:07:17] DEBUG:scaproust::session: session handle_evt Pipe
+[00:07:17] DEBUG:scaproust::session: session handle_pipe_evt MsgSnd
+[00:07:17] DEBUG:scaproust::socket: [1] on_pipe_evt [3]: MsgSnd
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Sending' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: ready: [3] 'Writable'
+[00:07:17] DEBUG:scaproust::socket: [1] pipe [3] ready: 'Writable'
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:17] DEBUG:scaproust::session: session handle_cmd Socket
+[00:07:17] DEBUG:scaproust::session: session handle_socket_cmd SendMsg
+[00:07:17] DEBUG:scaproust::socket: [1] handle_cmd SendMsg
+[00:07:17] DEBUG:scaproust::socket: [1] send
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Send'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Sending'.
+[00:07:17] DEBUG:scaproust::session: ready: [3] 'Writable'
+[00:07:17] DEBUG:scaproust::socket: [1] pipe [3] ready: 'Writable'
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Send' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Sending' to 'Sending'.
+[00:07:17] DEBUG:scaproust::session: ready: [3] 'Writable'
+[00:07:17] DEBUG:scaproust::socket: [1] pipe [3] ready: 'Writable'
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Sending' to 'Sending'.
+[00:07:17] DEBUG:scaproust::session: session received a Evt signal
+[00:07:17] DEBUG:scaproust::session: session handle_evt Pipe
+[00:07:17] DEBUG:scaproust::session: session handle_pipe_evt MsgSnd
+[00:07:17] DEBUG:scaproust::socket: [1] on_pipe_evt [3]: MsgSnd
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Sending' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: ready: [3] 'Writable'
+[00:07:17] DEBUG:scaproust::socket: [1] pipe [3] ready: 'Writable'
+[00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Idle'.
+
+
+[00:07:17] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:17] DEBUG:scaproust::session: session handle_cmd Socket
+[00:07:17] DEBUG:scaproust::session: session handle_socket_cmd RecvMsg
+[00:07:17] DEBUG:scaproust::socket: [0] handle_cmd RecvMsg
+[00:07:17] DEBUG:scaproust::socket: [0] recv
+[00:07:17] DEBUG:scaproust::pipe: [4] switch from 'Idle' to 'Recv'.
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Idle' to 'Receiving'.
+[00:07:17] DEBUG:scaproust::session: ready: [4] 'Readable'
+[00:07:17] DEBUG:scaproust::socket: [0] pipe [4] ready: 'Readable'
+[00:07:17] DEBUG:scaproust::pipe: [4] switch from 'Recv' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Receiving' to 'Receiving'.
+[00:07:17] DEBUG:scaproust::session: session received a Evt signal
+[00:07:17] DEBUG:scaproust::session: session handle_evt Pipe
+[00:07:17] DEBUG:scaproust::session: session handle_pipe_evt MsgRcv
+[00:07:17] DEBUG:scaproust::socket: [0] on_pipe_evt [4]: MsgRcv
+[00:07:17] DEBUG:scaproust::pipe: [4] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Receiving' to 'Idle'.
+[00:07:17] DEBUG:scaproust::session: ready: [4] 'Writable'
+[00:07:17] DEBUG:scaproust::socket: [0] pipe [4] ready: 'Writable'
+[00:07:17] DEBUG:scaproust::pipe: [4] switch from 'Idle' to 'Idle'.
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Idle' to 'Idle'.
+
+
+[00:07:17] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:17] DEBUG:scaproust::session: session handle_cmd Socket
+[00:07:17] DEBUG:scaproust::session: session handle_socket_cmd RecvMsg
+[00:07:17] DEBUG:scaproust::socket: [0] handle_cmd RecvMsg
+[00:07:17] DEBUG:scaproust::socket: [0] recv
+[00:07:17] DEBUG:scaproust::protocol::pull: [0] switch from 'Idle' to 'RecvOnHold'.
+[00:07:18] DEBUG:scaproust::socket: [0] on_recv_timeout
+[00:07:18] DEBUG:scaproust::protocol::pull: [0] switch from 'RecvOnHold' to 'Idle'.
+[00:07:18] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:18] DEBUG:scaproust::session: session handle_cmd Session
+[00:07:18] DEBUG:scaproust::session: session handle_session_cmd DestroySocket
+[00:07:18] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Dead'.
+[00:07:18] DEBUG:scaproust::session: session received a Cmd signal
+[00:07:18] DEBUG:scaproust::session: session handle_cmd Session
+[00:07:18] DEBUG:scaproust::session: session handle_session_cmd DestroySocket
+[00:07:18] FAILED
+[00:07:24] failures:
+[00:07:24] 
+[00:07:24] ---- check_readable_pipe_is_used_for_recv_when_receiving_two_messages_in_one_event stdout ----
+[00:07:24] 	thread 'check_readable_pipe_is_used_for_recv_when_receiving_two_messages_in_one_event' panicked at 'Second pull failed: Error { repr: Custom(Custom { kind: TimedOut, error: StringError("recv timeout reached") }) }', ../src/libcore\result.rs:746
+[00:07:24] note: Run with `RUST_BACKTRACE=1` for a backtrace.
+[00:07:24] 
+[00:07:24] 
+[00:07:24] failures:
+[00:07:24]     check_readable_pipe_is_used_for_recv_when_receiving_two_messages_in_one_event
+[00:07:24] 
+[00:07:24] test result: FAILED. 24 passed; 1 failed; 0 ignored; 0 measured
+[00:07:24] 
+[00:07:24] 
+[00:07:24] Command exited with code 101

@@ -91,6 +91,8 @@ pub enum SocketOption {
     DeviceItem(bool),
     SendTimeout(time::Duration),
     RecvTimeout(time::Duration),
+    SendPriority(u8),
+    RecvPriority(u8),
     Subscribe(String),
     Unsubscribe(String),
     SurveyDeadline(time::Duration),

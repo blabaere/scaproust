@@ -25,6 +25,8 @@ use recv;
 pub struct Pipe {
     token: mio::Token,
     addr: Option<String>,
+    send_priority: u8,
+    recv_priority: u8,
     state: Option<Box<PipeState>>
 }
 
@@ -34,10 +36,12 @@ impl Pipe {
         tok: mio::Token,
         addr: Option<String>,
         ids: (u16, u16),
+        priorities: (u8, u8),
         conn: Box<Connection>,
         sig_tx: mio::Sender<EventLoopSignal>) -> Pipe {
 
         let (p_id, p_peer_id) = ids;
+        let (send_prio, recv_prio) = priorities;
         let state = Initial {
             body : PipeBody {
                 token: tok,
@@ -51,6 +55,8 @@ impl Pipe {
         Pipe {
             token: tok,
             addr: addr,
+            send_priority: send_prio,
+            recv_priority: recv_prio,
             state: Some(box state)
         }
     }
@@ -113,6 +119,14 @@ impl Pipe {
 
     pub fn close(&mut self, event_loop: &mut EventLoop) {
         self.apply(|s| s.close(event_loop));
+    }
+
+    pub fn get_send_priority(&self) -> u8 {
+        self.send_priority
+    }
+
+    pub fn get_recv_priority(&self) -> u8 {
+        self.recv_priority
     }
 
     pub fn addr(self) -> Option<String> {

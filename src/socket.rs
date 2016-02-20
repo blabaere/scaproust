@@ -153,8 +153,9 @@ impl Socket {
         debug!("[{:?}] on_connection_created: '{:?}'", self.id, addr);
         let token = token.unwrap_or_else(|| self.next_token());
         let protocol_ids = (self.protocol.id(), self.protocol.peer_id());
+        let priorities = self.options.priorities();
         let sig_sender = self.sig_sender.clone();
-        let pipe = Pipe::new(token, addr, protocol_ids, conn, sig_sender);
+        let pipe = Pipe::new(token, addr, protocol_ids, priorities, conn, sig_sender);
 
         self.protocol.add_pipe(token, pipe).map(|_|self.send_event(SocketEvtSignal::PipeAdded(token)))
     }
@@ -319,6 +320,8 @@ impl Socket {
         let set_res = match option {
             SocketOption::SendTimeout(timeout) => self.options.set_send_timeout(timeout),
             SocketOption::RecvTimeout(timeout) => self.options.set_recv_timeout(timeout),
+            SocketOption::SendPriority(priority) => self.options.set_send_priority(priority),
+            SocketOption::RecvPriority(priority) => self.options.set_recv_priority(priority),
             SocketOption::DeviceItem(value)    => self.set_device_item(value),
             o @ _ => self.protocol.set_option(event_loop, o)
         };
@@ -352,6 +355,8 @@ impl Socket {
 struct SocketImplOptions {
     pub send_timeout_ms: Option<u64>,
     pub recv_timeout_ms: Option<u64>,
+    pub send_priority: u8,
+    pub recv_priority: u8,
     pub is_device_item: bool
 }
 
@@ -360,6 +365,8 @@ impl SocketImplOptions {
         SocketImplOptions {
             send_timeout_ms: None,
             recv_timeout_ms: None,
+            send_priority: 8,
+            recv_priority: 8,
             is_device_item: false
         }
     }
@@ -376,9 +383,35 @@ impl SocketImplOptions {
         Ok(())
     }
 
+    fn set_send_priority(&mut self, priority: u8) -> io::Result<()> {
+        if is_valid_priority(priority) {
+            self.send_priority = priority;
+            Ok(())
+        } else {
+            Err(invalid_data_io_error("Invalid priority"))
+        }
+    }
+
+    fn priorities(&self) -> (u8, u8) {
+        (self.send_priority, self.recv_priority)
+    }
+
+    fn set_recv_priority(&mut self, priority: u8) -> io::Result<()> {
+        if is_valid_priority(priority) {
+            self.recv_priority = priority;
+            Ok(())
+        } else {
+            Err(invalid_data_io_error("Invalid priority"))
+        }
+    }
+
     fn set_device_item(&mut self, value: bool) {
         self.is_device_item = value;
     }
+}
+
+fn is_valid_priority(priority: u8) -> bool {
+    priority >= 1 && priority <=16
 }
 
 fn duration_to_timeout(duration: time::Duration) -> Option<u64> {
