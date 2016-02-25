@@ -527,14 +527,14 @@ fn check_readable_pipe_is_used_for_recv_when_receiving_two_messages_in_one_event
 
     thread::sleep(time::Duration::from_millis(250));
 
-    push.send(vec![65, 66, 67]).expect("First push failed");
-    push.send(vec![67, 66, 65]).expect("Second push failed");
+    push.send(vec![65; 4096]).expect("First push failed");
+    push.send(vec![67; 4096]).expect("Second push failed");
 
     let received1 = pull.recv().expect("First pull failed");
-    assert_eq!(vec![65, 66, 67], received1);
+    assert_eq!(vec![65; 4096], received1);
 
     let received2 = pull.recv().expect("Second pull failed");
-    assert_eq!(vec![67, 66, 65], received2);
+    assert_eq!(vec![67; 4096], received2);
 }
 
 #[test]

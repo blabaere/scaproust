@@ -86,6 +86,7 @@
 [00:07:17] DEBUG:scaproust::socket: [1] pipe [3] ready: 'Writable'
 [00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Idle'.
 [00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Idle'.
+
 [00:07:17] DEBUG:scaproust::session: session received a Cmd signal
 [00:07:17] DEBUG:scaproust::session: session handle_cmd Socket
 [00:07:17] DEBUG:scaproust::session: session handle_socket_cmd SendMsg
@@ -115,6 +116,7 @@
 [00:07:17] DEBUG:scaproust::socket: [1] pipe [3] ready: 'Writable'
 [00:07:17] DEBUG:scaproust::pipe: [3] switch from 'Idle' to 'Idle'.
 [00:07:17] DEBUG:scaproust::protocol::push: [1] switch from 'Idle' to 'Idle'.
+
 [00:07:17] DEBUG:scaproust::session: session received a Cmd signal
 [00:07:17] DEBUG:scaproust::session: session handle_cmd Socket
 [00:07:17] DEBUG:scaproust::session: session handle_socket_cmd SendMsg
