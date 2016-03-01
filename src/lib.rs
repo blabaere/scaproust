@@ -15,14 +15,15 @@
 //!
 //! # Usage
 //!
-//! First, create a [Session](struct.SessionFacade.html) 
-//! (this will start the thread performing the actual I/O operations).
-//! Then, use the session to create some [Socket](struct.SocketFacade.html), 
-//! specifying the communication pattern with [SocketType](enum.SocketType.html).
-//! If you want, you can now set some [SocketOption](enum.SocketOption.html), like the timeouts.
-//! To plug the sockets, use the 'connect' and `bind` socket methods.
-//! Finally, use the socket methods `send` and `recv` to exchange messages between sockets.
-//! When in doubts, refer to the [nanomsg documentation](http://nanomsg.org/v0.8/nanomsg.7.html).
+//! First, create a [Session](struct.Session.html) 
+//! (this will start the thread performing the actual I/O operations).  
+//! Then, use the session to create some [Socket](struct.Socket.html), 
+//! specifying the communication pattern with [SocketType](enum.SocketType.html).  
+//! If you want, you can now [set some options](struct.Socket.html#method.set_option), like the timeouts.
+//! To plug the sockets, use the [connect](struct.Socket.html#method.connect) and [bind](struct.Socket.html#method.bind) socket methods.  
+//! Finally, use the socket methods [send](struct.Socket.html#method.send) and
+//! [recv](struct.Socket.html#method.recv) to exchange messages between sockets.  
+//! When in doubts, refer to the [nanomsg documentation](http://nanomsg.org/v0.8/nanomsg.7.html).  
 //!
 //! # Example
 //!
