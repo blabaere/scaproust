@@ -18,6 +18,7 @@ use device_facade::*;
 use EventLoop;
 use session::Session;
 
+/// This is the entry point of scaproust API.
 pub struct SessionFacade {
     cmd_sender: mio::Sender<EventLoopSignal>,
     evt_receiver: mpsc::Receiver<SessionNotify>
@@ -62,6 +63,11 @@ impl SessionFacade {
         self.cmd_sender.send(loop_sig).map_err(|e| convert_notify_err(e))
     }
 
+    /// Creates a socket of the specified type, which in turn determines its exact semantics.
+    /// See [SocketType](enum.SocketType.html) to get the list of available socket types.
+    /// The newly created socket is initially not associated with any endpoints.
+    /// In order to establish a message flow at least one endpoint has to be added to the socket 
+    /// using [connect](struct.Socket.html#method.connect) and [bind](struct.Socket.html#method.bind) methods.
     pub fn create_socket(&self, socket_type: SocketType) -> io::Result<SocketFacade> {
         let cmd = SessionCmdSignal::CreateSocket(socket_type);
 
