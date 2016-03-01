@@ -59,6 +59,13 @@ impl SocketFacade {
         self.cmd_sender.send(loop_sig).map_err(|e| convert_notify_err(e))
     }
 
+    /// Adds a remote endpoint to the socket.
+    /// The library would then try to connect to the specified remote endpoint.
+    /// The transport specifies the underlying transport protocol to use.
+    /// The meaning of the address part is specific to the underlying transport protocol.
+    /// Note that bind and connect may be called multiple times on the same socket,
+    /// thus allowing the socket to communicate with multiple heterogeneous endpoints.
+    /// On success, returns an [Endpoint](struct.Endpoint.html) that can be later used to remove the endpoint from the socket.
     pub fn connect(&mut self, addr: &str) -> Result<EndpointFacade, io::Error> {
         let cmd = SocketCmdSignal::Connect(addr.to_owned());
         
@@ -72,6 +79,13 @@ impl SocketFacade {
         }
     }
 
+    /// Adds a local endpoint to the socket. The endpoint can be then used by other applications to connect to.
+    /// The addr argument consists of two parts as follows: transport://address.
+    /// The transport specifies the underlying transport protocol to use.
+    /// The meaning of the address part is specific to the underlying transport protocol.
+    /// Note that bind and connect may be called multiple times on the same socket,
+    /// thus allowing the socket to communicate with multiple heterogeneous endpoints.
+    /// On success, returns an [Endpoint](struct.Endpoint.html) that can be later used to remove the endpoint from the socket.
     pub fn bind(&mut self, addr: &str) -> Result<EndpointFacade, io::Error> {
         let cmd = SocketCmdSignal::Bind(addr.to_owned());
         
@@ -123,6 +137,8 @@ impl SocketFacade {
         }
     }
 
+    /// Set a socket option.
+    /// See [SocketOption](enum.SocketOption.html) to get the list of options.
     pub fn set_option(&mut self, option: SocketOption) -> io::Result<()> {
         let cmd = SocketCmdSignal::SetOption(option);
 
