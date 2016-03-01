@@ -4,6 +4,48 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+//! Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) 
+//! "Scalability Protocols" in the [Rust programming language](http://www.rust-lang.org/).
+//!
+//! # Goals
+//!
+//! * Support for all of nanomsg's protocols.
+//! * Support for TCP and IPC transports.
+//! * Idiomatic rust API first, mimic the original C API second.
+//!
+//! # Usage
+//!
+//! First, create a [Session](struct.SessionFacade.html) 
+//! (this will start the thread performing the actual I/O operations).
+//! Then, use the session to create some [Socket](struct.SocketFacade.html), 
+//! specifying the communication pattern with [SocketType](enum.SocketType.html).
+//! If you want, you can now set some [SocketOption](enum.SocketOption.html), like the timeouts.
+//! To plug the sockets, use the 'connect' and `bind` socket methods.
+//! Finally, use the socket methods `send` and `recv` to exchange messages between sockets.
+//! When in doubts, refer to the [nanomsg documentation](http://nanomsg.org/v0.8/nanomsg.7.html).
+//!
+//! # Example
+//!
+//! ```
+//! use scaproust::*;
+//! use std::time;
+//! 
+//! let session = Session::new().unwrap();
+//! let mut pull = session.create_socket(SocketType::Pull).unwrap();
+//! let mut push = session.create_socket(SocketType::Push).unwrap();
+//! let timeout = time::Duration::from_millis(250);
+//! 
+//! push.set_recv_timeout(timeout).unwrap();
+//! pull.bind("tcp://127.0.0.1:5454").unwrap();
+//! 
+//! push.set_send_timeout(timeout).unwrap();
+//! push.connect("tcp://127.0.0.1:5454").unwrap();
+//! 
+//! push.send(vec![65, 66, 67]).unwrap();
+//! let received = pull.recv().unwrap();
+//! ```
+
+
 #![crate_name = "scaproust"]
 #![doc(html_root_url = "https://blabaere.github.io/scaproust/")]
 

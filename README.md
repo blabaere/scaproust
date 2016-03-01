@@ -52,8 +52,8 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
 
 - [ ] Socket options
   - [ ] Linger
-  - [x] Send buffer size
-  - [x] Recv buffer size
+  - [ ] Send buffer size
+  - [ ] Recv buffer size
   - [x] Send timeout
   - [x] Recv timeout
   - [ ] Reconnect interval
