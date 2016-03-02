@@ -14,17 +14,17 @@ use global::*;
 use event_loop_msg::*;
 use Message;
 
+/// Endpoint of a socket, obtained via the socket 
+/// [bind](struct.Socket.html#method.bind) or 
+/// [connect](struct.Socket.html#method.connect) methods.  
+/// Can only be used to shutdown an endpoint.  
+/// Note that droping an endpoint will **NOT** call shutdown.
 pub struct EndpointFacade {
     socket_id: SocketId,
     endpoint_id: mio::Token,
     cmd_sender: mio::Sender<EventLoopSignal>
 }
 
-/// Endpoint of a socket, obtained via the socket 
-/// [bind](struct.Socket.html#method.bind) or 
-/// [connect](struct.Socket.html#method.connect) methods.  
-/// Can only be used to shutdown an endpoint.  
-/// Note that droping an endpoint will **NOT** call shutdown.
 impl EndpointFacade {
     #[doc(hidden)]
     pub fn new(
