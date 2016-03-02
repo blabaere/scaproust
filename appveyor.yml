@@ -5,8 +5,7 @@ install:
   - rustc -V
   - cargo -V
 
-build_script:
-  - cargo build
+build: false
 
 test_script:
   - REM SET RUST_LOG=scaproust,test & SET RUST_TEST_THREADS=1& cargo test --verbose
