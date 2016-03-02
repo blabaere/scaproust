@@ -15,6 +15,9 @@ use std::thread;
 
 use scaproust::*;
 
+fn sleep_enough_for_connections_to_establish() {
+    thread::sleep(time::Duration::from_millis(250));
+}
 
 #[test]
 fn test_pipeline_connected_to_bound() {
@@ -216,7 +219,7 @@ fn test_pub_sub() {
     client.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
     client.set_option(SocketOption::Subscribe("B".to_string())).unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    sleep_enough_for_connections_to_establish();
 
     server.send(vec![65, 66, 67]).unwrap();
     let received_a = client.recv().unwrap();
@@ -246,7 +249,7 @@ fn test_bus() {
     client1.set_recv_timeout(timeout).unwrap();
     client2.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(150));
+    sleep_enough_for_connections_to_establish();
 
     let sent = vec![65, 66, 67];
     server.send(sent).expect("Server should have send a msg");
@@ -272,7 +275,7 @@ fn test_survey() {
     client2.set_recv_timeout(timeout).unwrap();
     server.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(500));
+    sleep_enough_for_connections_to_establish();
 
     let server_survey = vec![65, 66, 67];
     server.send(server_survey).expect("Server should have send a survey");
@@ -325,7 +328,7 @@ fn test_survey_deadline() {
     let mut server = session.create_socket(SocketType::Surveyor).unwrap();
     let mut client = session.create_socket(SocketType::Respondent).unwrap();
     let timeout = time::Duration::from_millis(50);
-    let deadline = time::Duration::from_millis(150);
+    let deadline = time::Duration::from_millis(250);
 
     server.set_option(SocketOption::SurveyDeadline(deadline)).unwrap();
     server.bind("tcp://127.0.0.1:5468").unwrap();
@@ -333,7 +336,7 @@ fn test_survey_deadline() {
     server.set_recv_timeout(timeout).unwrap();
     server.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(500));
+    sleep_enough_for_connections_to_establish();
 
     let server_survey = vec![65, 66, 67];
     server.send(server_survey).unwrap();
@@ -341,7 +344,8 @@ fn test_survey_deadline() {
     let client_survey = client.recv().unwrap();
     assert_eq!(vec![65, 66, 67], client_survey);
 
-    thread::sleep(time::Duration::from_millis(200));
+    thread::sleep(deadline);
+    thread::sleep(timeout);
 
     let err = server.recv().unwrap_err();
     assert_eq!(io::ErrorKind::Other, err.kind());
@@ -417,7 +421,7 @@ fn test_device_bus() {
     client1.set_recv_timeout(timeout).unwrap();
     client2.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    sleep_enough_for_connections_to_establish();
 
     let device = session.create_relay_device(server).unwrap();
     let device_thread = thread::spawn(move || device.run());
@@ -454,7 +458,7 @@ fn test_device_pipeline() {
     push.set_send_timeout(timeout).unwrap();
     pull.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(500));
+    sleep_enough_for_connections_to_establish();
 
     let device = session.create_bridge_device(d_pull, d_push).unwrap();
     let device_thread = thread::spawn(move || device.run());
@@ -485,7 +489,7 @@ fn check_readable_pipe_is_used_for_recv() {
     push2.connect("tcp://127.0.0.1:5473").unwrap();
     push3.connect("tcp://127.0.0.1:5473").unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    sleep_enough_for_connections_to_establish();
 
     push1.set_send_timeout(timeout).unwrap();
     push2.set_send_timeout(timeout).unwrap();
@@ -527,7 +531,7 @@ fn check_readable_pipe_is_used_for_recv_when_receiving_two_messages_in_one_event
     push.set_send_timeout(timeout).unwrap();
     pull.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    sleep_enough_for_connections_to_establish();
 
     push.send(vec![65, 66, 67]).expect("First push failed");
     push.send(vec![67, 66, 65]).expect("Second push failed");
@@ -560,7 +564,7 @@ fn device_req_rep() {
     rep.set_send_timeout(timeout).unwrap();
     rep.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    sleep_enough_for_connections_to_establish();
 
     let device = session.create_bridge_device(d_rep, d_req).unwrap();
     let device_thread = thread::spawn(move || device.run());
@@ -602,7 +606,7 @@ fn device_surv_resp_with_sequence_reply() {
     resp2.set_send_timeout(timeout).unwrap();
     resp2.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    sleep_enough_for_connections_to_establish();
 
     let device = session.create_bridge_device(d_surv, d_resp).unwrap();
     let device_thread = thread::spawn(move || device.run());
@@ -648,7 +652,7 @@ fn device_pair_left_to_right() {
     right.set_send_timeout(timeout).unwrap();
     right.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    sleep_enough_for_connections_to_establish();
 
     let device = session.create_bridge_device(d_left, d_right).unwrap();
     let device_thread = thread::spawn(move || device.run());
@@ -686,7 +690,7 @@ fn device_pair_right_to_left() {
     right.set_send_timeout(timeout).unwrap();
     right.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    sleep_enough_for_connections_to_establish();
 
     let device = session.create_bridge_device(d_left, d_right).unwrap();
     let device_thread = thread::spawn(move || device.run());
@@ -729,7 +733,7 @@ fn device_surv_resp_with_parallel_reply() {
     resp2.set_send_timeout(timeout).unwrap();
     resp2.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    sleep_enough_for_connections_to_establish();
 
     let device = session.create_bridge_device(d_surv, d_resp).unwrap();
     let device_thread = thread::spawn(move || device.run());
@@ -769,7 +773,7 @@ fn sub_can_skip_crap_and_keep_crop() {
     client.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
     client.set_option(SocketOption::Subscribe("B".to_string())).unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    sleep_enough_for_connections_to_establish();
 
     server.send(vec![99, 99, 99]).unwrap();
     server.send(vec![65, 66, 67]).unwrap();
@@ -797,7 +801,7 @@ fn load_balancing_chooses_the_highest_priority() {
     push.set_send_priority(2).unwrap();
     push.connect("tcp://127.0.0.1:5487").unwrap();
 
-    thread::sleep(timeout);
+    sleep_enough_for_connections_to_establish();
 
     let sent = vec![65, 66, 67];
     push.send(sent).unwrap();
@@ -827,7 +831,8 @@ fn can_shutdown_connect_endpoint() {
     client3.set_recv_timeout(timeout).unwrap();
     client3.set_option(SocketOption::Subscribe("A".to_string())).unwrap();
 
-    thread::sleep(time::Duration::from_millis(250));
+    sleep_enough_for_connections_to_establish();
+    drop(ep2);
 
     server.send(vec![65, 66, 67]).unwrap();
 

@@ -1,13 +1,11 @@
 # scaproust <img src=albertine-like.jpg align=right width=200 height=200>
 
-
 [![Linux build](https://travis-ci.org/blabaere/scaproust.svg?label=linux)](https://travis-ci.org/blabaere/scaproust)
 [![Windows build](https://ci.appveyor.com/api/projects/status/kpqdm42mhlki39fq?svg=true)](https://ci.appveyor.com/project/blabaere/scaproust)
 
 Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "Scalability Protocols" in the [Rust programming language](http://www.rust-lang.org/).
 
 **Experimental work !** For working stuff, please see [nanomsg-rs](https://github.com/blabaere/nanomsg.rs).  
-Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IPC on MS Windows is not yet supported.
 
 [API Documentation](https://blabaere.github.io/scaproust/scaproust/index.html)
 
@@ -17,7 +15,7 @@ Scaproust is internally based on [mio](https://github.com/carllerche/mio), so IP
 * Idiomatic rust API first, mimic the original C API second.
 
 ## Maybe
-* Polling on several sockets.
+* Polling, on several sockets.
 * Other transports (Inproc, TLS, WebSockets).
 * Nonblocking operations.
 
