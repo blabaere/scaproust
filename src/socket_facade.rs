@@ -26,6 +26,9 @@ pub struct SocketFacade {
     // or something that would help for poll
 }
 
+/// Socket is the main access that applications use to access the SP system.  
+/// It is an abstraction of an application's "connection" to a messaging topology.  
+/// Applications can have more than one Socket open at a time.
 impl SocketFacade {
 
     #[doc(hidden)]

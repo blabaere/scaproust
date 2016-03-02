@@ -82,8 +82,15 @@ pub use endpoint_facade::EndpointFacade as Endpoint;
 pub use global::SocketType;
 pub use event_loop_msg::SocketOption;
 
+#[doc(hidden)]
 pub type EventLoop = mio::EventLoop<session::Session>;
 
+/// Message encapsulates the messages that are exchanged back and forth.  
+/// The meaning of the header and body fields, and where the splits occur, 
+/// will vary depending on the protocol.  
+/// Note however that any headers applied by transport layers 
+/// (including TCP/ethernet headers, and SP protocol independent length headers), 
+/// are *not* included in the header.
 pub struct Message {
     pub header: Vec<u8>,
     pub body: Vec<u8>
