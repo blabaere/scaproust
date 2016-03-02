@@ -417,10 +417,12 @@ fn test_device_bus() {
     client1.set_recv_timeout(timeout).unwrap();
     client2.set_recv_timeout(timeout).unwrap();
 
-    thread::sleep(time::Duration::from_millis(500));
+    thread::sleep(time::Duration::from_millis(250));
 
     let device = session.create_relay_device(server).unwrap();
     let device_thread = thread::spawn(move || device.run());
+
+    thread::sleep(time::Duration::from_millis(250));
 
     client1.send(vec![65, 66, 67]).unwrap();
     let received = client2.recv().unwrap();

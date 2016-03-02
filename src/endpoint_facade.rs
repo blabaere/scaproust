@@ -21,6 +21,7 @@ pub struct EndpointFacade {
 }
 
 impl EndpointFacade {
+    #[doc(hidden)]
     pub fn new(
         id: SocketId,
         tok: mio::Token, 
@@ -32,6 +33,7 @@ impl EndpointFacade {
         }
     }
 
+    /// Removes the endpoint from the socket it belongs to.
     pub fn shutdown(self) {
         let cmd = SocketCmdSignal::Shutdown(self.endpoint_id);
         let cmd_sig = CmdSignal::Socket(self.socket_id, cmd);

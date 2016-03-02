@@ -90,10 +90,19 @@ impl SocketCmdSignal {
 }
 
 pub enum SocketOption {
+    #[doc(hidden)]
     DeviceItem(bool),
+
+    /// See [Socket::set_send_timeout](struct.Socket.html#method.set_send_timeout).
     SendTimeout(time::Duration),
+
+    /// See [Socket::set_recv_timeout](struct.Socket.html#method.set_recv_timeout).
     RecvTimeout(time::Duration),
+
+    /// See [Socket::set_send_priority](struct.Socket.html#method.set_send_priority).
     SendPriority(u8),
+
+    /// See [Socket::set_recv_priority](struct.Socket.html#method.set_recv_priority).
     RecvPriority(u8),
     Subscribe(String),
     Unsubscribe(String),

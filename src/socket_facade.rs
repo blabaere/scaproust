@@ -61,6 +61,7 @@ impl SocketFacade {
 
     /// Adds a remote endpoint to the socket.
     /// The library would then try to connect to the specified remote endpoint.
+    /// The addr argument consists of two parts as follows: `transport://address`.
     /// The transport specifies the underlying transport protocol to use.
     /// The meaning of the address part is specific to the underlying transport protocol.
     /// Note that bind and connect may be called multiple times on the same socket,
@@ -80,7 +81,7 @@ impl SocketFacade {
     }
 
     /// Adds a local endpoint to the socket. The endpoint can be then used by other applications to connect to.
-    /// The addr argument consists of two parts as follows: transport://address.
+    /// The addr argument consists of two parts as follows: `transport://address`.
     /// The transport specifies the underlying transport protocol to use.
     /// The meaning of the address part is specific to the underlying transport protocol.
     /// Note that bind and connect may be called multiple times on the same socket,
@@ -103,10 +104,12 @@ impl SocketFacade {
         EndpointFacade::new(self.id, tok, self.cmd_sender.clone())
     }
 
+    /// Sends a message.
     pub fn send(&mut self, buffer: Vec<u8>) -> Result<(), io::Error> {
         self.send_msg(Message::with_body(buffer))
     }
 
+    /// Sends a message.
     pub fn send_msg(&mut self, msg: Message) -> Result<(), io::Error> {
         let cmd = SocketCmdSignal::SendMsg(msg);
 
@@ -120,10 +123,12 @@ impl SocketFacade {
         }
     }
 
+    /// Receives a message.
     pub fn recv(&mut self) -> Result<Vec<u8>, io::Error> {
         self.recv_msg().map(|msg| msg.to_buffer())
     }
 
+    /// Receives a message.
     pub fn recv_msg(&mut self) -> Result<Message, io::Error> {
         let cmd = SocketCmdSignal::RecvMsg;
 
@@ -137,7 +142,7 @@ impl SocketFacade {
         }
     }
 
-    /// Set a socket option.
+    /// Sets a socket option.
     /// See [SocketOption](enum.SocketOption.html) to get the list of options.
     pub fn set_option(&mut self, option: SocketOption) -> io::Result<()> {
         let cmd = SocketCmdSignal::SetOption(option);
@@ -152,18 +157,36 @@ impl SocketFacade {
         }
     }
 
+    /// Sets the timeout for send operation on the socket.  
+    /// If message cannot be sent within the specified timeout, 
+    /// an error with the kind `TimedOut` is returned. 
+    /// Zero value means infinite timeout. Default value is zero.
     pub fn set_send_timeout(&mut self, timeout: time::Duration) -> io::Result<()> {
         self.set_option(SocketOption::SendTimeout(timeout))
     }
 
+    /// Sets the timeout for recv operation on the socket.  
+    /// If message cannot be received within the specified timeout, 
+    /// an error with the kind `TimedOut` is returned. 
+    /// Zero value means infinite timeout. Default value is zero.
     pub fn set_recv_timeout(&mut self, timeout: time::Duration) -> io::Result<()> {
         self.set_option(SocketOption::RecvTimeout(timeout))
     }
 
+    /// Sets outbound priority for endpoints subsequently added to the socket.  
+    /// This option has no effect on socket types that send messages to all the peers.  
+    /// However, if the socket type sends each message to a single peer (or a limited set of peers), 
+    /// peers with high priority take precedence over peers with low priority. 
+    /// Highest priority is 1, lowest priority is 16. Default value is 8.
     pub fn set_send_priority(&mut self, priority: u8) -> io::Result<()> {
         self.set_option(SocketOption::SendPriority(priority))
     }
 
+    /// Sets inbound priority for endpoints subsequently added to the socket.  
+    /// This option has no effect on socket types that are not able to receive messages.  
+    /// When receiving a message, messages from peer with higher priority 
+    /// are received before messages from peer with lower priority. 
+    /// Highest priority is 1, lowest priority is 16. Default value is 8.
     pub fn set_recv_priority(&mut self, priority: u8) -> io::Result<()> {
         self.set_option(SocketOption::RecvPriority(priority))
     }
