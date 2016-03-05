@@ -158,7 +158,7 @@ impl State {
         self
     }
 
-    fn on_pipe_removed(self, body: &mut Body, tok: mio::Token) -> State {
+    fn on_pipe_removed(self, _: &mut Body, tok: mio::Token) -> State {
         match self {
             State::Receiving(token, timeout) => {
                 if token == tok {

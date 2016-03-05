@@ -4,15 +4,10 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::io;
-use std::sync::mpsc::Receiver;
-use std::time;
-
 use mio;
 
 use global::*;
 use event_loop_msg::*;
-use Message;
 
 /// Endpoint of a socket, obtained via the socket 
 /// [bind](struct.Socket.html#method.bind) or 

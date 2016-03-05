@@ -45,8 +45,8 @@ enum State {
     Receiving(mio::Token, Timeout),
     RecvOnHold(Timeout),
     Active(mio::Token),
-    Sending(Rc<Message>, Timeout, mio::Token),
-    SendOnHold(Rc<Message>, Timeout, mio::Token)
+    Sending(mio::Token, Rc<Message>, Timeout),
+    SendOnHold(mio::Token, Rc<Message>, Timeout)
 }
 
 impl Rep {
@@ -195,11 +195,11 @@ impl State {
         body.on_pipe_opened(event_loop, tok);
 
         match self {
-            State::SendOnHold(msg, timeout, t) => {
-                if t == tok {
+            State::SendOnHold(token, msg, timeout) => {
+                if token == tok {
                     try_send(body, event_loop, msg, timeout, tok)
                 } else {
-                    State::SendOnHold(msg, timeout, t)
+                    State::SendOnHold(token, msg, timeout)
                 }
             },
             other @ _ => other
@@ -218,20 +218,24 @@ impl State {
         }
     }
 
-    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token) -> State {
+    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
         match self {
-            State::Sending(_, timeout, _)    => body.on_send_by_pipe(event_loop, timeout),
-            State::SendOnHold(_, timeout, _) => body.on_send_by_pipe(event_loop, timeout),
-            _ => {}
+            State::Sending(token, msg, timeout) => {
+                if token == tok {
+                    body.on_send_by_pipe(event_loop, timeout);
+                    State::Idle
+                } else {
+                    State::Sending(token, msg, timeout)
+                }
+            },
+            other @ _ => other
         }
-
-        State::Idle
     }
 
     fn on_send_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
         match self {
-            State::Sending(_, _, t)    => body.on_send_timeout(event_loop, t),
-            State::SendOnHold(_, _, t) => body.on_send_timeout(event_loop, t),
+            State::Sending(tok, _, _)    => body.on_send_timeout(event_loop, tok),
+            State::SendOnHold(tok, _, _) => body.on_send_timeout(event_loop, tok),
             _ => {}
         }
 
@@ -278,9 +282,9 @@ impl State {
 
 fn try_send(body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, timeout: Option<mio::Timeout>, tok: mio::Token) -> State {
     if body.send(event_loop, msg.clone(), tok) {
-        State::Sending(msg, timeout, tok)
+        State::Sending(tok, msg, timeout)
     } else {
-        State::SendOnHold(msg, timeout, tok)
+        State::SendOnHold(tok, msg, timeout)
     }
 }
 

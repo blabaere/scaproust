@@ -37,7 +37,7 @@ struct Body {
 
 enum State {
     Idle,
-    Sending(Rc<Message>, Timeout),
+    Sending(mio::Token, Rc<Message>, Timeout),
     SendOnHold(Rc<Message>, Timeout)
 }
 
@@ -138,9 +138,9 @@ impl Protocol for Push {
 impl State {
     fn name(&self) -> &'static str {
         match *self {
-            State::Idle             => "Idle",
-            State::Sending(_, _)    => "Sending",
-            State::SendOnHold(_, _) => "SendOnHold"
+            State::Idle            => "Idle",
+            State::Sending(_,_,_)  => "Sending",
+            State::SendOnHold(_,_) => "SendOnHold"
         }
     }
 
@@ -148,13 +148,13 @@ impl State {
         self
     }
 
-    fn on_pipe_removed(self, body: &mut Body, tok: mio::Token) -> State {
+    fn on_pipe_removed(self, _: &mut Body, tok: mio::Token) -> State {
         match self {
-            State::Sending(msg, t) => {
-                if body.is_active_pipe(tok) {
-                    State::SendOnHold(msg, t)
+            State::Sending(token, msg, timeout) => {
+                if token == tok {
+                    State::SendOnHold(msg, timeout)
                 } else {
-                    State::Sending(msg, t)
+                    State::Sending(token, msg, timeout)
                 }
             },
             other @ _ => other
@@ -174,19 +174,25 @@ impl State {
     }
 
     fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, timeout: Option<mio::Timeout>) -> State {
-        if body.send(event_loop, msg.clone()) {
-            State::Sending(msg, timeout)
+        if let Some(tok) = body.send_to(event_loop, msg.clone()) {
+            State::Sending(tok, msg, timeout)
         } else {
             State::SendOnHold(msg, timeout)
         }
     }
 
-    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token) -> State {
-        if let State::Sending(_, timeout) = self {
-            body.on_send_by_pipe(event_loop, timeout);
+    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+        match self {
+            State::Sending(token, msg, timeout) => {
+                if tok == token {
+                    body.on_send_by_pipe(event_loop, timeout);
+                    State::Idle
+                } else {
+                    State::Sending(token, msg, timeout)
+                }
+            }
+            other @ _ => other
         }
-
-        State::Idle
     }
 
     fn on_send_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {

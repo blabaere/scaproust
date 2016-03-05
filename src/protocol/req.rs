@@ -47,7 +47,7 @@ struct Body {
 
 enum State {
     Idle,
-    Sending(Rc<Message>, Timeout),
+    Sending(mio::Token, Rc<Message>, Timeout),
     SendOnHold(Rc<Message>, Timeout),
     WaitingReply(PendingRequest),
     Receiving(PendingRequest, Timeout),
@@ -184,7 +184,7 @@ impl State {
     fn name(&self) -> &'static str {
         match *self {
             State::Idle            => "Idle",
-            State::Sending(_, _)   => "Sending",
+            State::Sending(_,_,_)  => "Sending",
             State::SendOnHold(_,_) => "SendOnHold",
             State::WaitingReply(_) => "WaitingReply",
             State::Receiving(_,_)  => "Receiving",
@@ -196,13 +196,13 @@ impl State {
         self
     }
 
-    fn on_pipe_removed(self, body: &mut Body, tok: mio::Token) -> State {
+    fn on_pipe_removed(self, _: &mut Body, tok: mio::Token) -> State {
         match self {
-            State::Sending(msg, t) => {
-                if body.is_active_pipe(tok) {
-                    State::SendOnHold(msg, t)
+            State::Sending(token, msg, timeout) => {
+                if token == tok {
+                    State::SendOnHold(msg, timeout)
                 } else {
-                    State::Sending(msg, t)
+                    State::Sending(token, msg, timeout)
                 }
             },
             State::Receiving(p, t) => {
@@ -233,20 +233,25 @@ impl State {
             clear_timeout(event_loop, p.timeout);
         }
 
-        if body.send(event_loop, msg.clone()) {
-            State::Sending(msg, timeout)
+        if let Some(tok) = body.send_to(event_loop, msg.clone()) {
+            State::Sending(tok, msg, timeout)
         } else {
             State::SendOnHold(msg, timeout)
         }
     }
 
     fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
-        if let State::Sending(msg, timeout) = self {
-            let pending_request = body.on_send_by_pipe(event_loop, tok, msg, timeout);
+        match self {
+            State::Sending(token, msg, timeout) => {
+                if token == tok {
+                    let pending_request = body.on_send_by_pipe(event_loop, tok, msg, timeout);
 
-            State::WaitingReply(pending_request)
-        } else {
-            State::Idle
+                    State::WaitingReply(pending_request)
+                } else {
+                    State::Sending(token, msg, timeout)
+                }
+            },
+            other @ _ => other
         }
     }
 

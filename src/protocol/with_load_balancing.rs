@@ -76,6 +76,13 @@ pub trait WithLoadBalancing : WithPipes {
         self.get_active_pipe().map(|p| p.send(event_loop, msg)).is_some()
     }
 
+    fn send_to(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) -> Option<mio::Token> {
+        self.get_active_pipe().map(|p| {
+            p.send(event_loop, msg);
+            p.token()
+        })
+    }
+
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
         self.send_notify(SocketNotify::MsgSent);
         self.advance_pipe(event_loop);
