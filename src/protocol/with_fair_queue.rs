@@ -89,6 +89,13 @@ pub trait WithFairQueue : WithPipes {
         self.get_active_pipe_mut().map(|p| p.recv(event_loop)).is_some()
     }
 
+    fn recv_from(&mut self, event_loop: &mut EventLoop) -> Option<mio::Token> {
+        self.get_active_pipe_mut().map(|p| {
+            p.recv(event_loop);
+            p.token()
+        })
+    }
+
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
         self.send_notify(SocketNotify::MsgRecv(msg));
         self.advance_pipe(event_loop);

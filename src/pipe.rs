@@ -61,6 +61,10 @@ impl Pipe {
         }
     }
 
+    pub fn token(&self) -> mio::Token {
+        self.token
+    }
+
     pub fn can_recv(&self) -> bool {
         match self.state.as_ref().map(|s| s.can_recv()) {
             Some(true)  => true,

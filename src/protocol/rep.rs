@@ -42,7 +42,7 @@ struct Body {
 
 enum State {
     Idle,
-    Receiving(Timeout),
+    Receiving(mio::Token, Timeout),
     RecvOnHold(Timeout),
     Active(mio::Token),
     Sending(Rc<Message>, Timeout, mio::Token),
@@ -172,7 +172,7 @@ impl State {
             State::Sending(_,_,_)    => "Sending",
             State::SendOnHold(_,_,_) => "SendOnHold",
             State::Active(_)         => "Active",
-            State::Receiving(_)      => "Receiving",
+            State::Receiving(_,_)    => "Receiving",
             State::RecvOnHold(_)     => "RecvOnHold"
         }
     }
@@ -239,19 +239,25 @@ impl State {
     }
 
     fn recv(self, body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {
-        if body.recv(event_loop) {
-            State::Receiving(timeout)
+        if let Some(tok) = body.recv_from(event_loop) {
+            State::Receiving(tok, timeout)
         } else {
             State::RecvOnHold(timeout)
         }
     }
 
     fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) -> State {
-        if let State::Receiving(timeout) = self {
-            body.on_recv_by_pipe(event_loop, msg, timeout);
+        match self {
+            State::Receiving(token, timeout) => {
+                if tok == token {
+                    body.on_recv_by_pipe(event_loop, msg, timeout);
+                    State::Active(tok)
+                } else {
+                    State::Receiving(token, timeout)
+                }
+            }
+            other @ _ => other
         }
-
-        State::Active(tok)
     }
 
     fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {

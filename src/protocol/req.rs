@@ -206,7 +206,7 @@ impl State {
                 }
             },
             State::Receiving(p, t) => {
-                if body.is_active_pipe(tok) {
+                if p.peer == tok {
                     State::RecvOnHold(p, t)
                 } else {
                     State::Receiving(p, t)
@@ -292,14 +292,18 @@ impl State {
         }
     }
 
-    fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message, req_id: u32) -> State {
+    fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, msg: Message, req_id: u32) -> State {
         if let State::Receiving(p, timeout) = self {
-            if req_id == body.cur_req_id() {
-                body.on_recv_by_pipe(event_loop, msg, p, timeout);
+            if p.peer == tok {
+                if req_id == body.cur_req_id() {
+                    body.on_recv_by_pipe(event_loop, msg, p, timeout);
 
-                State::Idle
+                    State::Idle
+                } else {
+                    try_recv(body, event_loop, timeout, p)
+                }
             } else {
-                try_recv(body, event_loop, timeout, p)
+                State::Receiving(p, timeout)
             }
         } else {
             State::Idle

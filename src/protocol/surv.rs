@@ -53,7 +53,7 @@ struct PendingSurvey {
 enum State {
     Idle,
     Active(PendingSurvey),
-    Receiving(PendingSurvey, Timeout),
+    Receiving(mio::Token, PendingSurvey, Timeout),
     RecvOnHold(PendingSurvey, Timeout)
 }
 
@@ -186,10 +186,10 @@ impl Protocol for Surv {
 impl State {
     fn name(&self) -> &'static str {
         match *self {
-            State::Idle            => "Idle",
-            State::Active(_)       => "WaitingVotes",
-            State::Receiving(_,_)  => "Receiving",
-            State::RecvOnHold(_,_) => "RecvOnHold"
+            State::Idle             => "Idle",
+            State::Active(_)        => "WaitingVotes",
+            State::Receiving(_,_,_) => "Receiving",
+            State::RecvOnHold(_,_)  => "RecvOnHold"
         }
     }
 
@@ -197,13 +197,13 @@ impl State {
         self
     }
 
-    fn on_pipe_removed(self, body: &mut Body, tok: mio::Token) -> State {
+    fn on_pipe_removed(self, _: &mut Body, tok: mio::Token) -> State {
         match self {
-            State::Receiving(p, t) => {
-                if body.is_active_pipe(tok) {
-                    State::RecvOnHold(p, t)
+            State::Receiving(token, pending, timeout) => {
+                if token == tok {
+                    State::RecvOnHold(pending, timeout)
                 } else {
-                    State::Receiving(p, t)
+                    State::Receiving(token, pending, timeout)
                 }
             },
             other @ _ => other
@@ -255,14 +255,18 @@ impl State {
         }
     }
 
-    fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message, survey_id: u32) -> State {
-        if let State::Receiving(p, timeout) = self {
-            if survey_id == body.cur_survey_id() {
-                body.on_recv_by_pipe(event_loop, msg, timeout);
+    fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, msg: Message, survey_id: u32) -> State {
+        if let State::Receiving(token, p, timeout) = self {
+            if token == tok {
+                if survey_id == body.cur_survey_id() {
+                    body.on_recv_by_pipe(event_loop, msg, timeout);
 
-                State::Active(p)
+                     State::Active(p)
+                } else {
+                    try_recv(body, event_loop, timeout, p)
+                }
             } else {
-                try_recv(body, event_loop, timeout, p)
+                State::Receiving(token, p, timeout)
             }
         } else {
             State::Idle
@@ -273,9 +277,9 @@ impl State {
         body.on_recv_timeout(event_loop);
 
         match self {
-            State::Receiving(p, _)  => State::Active(p),
-            State::RecvOnHold(p, _) => State::Active(p),
-            _                       => State::Idle
+            State::Receiving(_,p, _) => State::Active(p),
+            State::RecvOnHold(p, _)  => State::Active(p),
+            other @ _                => other
         }
     }
 
@@ -290,8 +294,8 @@ impl State {
 }
 
 fn try_recv(body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>, p: PendingSurvey) -> State {
-    if body.recv(event_loop) {
-        State::Receiving(p, timeout)
+    if let Some(tok) = body.recv_from(event_loop) {
+        State::Receiving(tok, p, timeout)
     } else {
         State::RecvOnHold(p, timeout)
     }
