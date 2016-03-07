@@ -212,7 +212,7 @@ impl State {
                     State::Receiving(p, t)
                 }
             },
-            other @ _ => other
+            other => other
         }
     }
 
@@ -251,7 +251,7 @@ impl State {
                     State::Sending(token, msg, timeout)
                 }
             },
-            other @ _ => other
+            other => other
         }
     }
 
@@ -317,7 +317,7 @@ impl State {
 
     fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
         match self {
-            State::Receiving(p, _)  => body.on_recv_timeout(event_loop, p),
+            State::Receiving(p, _)  |
             State::RecvOnHold(p, _) => body.on_recv_timeout(event_loop, p),
             _                       => {}
         };
@@ -330,7 +330,7 @@ impl State {
 
         match self {
             State::SendOnHold(msg, t) => State::Idle.send(body, event_loop, msg, t),
-            other @ _                 => other
+            other                     => other
         }
     }
 }
@@ -348,11 +348,10 @@ impl Body {
     fn schedule_resend(&mut self, event_loop: &mut EventLoop) -> Timeout {
         if self.resend_interval > 0u64 {
             let cmd = EventLoopTimeout::Resend(self.id);
-            let ivl = self.resend_interval;
+            let ivl_ms = self.resend_interval;
+            let ivl = Duration::from_millis(ivl_ms);
 
-            event_loop.timeout(cmd, Duration::from_millis(ivl)).
-                map(|t| Some(t)).
-                unwrap_or_else(|_| None)
+            event_loop.timeout(cmd, ivl).map(Some).unwrap_or_else(|_| None)
         } else {
             None
         }
@@ -361,14 +360,11 @@ impl Body {
     fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Rc<Message>, timeout: Timeout) -> PendingRequest {
         WithLoadBalancing::on_send_by_pipe(self, event_loop, timeout);
 
-        let resend_timeout = self.schedule_resend(event_loop);
-        let pending_request = PendingRequest {
+        PendingRequest {
             peer: tok,
             req: msg,
-            timeout: resend_timeout
-        };
-
-        pending_request
+            timeout: self.schedule_resend(event_loop)
+        }
     }
 
     fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, pending_request: PendingRequest, timeout: Timeout) {
@@ -414,21 +410,21 @@ impl WithNotify for Body {
 }
 
 impl WithPipes for Body {
-    fn get_pipes<'a>(&'a self) -> &'a HashMap<mio::Token, Pipe> {
+    fn get_pipes(&self) -> &HashMap<mio::Token, Pipe> {
         &self.pipes
     }
 
-    fn get_pipes_mut<'a>(&'a mut self) -> &'a mut HashMap<mio::Token, Pipe> {
+    fn get_pipes_mut(&mut self) -> &mut HashMap<mio::Token, Pipe> {
         &mut self.pipes
     }
 }
 
 impl WithLoadBalancing for Body {
-    fn get_load_balancer<'a>(&'a self) -> &'a PrioList {
+    fn get_load_balancer(&self) -> &PrioList {
         &self.lb
     }
 
-    fn get_load_balancer_mut<'a>(&'a mut self) -> &'a mut PrioList {
+    fn get_load_balancer_mut(&mut self) -> &mut PrioList {
         &mut self.lb
     }
 }
@@ -456,7 +452,7 @@ fn decode(raw_msg: Message, _: mio::Token) -> Option<(Message, u32)> {
     let body = payload.split_off(4);
     let req_id = BigEndian::read_u32(&payload);
 
-    if header.len() == 0 {
+    if header.is_empty() {
         header = payload;
     } else {
         header.extend_from_slice(&payload);
