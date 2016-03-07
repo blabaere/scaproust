@@ -50,7 +50,10 @@
 #![crate_name = "scaproust"]
 #![doc(html_root_url = "https://blabaere.github.io/scaproust/")]
 
+#![allow(unstable_features)]
 #![feature(box_syntax)]
+#![feature(plugin)]
+#![plugin(clippy)]
 
 #[macro_use]
 extern crate log;

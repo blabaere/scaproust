@@ -408,7 +408,7 @@ impl Body {
 }
 
 impl WithNotify for Body {
-    fn get_notify_sender<'a>(&'a self) -> &'a Sender<SocketNotify> {
+    fn get_notify_sender(&self) -> &Sender<SocketNotify> {
         &self.notify_sender
     }
 }
