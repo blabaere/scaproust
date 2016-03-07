@@ -57,7 +57,7 @@ impl Excl {
         };
     }
 
-    pub fn get<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
+    pub fn get(&mut self, tok: mio::Token) -> Option<&mut Pipe> {
         if self.token == Some(tok) {
             self.pipe.as_mut()
         } else {
@@ -65,7 +65,7 @@ impl Excl {
         }
     }
 
-    pub fn get_active_mut<'a>(&'a mut self) -> Option<&'a mut Pipe> {
+    pub fn get_active_mut(&mut self) -> Option<&mut Pipe> {
         if self.active {
             self.pipe.as_mut()
         } else {
@@ -73,7 +73,7 @@ impl Excl {
         }
     }
 
-    pub fn get_active<'a>(&'a self) -> Option<&'a Pipe> {
+    pub fn get_active(&self) -> Option<&Pipe> {
         if self.active {
             self.pipe.as_ref()
         } else {
@@ -81,7 +81,7 @@ impl Excl {
         }
     }
 
-    pub fn get_pipe<'a>(&'a mut self) -> Option<&'a mut Pipe> {
+    pub fn get_pipe(&mut self) -> Option<&mut Pipe> {
         self.pipe.as_mut()
     }
 }
