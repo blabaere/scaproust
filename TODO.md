@@ -15,7 +15,12 @@ Actions:
 - Stop using the priolist::current to know which pipe is sending or receiving.
 - Move that information inside the protocol state.
 
-2. Enhance the priolist item with a visibility field.  
+2. Make the sending and receiving states of a pipe independant.  
+- Merge all the live pipe state into a single one.
+- Create a sending side and receiving side pipe state.
+- Have the live pipe state owns one state for each side.
+
+3. Enhance the priolist item with a visibility field.  
 - Have the pipe tell the protocol that sending or receiving is blocked, waiting on the remote end.
 - Add show/hide methods to priolist, a pipe can only be current if it is both active and visible.
 - Use this to add the pipe to the priolist earlier, but with hidden visibility.
@@ -23,11 +28,6 @@ Actions:
 - When a pipe operation is blocked, hide AND deactivate it.
 - When the operation finally completes, show the pipe, but wait for readiness to activate it.
 - Remove the cancel_send and cancel_recv methods from pipe.
-
-3. Make the sending and receiving states of a pipe independant.  
-- Merge all the live pipe state into a single one.
-- Create a sending side and receiving side pipe state.
-- Have the live pipe state owns one state for each side.
 
 ### When the sending/receiving pipe is removed, it probably means the operation has failed
 

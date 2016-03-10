@@ -154,7 +154,7 @@ impl State {
         match self {
             State::Sending(msg, t) => State::SendOnHold(msg, t),
             State::Receiving(t)    => State::RecvOnHold(t),
-            other @ _              => other
+            other                  => other
         }
     }
 
@@ -170,7 +170,7 @@ impl State {
         match self {
             State::SendOnHold(msg, t) => State::Idle.send(body, event_loop, msg, t),
             State::RecvOnHold(t)      => State::Idle.recv(body, event_loop, t),
-            other @ _                 => other
+            other                     => other
         }
     }
 
@@ -268,11 +268,11 @@ impl Body {
         self.excl.get(tok).map(|p| p.on_open_ack(event_loop));
     }
 
-    fn get_active_pipe<'a>(&'a mut self) -> Option<&'a mut Pipe> {
+    fn get_active_pipe(&mut self) -> Option<&mut Pipe> {
         self.excl.get_active_mut()
     }
 
-    fn get_pipe<'a>(&'a mut self, tok: mio::Token) -> Option<&'a mut Pipe> {
+    fn get_pipe(&mut self, tok: mio::Token) -> Option<&mut Pipe> {
         self.excl.get(tok)
     }
 

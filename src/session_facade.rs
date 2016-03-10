@@ -60,7 +60,7 @@ impl SessionFacade {
         let cmd_sig = CmdSignal::Session(cmd);
         let loop_sig = EventLoopSignal::Cmd(cmd_sig);
 
-        self.cmd_sender.send(loop_sig).map_err(|e| convert_notify_err(e))
+        self.cmd_sender.send(loop_sig).map_err(convert_notify_err)
     }
 
     /// Creates a socket of the specified type, which in turn determines its exact semantics.

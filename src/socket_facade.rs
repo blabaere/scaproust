@@ -59,7 +59,7 @@ impl SocketFacade {
         let cmd_sig = CmdSignal::Socket(self.id, cmd);
         let loop_sig = EventLoopSignal::Cmd(cmd_sig);
 
-        self.cmd_sender.send(loop_sig).map_err(|e| convert_notify_err(e))
+        self.cmd_sender.send(loop_sig).map_err(convert_notify_err)
     }
 
     /// Adds a remote endpoint to the socket.
@@ -128,7 +128,7 @@ impl SocketFacade {
 
     /// Receives a message.
     pub fn recv(&mut self) -> Result<Vec<u8>, io::Error> {
-        self.recv_msg().map(|msg| msg.to_buffer())
+        self.recv_msg().map(|msg| msg.into_buffer())
     }
 
     /// Receives a message.

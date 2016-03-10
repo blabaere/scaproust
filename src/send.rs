@@ -48,10 +48,9 @@ enum Step {
 impl Step {
     fn next(&self) -> Step {
         match *self {
-            Step::Prefix => Step::Header,
-            Step::Header => Step::Body,
-            Step::Body   => Step::Done,
-            Step::Done   => Step::Done
+            Step::Prefix              => Step::Header,
+            Step::Header              => Step::Body,
+            Step::Body | Step::Done   => Step::Done
         }
     }
 }

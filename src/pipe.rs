@@ -176,7 +176,7 @@ impl PipeBody {
         let loop_sig = EventLoopSignal::Evt(evt_sig);
         let send_res = self.sig_sender.send(loop_sig);
 
-        send_res.map_err(|e| global::convert_notify_err(e))
+        send_res.map_err(global::convert_notify_err)
     }
 }
 
@@ -239,7 +239,7 @@ trait PipeState {
 }
 
 trait LivePipeState {
-    fn body<'a>(&'a self) -> &'a PipeBody;
+    fn body(&self) -> &PipeBody;
 
     fn debug(&self, log: &str) {
         debug!("[{:?}] {}", self.body().token().as_usize(), log)
@@ -330,7 +330,7 @@ impl PipeState for Initial {
 }
 
 impl LivePipeState for Initial {
-    fn body<'a>(&'a self) -> &'a PipeBody {
+    fn body(&self) -> &PipeBody {
         &self.body
     }
 }
@@ -407,7 +407,7 @@ impl PipeState for HandshakeTx {
 }
 
 impl LivePipeState for HandshakeTx {
-    fn body<'a>(&'a self) -> &'a PipeBody {
+    fn body(&self) -> &PipeBody {
         &self.body
     }
 }
@@ -485,7 +485,7 @@ impl PipeState for HandshakeRx {
 }
 
 impl LivePipeState for HandshakeRx {
-    fn body<'a>(&'a self) -> &'a PipeBody {
+    fn body(&self) -> &PipeBody {
         &self.body
     }
 }
@@ -528,7 +528,7 @@ impl PipeState for Activable {
 }
 
 impl LivePipeState for Activable {
-    fn body<'a>(&'a self) -> &'a PipeBody {
+    fn body(&self) -> &PipeBody {
         &self.body
     }
 }
@@ -657,7 +657,7 @@ impl PipeState for Idle {
 }
 
 impl LivePipeState for Idle {
-    fn body<'a>(&'a self) -> &'a PipeBody {
+    fn body(&self) -> &PipeBody {
         &self.body
     }
 }
@@ -728,7 +728,7 @@ impl PipeState for Receiving {
 }
 
 impl LivePipeState for Receiving {
-    fn body<'a>(&'a self) -> &'a PipeBody {
+    fn body(&self) -> &PipeBody {
         &self.body
     }
 }
@@ -809,7 +809,7 @@ impl PipeState for Sending {
 }
 
 impl LivePipeState for Sending {
-    fn body<'a>(&'a self) -> &'a PipeBody {
+    fn body(&self) -> &PipeBody {
         &self.body
     }
 }

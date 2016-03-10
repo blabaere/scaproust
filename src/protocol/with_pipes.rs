@@ -13,14 +13,14 @@ use pipe::Pipe;
 use super::with_notify::WithNotify;
 
 pub trait WithPipes : WithNotify {
-    fn get_pipes<'a>(&'a self) -> &'a HashMap<mio::Token, Pipe>;
-    fn get_pipes_mut<'a>(&'a mut self) -> &'a mut HashMap<mio::Token, Pipe>;
+    fn get_pipes(&self) -> &HashMap<mio::Token, Pipe>;
+    fn get_pipes_mut(&mut self) -> &mut HashMap<mio::Token, Pipe>;
 
-    fn get_pipe<'a>(&'a self, tok: &mio::Token) -> Option<&'a Pipe> {
+    fn get_pipe(&self, tok: &mio::Token) -> Option<&Pipe> {
         self.get_pipes().get(tok)
     }
 
-    fn get_pipe_mut<'a>(&'a mut self, tok: &mio::Token) -> Option<&'a mut Pipe> {
+    fn get_pipe_mut(&mut self, tok: &mio::Token) -> Option<&mut Pipe> {
         self.get_pipes_mut().get_mut(tok)
     }
 

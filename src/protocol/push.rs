@@ -157,7 +157,7 @@ impl State {
                     State::Sending(token, msg, timeout)
                 }
             },
-            other @ _ => other
+            other => other
         }
     }
 
@@ -191,7 +191,7 @@ impl State {
                     State::Sending(token, msg, timeout)
                 }
             }
-            other @ _ => other
+            other => other
         }
     }
 
@@ -220,33 +220,33 @@ impl State {
 
         match self {
             State::SendOnHold(msg, t) => State::Idle.send(body, event_loop, msg, t),
-            other @ _                 => other
+            other                     => other
         }
     }
 }
 
 impl WithNotify for Body {
-    fn get_notify_sender<'a>(&'a self) -> &'a Sender<SocketNotify> {
+    fn get_notify_sender(&self) -> &Sender<SocketNotify> {
         &self.notify_sender
     }
 }
 
 impl WithPipes for Body {
-    fn get_pipes<'a>(&'a self) -> &'a HashMap<mio::Token, Pipe> {
+    fn get_pipes(&self) -> &HashMap<mio::Token, Pipe> {
         &self.pipes
     }
 
-    fn get_pipes_mut<'a>(&'a mut self) -> &'a mut HashMap<mio::Token, Pipe> {
+    fn get_pipes_mut(&mut self) -> &mut HashMap<mio::Token, Pipe> {
         &mut self.pipes
     }
 }
 
 impl WithLoadBalancing for Body {
-    fn get_load_balancer<'a>(&'a self) -> &'a PrioList {
+    fn get_load_balancer(&self) -> &PrioList {
         &self.lb
     }
 
-    fn get_load_balancer_mut<'a>(&'a mut self) -> &'a mut PrioList {
+    fn get_load_balancer_mut(&mut self) -> &mut PrioList {
         &mut self.lb
     }
 }

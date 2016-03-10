@@ -20,8 +20,8 @@ use Message;
 use super::with_pipes::WithPipes;
 
 pub trait WithLoadBalancing : WithPipes {
-    fn get_load_balancer<'a>(&'a self) -> &'a PrioList;
-    fn get_load_balancer_mut<'a>(&'a mut self) -> &'a mut PrioList;
+    fn get_load_balancer(&self) -> &PrioList;
+    fn get_load_balancer_mut(&mut self) -> &mut PrioList;
 
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
         match self.get_pipes_mut().insert(tok, pipe) {
@@ -40,13 +40,13 @@ pub trait WithLoadBalancing : WithPipes {
     }
 
     fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        let priority = self.get_pipe(&tok).map(|p| p.get_send_priority()).unwrap_or(8);
+        let priority = self.get_pipe(&tok).map_or(8, |p| p.get_send_priority());
 
         self.get_load_balancer_mut().insert(tok, priority);
         self.get_pipe_mut(&tok).map(|p| p.on_open_ack(event_loop));
     }
 
-    fn get_active_pipe<'a>(&'a mut self) -> Option<&'a mut Pipe> {
+    fn get_active_pipe(&mut self) -> Option<&mut Pipe> {
         match self.get_load_balancer().get() {
             Some(tok) => self.get_pipe_mut(&tok),
             None      => None

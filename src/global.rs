@@ -14,7 +14,7 @@ use mio::NotifyError;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SocketType {
-    Pair       = (1 * 16),
+    Pair       = (    16),
     Pub        = (2 * 16),
     Sub        = (2 * 16) + 1,
     Req        = (3 * 16),

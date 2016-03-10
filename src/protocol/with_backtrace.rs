@@ -6,10 +6,10 @@
 
 pub trait WithBacktrace {
 
-    fn get_backtrace<'a>(&'a self) -> &'a Vec<u8>;
-    fn get_backtrace_mut<'a>(&'a mut self) -> &'a mut Vec<u8>;
+    fn get_backtrace(&self) -> &Vec<u8>;
+    fn get_backtrace_mut(&mut self) -> &mut Vec<u8>;
 
-    fn backtrace<'a>(&'a self) -> &'a [u8] {
+    fn backtrace(&self) -> &[u8] {
         &self.get_backtrace()
     }
 

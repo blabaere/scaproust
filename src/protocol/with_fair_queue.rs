@@ -19,8 +19,8 @@ use Message;
 use super::with_pipes::WithPipes;
 
 pub trait WithFairQueue : WithPipes {
-    fn get_fair_queue<'a>(&'a self) -> &'a PrioList;
-    fn get_fair_queue_mut<'a>(&'a mut self) -> &'a mut PrioList;
+    fn get_fair_queue(&self) -> &PrioList;
+    fn get_fair_queue_mut(&mut self) -> &mut PrioList;
     
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
         match self.get_pipes_mut().insert(tok, pipe) {
@@ -39,20 +39,20 @@ pub trait WithFairQueue : WithPipes {
     }
 
     fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        let priority = self.get_pipe(&tok).map(|p| p.get_recv_priority()).unwrap_or(8);
+        let priority = self.get_pipe(&tok).map_or(8, |p| p.get_recv_priority());
 
         self.get_fair_queue_mut().insert(tok, priority);
         self.get_pipe_mut(&tok).map(|p| p.on_open_ack(event_loop));
     }
 
-    fn get_active_pipe<'a>(&'a self) -> Option<&'a Pipe> {
+    fn get_active_pipe(&self) -> Option<&Pipe> {
         match self.get_fair_queue().get() {
             Some(tok) => self.get_pipe(&tok),
             None      => None
         }
     }
 
-    fn get_active_pipe_mut<'a>(&'a mut self) -> Option<&'a mut Pipe> {
+    fn get_active_pipe_mut(&mut self) -> Option<&mut Pipe> {
         match self.get_fair_queue().get() {
             Some(tok) => self.get_pipe_mut(&tok),
             None      => None

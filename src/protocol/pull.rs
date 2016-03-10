@@ -157,7 +157,7 @@ impl State {
                     State::Receiving(token, timeout)
                 }
             },
-            other @ _ => other
+            other => other
         }
     }
 
@@ -205,7 +205,7 @@ impl State {
                     State::Receiving(token, timeout)
                 }
             }
-            other @ _ => other
+            other => other
         }
     }
 
@@ -220,33 +220,33 @@ impl State {
 
         match self {
             State::RecvOnHold(t) => State::Idle.recv(body, event_loop, t),
-            other @ _            => other
+            other                => other
         }
     }
 }
 
 impl WithNotify for Body {
-    fn get_notify_sender<'a>(&'a self) -> &'a Sender<SocketNotify> {
+    fn get_notify_sender(&self) -> &Sender<SocketNotify> {
         &self.notify_sender
     }
 }
 
 impl WithPipes for Body {
-    fn get_pipes<'a>(&'a self) -> &'a HashMap<mio::Token, Pipe> {
+    fn get_pipes(&self) -> &HashMap<mio::Token, Pipe> {
         &self.pipes
     }
 
-    fn get_pipes_mut<'a>(&'a mut self) -> &'a mut HashMap<mio::Token, Pipe> {
+    fn get_pipes_mut(&mut self) -> &mut HashMap<mio::Token, Pipe> {
         &mut self.pipes
     }
 }
 
 impl WithFairQueue for Body {
-    fn get_fair_queue<'a>(&'a self) -> &'a PrioList {
+    fn get_fair_queue(&self) -> &PrioList {
         &self.fq
     }
 
-    fn get_fair_queue_mut<'a>(&'a mut self) -> &'a mut PrioList {
+    fn get_fair_queue_mut(&mut self) -> &mut PrioList {
         &mut self.fq
     }
 }

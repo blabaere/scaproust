@@ -86,11 +86,8 @@ impl Listener for TcpListener {
     fn accept(&mut self) -> io::Result<Vec<Box<Connection>>> {
         let mut conns: Vec<Box<Connection>> = Vec::new();
 
-        loop {
-            match try!(self.listener.accept()) {
-                Some((s, _)) => conns.push(box TcpConnection { stream: s }),
-                None    => break
-            }
+        while let Some((s, _)) = try!(self.listener.accept()) {
+            conns.push(box TcpConnection { stream: s });
         }
 
         Ok(conns)

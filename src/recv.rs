@@ -22,9 +22,8 @@ enum Step {
 impl Step {
     fn next(&self) -> Step {
         match *self {
-            Step::Prefix  => Step::Payload,
-            Step::Payload => Step::Done,
-            Step::Done    => Step::Done
+            Step::Prefix               => Step::Payload,
+            Step::Payload | Step::Done => Step::Done
         }
     }
 }
@@ -58,9 +57,7 @@ impl RecvOperation {
         if self.step == Step::Prefix {
             self.read += try!(RecvOperation::recv_buffer(connection, &mut self.prefix[self.read..]));
 
-            if self.read == 0 {
-                return Ok(None);
-            } else if self.read == self.prefix.len() {
+            if self.read == self.prefix.len() {
                 self.step_forward();
                 self.msg_len = BigEndian::read_u64(&self.prefix);
                 self.buffer = Some(vec![0u8; self.msg_len as usize]);

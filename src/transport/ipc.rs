@@ -80,11 +80,8 @@ impl Listener for IpcListener {
     fn accept(&mut self) -> io::Result<Vec<Box<Connection>>> {
         let mut conns: Vec<Box<Connection>> = Vec::new();
 
-        loop {
-            match try!(self.listener.accept()) {
-                Some(s) => conns.push(box IpcConnection { stream: s }),
-                None    => break
-            }
+        while let Some(s) = try!(self.listener.accept()) {
+            conns.push(box IpcConnection { stream: s });
         }
 
         Ok(conns)

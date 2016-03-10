@@ -242,9 +242,7 @@ impl Socket {
     fn pipe_ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         debug!("[{:?}] pipe [{:?}] ready: '{:?}'", self.id, tok.as_usize(), events);
 
-        if events.is_hup() {
-            self.remove_pipe_and_schedule_reconnect(event_loop, tok);
-        } else if events.is_error() {
+        if events.is_hup() | events.is_error() {
             self.remove_pipe_and_schedule_reconnect(event_loop, tok);
         } else {
             self.protocol.ready(event_loop, tok, events);
@@ -257,7 +255,7 @@ impl Socket {
 
     fn remove_pipe_and_schedule_reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         if let Some(mut pipe) = self.protocol.remove_pipe(tok) {
-            let _ = pipe.close(event_loop);
+            pipe.close(event_loop);
             if let Some(addr) = pipe.addr() {
                 self.schedule_reconnect(event_loop, tok, addr);
             }
@@ -338,12 +336,12 @@ impl Socket {
 
     pub fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) {
         let set_res = match option {
-            SocketOption::SendTimeout(timeout) => self.options.set_send_timeout(timeout),
-            SocketOption::RecvTimeout(timeout) => self.options.set_recv_timeout(timeout),
+            SocketOption::SendTimeout(timeout)   => self.options.set_send_timeout(timeout),
+            SocketOption::RecvTimeout(timeout)   => self.options.set_recv_timeout(timeout),
             SocketOption::SendPriority(priority) => self.options.set_send_priority(priority),
             SocketOption::RecvPriority(priority) => self.options.set_recv_priority(priority),
-            SocketOption::DeviceItem(value)    => self.set_device_item(value),
-            o @ _ => self.protocol.set_option(event_loop, o)
+            SocketOption::DeviceItem(value)      => self.set_device_item(value),
+            option                               => self.protocol.set_option(event_loop, option)
         };
         let evt = match set_res {
             Ok(_)  => SocketNotify::OptionSet,

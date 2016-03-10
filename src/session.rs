@@ -111,7 +111,7 @@ impl Session {
             PipeEvtSignal::Closed => {
                 self.socket_ids.remove(&tok);
             },
-            other @ _ => {
+            other => {
                 self.on_socket_by_token(&tok, |s| s.on_pipe_evt(event_loop, tok, other));
             }
         };

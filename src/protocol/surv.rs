@@ -206,7 +206,7 @@ impl State {
                     State::Receiving(token, pending, timeout)
                 }
             },
-            other @ _ => other
+            other => other
         }
     }
 
@@ -277,9 +277,9 @@ impl State {
         body.on_recv_timeout(event_loop);
 
         match self {
-            State::Receiving(_,p, _) => State::Active(p),
-            State::RecvOnHold(p, _)  => State::Active(p),
-            other @ _                => other
+            State::Receiving(_,p, _) |
+            State::RecvOnHold(p, _)   => State::Active(p),
+            other                     => other
         }
     }
 
@@ -288,7 +288,7 @@ impl State {
 
         match self {
             State::RecvOnHold(p, t) => try_recv(body, event_loop, t, p),
-            other @ _               => other
+            other                   => other
         }
     }
 }
@@ -324,7 +324,7 @@ impl Body {
         let ivl = self.deadline_ms;
 
         event_loop.timeout(cmd, time::Duration::from_millis(ivl)).
-            map(|t| Some(t)).
+            map(Some).
             unwrap_or_else(|_| None)
     }
 
@@ -382,28 +382,28 @@ impl Body {
 }
 
 impl WithNotify for Body {
-    fn get_notify_sender<'a>(&'a self) -> &'a Sender<SocketNotify> {
+    fn get_notify_sender(&self) -> &Sender<SocketNotify> {
         &self.notify_sender
     }
 }
 
 impl WithPipes for Body {
-    fn get_pipes<'a>(&'a self) -> &'a HashMap<mio::Token, Pipe> {
+    fn get_pipes(&self) -> &HashMap<mio::Token, Pipe> {
         &self.pipes
     }
 
-    fn get_pipes_mut<'a>(&'a mut self) -> &'a mut HashMap<mio::Token, Pipe> {
+    fn get_pipes_mut(&mut self) -> &mut HashMap<mio::Token, Pipe> {
         &mut self.pipes
     }
 }
 
 impl WithFairQueue for Body {
 
-    fn get_fair_queue<'a>(&'a self) -> &'a PrioList {
+    fn get_fair_queue(&self) -> &PrioList {
         &self.fq
     }
 
-    fn get_fair_queue_mut<'a>(&'a mut self) -> &'a mut PrioList {
+    fn get_fair_queue_mut(&mut self) -> &mut PrioList {
         &mut self.fq
     }
 }
@@ -427,7 +427,7 @@ fn decode(raw_msg: Message, _: mio::Token) -> Option<(Message, u32)> {
     let body = payload.split_off(4);
     let survey_id = BigEndian::read_u32(&payload);
 
-    if header.len() == 0 {
+    if header.is_empty() {
         header = payload;
     } else {
         header.extend_from_slice(&payload);

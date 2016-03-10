@@ -9,7 +9,7 @@ use std::sync::mpsc::Sender;
 use event_loop_msg::{ SocketNotify };
 
 pub trait WithNotify {
-    fn get_notify_sender<'a>(&'a self) -> &'a Sender<SocketNotify>;
+    fn get_notify_sender(&self) -> &Sender<SocketNotify>;
 
     fn send_notify(&self, evt: SocketNotify) {
         let send_res = self.get_notify_sender().send(evt);

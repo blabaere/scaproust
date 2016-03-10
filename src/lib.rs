@@ -50,10 +50,12 @@
 #![crate_name = "scaproust"]
 #![doc(html_root_url = "https://blabaere.github.io/scaproust/")]
 
-#![allow(unstable_features)]
 #![feature(box_syntax)]
 #![feature(plugin)]
 #![plugin(clippy)]
+#![allow(boxed_local)]
+#![allow(bool_comparison)]
+#![allow(explicit_iter_loop)]
 
 #[macro_use]
 extern crate log;
@@ -115,15 +117,19 @@ impl Message {
         self.header.len() + self.body.len()
     }
 
-    pub fn get_header<'a>(&'a self) -> &'a [u8] {
+    pub fn is_empty(&self) -> bool {
+        self.header.is_empty() && self.body.is_empty()
+    }
+
+    pub fn get_header(&self) -> &[u8] {
         &self.header
     }
 
-    pub fn get_body<'a>(&'a self) -> &'a [u8] {
+    pub fn get_body(&self) -> &[u8] {
         &self.body
     }
 
-    pub fn to_buffer(self) -> Vec<u8> {
+    pub fn into_buffer(self) -> Vec<u8> {
         self.body
     }
 
