@@ -21,27 +21,21 @@ use endpoint_facade::EndpointFacade;
 /// Applications can have more than one Socket open at a time.
 pub struct SocketFacade {
     id: SocketId,
-    socket_type: SocketType, 
+    socket_type: SocketType,
     cmd_sender: Sender<EventLoopSignal>,
-    evt_receiver: Receiver<SocketNotify>
-    // Could use https://github.com/polyfractal/bounded-spsc-queue ?
-    // Maybe once a smart waiting strategy is available (like spin, then sleep 0, then sleep 1, then mutex ?)
-    // or something that would help for poll
+    evt_receiver: Receiver<SocketNotify> /* Could use https://github.com/polyfractal/bounded-spsc-queue ?
+                                          * Maybe once a smart waiting strategy is available (like spin, then sleep 0, then sleep 1, then mutex ?)
+                                          * or something that would help for poll */
 }
 
 impl SocketFacade {
-
     #[doc(hidden)]
-    pub fn new(
-        id: SocketId,
-        socket_type: SocketType, 
-        cmd_tx: Sender<EventLoopSignal>, 
-        evt_rx: Receiver<SocketNotify>) -> SocketFacade {
-        SocketFacade { 
-            id: id, 
+    pub fn new(id: SocketId, socket_type: SocketType, cmd_tx: Sender<EventLoopSignal>, evt_rx: Receiver<SocketNotify>) -> SocketFacade {
+        SocketFacade {
+            id: id,
             socket_type: socket_type,
-            cmd_sender: cmd_tx, 
-            evt_receiver: evt_rx 
+            cmd_sender: cmd_tx,
+            evt_receiver: evt_rx
         }
     }
 
@@ -72,14 +66,14 @@ impl SocketFacade {
     /// On success, returns an [Endpoint](struct.Endpoint.html) that can be later used to remove the endpoint from the socket.
     pub fn connect(&mut self, addr: &str) -> Result<EndpointFacade, io::Error> {
         let cmd = SocketCmdSignal::Connect(addr.to_owned());
-        
+
         try!(self.send_cmd(cmd));
 
         match self.evt_receiver.recv() {
-            Ok(SocketNotify::Connected(t))    => Ok(self.new_endpoint(t)),
+            Ok(SocketNotify::Connected(t)) => Ok(self.new_endpoint(t)),
             Ok(SocketNotify::NotConnected(e)) => Err(e),
-            Ok(_)                             => Err(other_io_error("unexpected evt")),
-            Err(_)                            => Err(other_io_error("evt channel closed"))
+            Ok(_) => Err(other_io_error("unexpected evt")),
+            Err(_) => Err(other_io_error("evt channel closed")),
         }
     }
 
@@ -92,14 +86,14 @@ impl SocketFacade {
     /// On success, returns an [Endpoint](struct.Endpoint.html) that can be later used to remove the endpoint from the socket.
     pub fn bind(&mut self, addr: &str) -> Result<EndpointFacade, io::Error> {
         let cmd = SocketCmdSignal::Bind(addr.to_owned());
-        
+
         try!(self.send_cmd(cmd));
 
         match self.evt_receiver.recv() {
-            Ok(SocketNotify::Bound(t))    => Ok(self.new_endpoint(t)),
+            Ok(SocketNotify::Bound(t)) => Ok(self.new_endpoint(t)),
             Ok(SocketNotify::NotBound(e)) => Err(e),
-            Ok(_)                         => Err(other_io_error("unexpected evt")),
-            Err(_)                        => Err(other_io_error("evt channel closed"))
+            Ok(_) => Err(other_io_error("unexpected evt")),
+            Err(_) => Err(other_io_error("evt channel closed")),
         }
     }
 
@@ -119,10 +113,10 @@ impl SocketFacade {
         try!(self.send_cmd(cmd));
 
         match self.evt_receiver.recv() {
-            Ok(SocketNotify::MsgSent)       => Ok(()),
+            Ok(SocketNotify::MsgSent) => Ok(()),
             Ok(SocketNotify::MsgNotSent(e)) => Err(e),
-            Ok(_)                           => Err(other_io_error("unexpected evt")),
-            Err(_)                          => Err(other_io_error("evt channel closed"))
+            Ok(_) => Err(other_io_error("unexpected evt")),
+            Err(_) => Err(other_io_error("evt channel closed")),
         }
     }
 
@@ -138,10 +132,10 @@ impl SocketFacade {
         try!(self.send_cmd(cmd));
 
         match self.evt_receiver.recv() {
-            Ok(SocketNotify::MsgRecv(msg))  => Ok(msg),
+            Ok(SocketNotify::MsgRecv(msg)) => Ok(msg),
             Ok(SocketNotify::MsgNotRecv(e)) => Err(e),
-            Ok(_)                           => Err(other_io_error("unexpected evt")),
-            Err(_)                          => Err(other_io_error("evt channel closed"))
+            Ok(_) => Err(other_io_error("unexpected evt")),
+            Err(_) => Err(other_io_error("evt channel closed")),
         }
     }
 
@@ -153,10 +147,10 @@ impl SocketFacade {
         try!(self.send_cmd(cmd));
 
         match self.evt_receiver.recv() {
-            Ok(SocketNotify::OptionSet)       => Ok(()),
+            Ok(SocketNotify::OptionSet) => Ok(()),
             Ok(SocketNotify::OptionNotSet(e)) => Err(e),
-            Ok(_)                             => Err(other_io_error("unexpected evt")),
-            Err(_)                            => Err(other_io_error("evt channel closed"))
+            Ok(_) => Err(other_io_error("unexpected evt")),
+            Err(_) => Err(other_io_error("evt channel closed")),
         }
     }
 

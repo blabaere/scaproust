@@ -22,10 +22,7 @@ pub struct EndpointFacade {
 
 impl EndpointFacade {
     #[doc(hidden)]
-    pub fn new(
-        id: SocketId,
-        tok: mio::Token, 
-        cmd_tx: mio::Sender<EventLoopSignal>) -> EndpointFacade {
+    pub fn new(id: SocketId, tok: mio::Token, cmd_tx: mio::Sender<EventLoopSignal>) -> EndpointFacade {
         EndpointFacade {
             socket_id: id,
             endpoint_id: tok,

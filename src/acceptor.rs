@@ -9,21 +9,21 @@ use std::io;
 use mio;
 
 use global;
-use transport::{ Listener, Connection };
+use transport::{Connection, Listener};
 use EventLoop;
 
 pub struct Acceptor {
     token: mio::Token,
-    addr: String, 
+    addr: String,
     listener: Box<Listener>
 }
 
 impl Acceptor {
     pub fn new(token: mio::Token, addr: String, listener: Box<Listener>) -> Acceptor {
-        Acceptor { 
+        Acceptor {
             token: token,
             addr: addr,
-            listener: listener 
+            listener: listener
         }
     }
 

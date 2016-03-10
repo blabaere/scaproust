@@ -10,12 +10,12 @@ use std::io;
 
 use mio;
 
-use super::{ Protocol, Timeout };
+use super::{Protocol, Timeout};
 use super::clear_timeout;
 use super::excl::*;
 use pipe::Pipe;
 use global::*;
-use event_loop_msg::{ SocketNotify };
+use event_loop_msg::SocketNotify;
 use EventLoop;
 use Message;
 
@@ -52,7 +52,7 @@ impl Pair {
         }
     }
 
-    fn on_state_transition<F>(&mut self, transition: F) where F : FnOnce(State, &mut Body) -> State {
+    fn on_state_transition<F>(&mut self, transition: F) where F: FnOnce(State, &mut Body) -> State {
         if let Some(old_state) = self.state.take() {
             let old_name = old_state.name();
             let new_state = transition(old_state, &mut self.body);
@@ -78,7 +78,7 @@ impl Protocol for Pair {
         }
 
         res
-     }
+    }
 
     fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
         let pipe = self.body.remove_pipe(tok);
@@ -126,7 +126,7 @@ impl Protocol for Pair {
         self.on_state_transition(|s, body| s.ready(body, event_loop, tok, events));
     }
 
-    fn can_recv(&self) -> bool { 
+    fn can_recv(&self) -> bool {
         self.body.can_recv()
     }
 
@@ -138,11 +138,11 @@ impl Protocol for Pair {
 impl State {
     fn name(&self) -> &'static str {
         match *self {
-            State::Idle             => "Idle",
-            State::Sending(_, _)    => "Sending",
+            State::Idle => "Idle",
+            State::Sending(_, _) => "Sending",
             State::SendOnHold(_, _) => "SendOnHold",
-            State::Receiving(_)     => "Receiving",
-            State::RecvOnHold(_)    => "RecvOnHold"
+            State::Receiving(_) => "Receiving",
+            State::RecvOnHold(_) => "RecvOnHold",
         }
     }
 
@@ -153,8 +153,8 @@ impl State {
     fn on_pipe_removed(self, _: &mut Body, _: mio::Token) -> State {
         match self {
             State::Sending(msg, t) => State::SendOnHold(msg, t),
-            State::Receiving(t)    => State::RecvOnHold(t),
-            other                  => other
+            State::Receiving(t) => State::RecvOnHold(t),
+            other => other,
         }
     }
 
@@ -169,8 +169,8 @@ impl State {
 
         match self {
             State::SendOnHold(msg, t) => State::Idle.send(body, event_loop, msg, t),
-            State::RecvOnHold(t)      => State::Idle.recv(body, event_loop, t),
-            other                     => other
+            State::RecvOnHold(t) => State::Idle.recv(body, event_loop, t),
+            other => other,
         }
     }
 
@@ -238,7 +238,6 @@ impl State {
 }
 
 impl Body {
-
     fn send_notify(&self, evt: SocketNotify) {
         let send_res = self.notify_sender.send(evt);
 
@@ -246,13 +245,13 @@ impl Body {
             error!("Failed to send notify to the facade: '{:?}'", send_res.err());
         }
     }
-    
+
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
-         if self.excl.add(tok, pipe) {
+        if self.excl.add(tok, pipe) {
             Ok(())
-         } else {
+        } else {
             Err(other_io_error("supports only one item"))
-         }
+        }
     }
 
     fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
@@ -279,7 +278,7 @@ impl Body {
     fn can_recv(&self) -> bool {
         match self.excl.get_active() {
             Some(pipe) => pipe.can_recv(),
-            None       => false
+            None => false,
         }
     }
 

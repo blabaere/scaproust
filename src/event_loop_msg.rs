@@ -23,7 +23,7 @@ impl EventLoopSignal {
     pub fn name(&self) -> &'static str {
         match *self {
             EventLoopSignal::Cmd(_) => "Cmd",
-            EventLoopSignal::Evt(_) => "Evt"
+            EventLoopSignal::Evt(_) => "Evt",
         }
     }
 }
@@ -38,9 +38,9 @@ pub enum CmdSignal {
 impl CmdSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            CmdSignal::Session(_)  => "Session",
-            CmdSignal::Socket(_,_) => "Socket",
-            CmdSignal::Probe(_,_)  => "Probe"
+            CmdSignal::Session(_) => "Session",
+            CmdSignal::Socket(_, _) => "Socket",
+            CmdSignal::Probe(_, _) => "Probe",
         }
     }
 }
@@ -57,11 +57,11 @@ pub enum SessionCmdSignal {
 impl SessionCmdSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            SessionCmdSignal::CreateSocket(_)  => "CreateSocket",
+            SessionCmdSignal::CreateSocket(_) => "CreateSocket",
             SessionCmdSignal::DestroySocket(_) => "DestroySocket",
-            SessionCmdSignal::CreateProbe(_,_) => "CreateProbe",
-            SessionCmdSignal::DestroyProbe(_)  => "DestroyProbe",
-            SessionCmdSignal::Shutdown         => "Shutdown"
+            SessionCmdSignal::CreateProbe(_, _) => "CreateProbe",
+            SessionCmdSignal::DestroyProbe(_) => "DestroyProbe",
+            SessionCmdSignal::Shutdown => "Shutdown",
         }
     }
 }
@@ -79,12 +79,12 @@ pub enum SocketCmdSignal {
 impl SocketCmdSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            SocketCmdSignal::Connect(_)     => "Connect",
-            SocketCmdSignal::Bind(_)        => "Bind",
-            SocketCmdSignal::SendMsg(_)     => "SendMsg",
-            SocketCmdSignal::RecvMsg        => "RecvMsg",
-            SocketCmdSignal::SetOption(_)   => "SetOption",
-            SocketCmdSignal::Shutdown(_)    => "Shutdown"
+            SocketCmdSignal::Connect(_) => "Connect",
+            SocketCmdSignal::Bind(_) => "Bind",
+            SocketCmdSignal::SendMsg(_) => "SendMsg",
+            SocketCmdSignal::RecvMsg => "RecvMsg",
+            SocketCmdSignal::SetOption(_) => "SetOption",
+            SocketCmdSignal::Shutdown(_) => "Shutdown",
         }
     }
 }
@@ -118,7 +118,7 @@ pub enum ProbeCmdSignal {
 impl ProbeCmdSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            ProbeCmdSignal::PollReadable => "PollReadable"
+            ProbeCmdSignal::PollReadable => "PollReadable",
         }
     }
 }
@@ -132,8 +132,8 @@ pub enum EvtSignal {
 impl EvtSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            EvtSignal::Socket(_,_) => "Socket",
-            EvtSignal::Pipe(_,_)   => "Pipe"
+            EvtSignal::Socket(_, _) => "Socket",
+            EvtSignal::Pipe(_, _) => "Pipe",
         }
     }
 }
@@ -148,9 +148,9 @@ pub enum SocketEvtSignal {
 impl SocketEvtSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            SocketEvtSignal::PipeAdded(_)     => "PipeAdded",
+            SocketEvtSignal::PipeAdded(_) => "PipeAdded",
             SocketEvtSignal::AcceptorAdded(_) => "AcceptorAdded",
-            SocketEvtSignal::Readable         => "Readable"
+            SocketEvtSignal::Readable => "Readable",
         }
     }
 }
@@ -166,10 +166,10 @@ pub enum PipeEvtSignal {
 impl PipeEvtSignal {
     pub fn name(&self) -> &'static str {
         match *self {
-            PipeEvtSignal::Opened    => "Opened",
-            PipeEvtSignal::Closed    => "Closed",
+            PipeEvtSignal::Opened => "Opened",
+            PipeEvtSignal::Closed => "Closed",
             PipeEvtSignal::MsgRcv(_) => "MsgRcv",
-            PipeEvtSignal::MsgSnd    => "MsgSnd"
+            PipeEvtSignal::MsgSnd => "MsgSnd",
         }
     }
 }

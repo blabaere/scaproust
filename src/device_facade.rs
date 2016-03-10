@@ -15,14 +15,14 @@ use socket_facade::*;
 
 
 pub trait DeviceFacade : Send {
-    fn run(mut self: Box<Self>) -> io::Result<()>;
+    fn run(self: Box<Self>) -> io::Result<()>;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// RELAY DEVICE                                                              //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
+/// ////////////////////////////////////////////////////////////////////////////
+///                                                                           //
+/// RELAY DEVICE                                                              //
+///                                                                           //
+/// ////////////////////////////////////////////////////////////////////////////
 
 pub struct RelayDevice {
     socket: Option<SocketFacade>
@@ -30,14 +30,12 @@ pub struct RelayDevice {
 
 impl RelayDevice {
     pub fn new(s: SocketFacade) -> RelayDevice {
-        RelayDevice {
-            socket: Some(s)
-        }
+        RelayDevice { socket: Some(s) }
     }
 }
 
 impl DeviceFacade for RelayDevice {
-    fn run(mut self: Box<Self>) -> io::Result<()> {
+    fn run(self: Box<Self>) -> io::Result<()> {
         let mut socket = self.socket.take().unwrap();
         loop {
             try!(socket.recv_msg().and_then(|msg| socket.send_msg(msg)));
@@ -45,11 +43,11 @@ impl DeviceFacade for RelayDevice {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// ONE-WAY BRIDGE DEVICE                                                     //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
+/// ////////////////////////////////////////////////////////////////////////////
+///                                                                           //
+/// ONE-WAY BRIDGE DEVICE                                                     //
+///                                                                           //
+/// ////////////////////////////////////////////////////////////////////////////
 
 pub struct OneWayDevice {
     left: Option<SocketFacade>,
@@ -66,7 +64,7 @@ impl OneWayDevice {
 }
 
 impl DeviceFacade for OneWayDevice {
-    fn run(mut self: Box<Self>) -> io::Result<()> {
+    fn run(self: Box<Self>) -> io::Result<()> {
         let mut left = self.left.take().unwrap();
         let mut right = self.right.take().unwrap();
 
@@ -76,11 +74,11 @@ impl DeviceFacade for OneWayDevice {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// TWO-WAY BRIDGE DEVICE                                                     //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
+/// ////////////////////////////////////////////////////////////////////////////
+///                                                                           //
+/// TWO-WAY BRIDGE DEVICE                                                     //
+///                                                                           //
+/// ////////////////////////////////////////////////////////////////////////////
 
 pub struct TwoWayDevice {
     id: ProbeId,
@@ -91,12 +89,7 @@ pub struct TwoWayDevice {
 }
 
 impl TwoWayDevice {
-    pub fn new(
-        id: ProbeId,
-        cmd_tx: Sender<EventLoopSignal>,
-        evt_tx: Receiver<ProbeNotify>,
-        l: SocketFacade,
-        r: SocketFacade) -> TwoWayDevice {
+    pub fn new(id: ProbeId, cmd_tx: Sender<EventLoopSignal>, evt_tx: Receiver<ProbeNotify>, l: SocketFacade, r: SocketFacade) -> TwoWayDevice {
         TwoWayDevice {
             id: id,
             cmd_sender: cmd_tx,
@@ -115,7 +108,7 @@ impl TwoWayDevice {
 }
 
 impl DeviceFacade for TwoWayDevice {
-    fn run(mut self: Box<Self>) -> io::Result<()> {
+    fn run(self: Box<Self>) -> io::Result<()> {
         let mut left = self.left.take().unwrap();
         let mut right = self.right.take().unwrap();
 
@@ -130,8 +123,8 @@ impl DeviceFacade for TwoWayDevice {
                     if r {
                         try!(right.forward_msg(&mut left));
                     }
-                },
-                Err(_) => return Err(other_io_error("evt channel closed"))
+                }
+                Err(_) => return Err(other_io_error("evt channel closed")),
             };
         }
     }

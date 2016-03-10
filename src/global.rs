@@ -7,7 +7,7 @@
 use std::fmt;
 use std::rc::Rc;
 use std::cell::Cell;
-use std::io::{ Error, ErrorKind };
+use std::io::{Error, ErrorKind};
 use std::time;
 
 use mio::NotifyError;
@@ -42,13 +42,12 @@ impl SocketType {
             SocketType::Pull       => SocketType::Push,
             SocketType::Surveyor   => SocketType::Respondent,
             SocketType::Respondent => SocketType::Surveyor,
-            SocketType::Bus        => SocketType::Bus
+            SocketType::Bus        => SocketType::Bus,
         }
     }
 
     pub fn matches(&self, other: SocketType) -> bool {
-        self.peer() == other &&
-        other.peer() == *self
+        self.peer() == other && other.peer() == *self
     }
 }
 
@@ -106,9 +105,9 @@ pub fn invalid_input_io_error(msg: &'static str) -> Error {
 
 pub fn convert_notify_err<T>(err: NotifyError<T>) -> Error {
     match err {
-        NotifyError::Io(e)     => e,
+        NotifyError::Io(e) => e,
         NotifyError::Closed(_) => other_io_error("cmd channel closed"),
-        NotifyError::Full(_)   => Error::new(ErrorKind::WouldBlock, "cmd channel full")
+        NotifyError::Full(_) => Error::new(ErrorKind::WouldBlock, "cmd channel full"),
     }
 }
 
