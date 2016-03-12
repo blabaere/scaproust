@@ -35,7 +35,7 @@ impl RelayDevice {
 }
 
 impl DeviceFacade for RelayDevice {
-    fn run(self: Box<Self>) -> io::Result<()> {
+    fn run(mut self: Box<Self>) -> io::Result<()> {
         let mut socket = self.socket.take().unwrap();
         loop {
             try!(socket.recv_msg().and_then(|msg| socket.send_msg(msg)));
@@ -64,7 +64,7 @@ impl OneWayDevice {
 }
 
 impl DeviceFacade for OneWayDevice {
-    fn run(self: Box<Self>) -> io::Result<()> {
+    fn run(mut self: Box<Self>) -> io::Result<()> {
         let mut left = self.left.take().unwrap();
         let mut right = self.right.take().unwrap();
 
@@ -108,7 +108,7 @@ impl TwoWayDevice {
 }
 
 impl DeviceFacade for TwoWayDevice {
-    fn run(self: Box<Self>) -> io::Result<()> {
+    fn run(mut self: Box<Self>) -> io::Result<()> {
         let mut left = self.left.take().unwrap();
         let mut right = self.right.take().unwrap();
 
