@@ -180,11 +180,12 @@ impl PipeBody {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// STATE DEFINITION                                                          //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
+
+/*****************************************************************************/
+/*                                                                           */
+/* STATE DEFINITION                                                          */
+/*                                                                           */
+/*****************************************************************************/
 trait PipeState {
     fn name(&self) -> &'static str;
 
@@ -290,11 +291,11 @@ fn no_transition_if_ok<F : PipeState + 'static>(f: Box<F>, res: io::Result<()>, 
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// HANDSHAKE                                                                 //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
+/*****************************************************************************/
+/*                                                                           */
+/* HANDSHAKE                                                                 */
+/*                                                                           */
+/*****************************************************************************/
 fn create_handshake(protocol_id: u16) -> [u8; 8] {
     // handshake is Zero, 'S', 'P', Version, Proto[2], Rsvd[2]
     let mut handshake = [0, 83, 80, 0, 0, 0, 0, 0];
@@ -302,11 +303,11 @@ fn create_handshake(protocol_id: u16) -> [u8; 8] {
     handshake
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// INITIAL STATE                                                             //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
+/*****************************************************************************/
+/*                                                                           */
+/* INITIAL STATE                                                             */
+/*                                                                           */
+/*****************************************************************************/
 struct Initial {
     body: PipeBody, 
     protocol_id: u16,
@@ -335,11 +336,11 @@ impl LivePipeState for Initial {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// SEND HANDSHAKE STATE                                                      //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
+/*****************************************************************************/
+/*                                                                           */
+/* SEND HANDSHAKE STATE                                                      */
+/*                                                                           */
+/*****************************************************************************/
 struct HandshakeTx {
     body: PipeBody, 
     protocol_id: u16,
@@ -412,11 +413,11 @@ impl LivePipeState for HandshakeTx {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// RECV PEER HANDSHAKE STATE                                                 //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
+/*****************************************************************************/
+/*                                                                           */
+/* RECV PEER HANDSHAKE STATE                                                 */
+/*                                                                           */
+/*****************************************************************************/
 struct HandshakeRx {
     body: PipeBody, 
     protocol_peer_id: u16
@@ -490,11 +491,11 @@ impl LivePipeState for HandshakeRx {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// HANDSHAKE ESTABLISHED STATE                                               //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
+/*****************************************************************************/
+/*                                                                           */
+/* HANDSHAKE ESTABLISHED STATE                                               */
+/*                                                                           */
+/*****************************************************************************/
 struct Activable {
     body: PipeBody
 }
@@ -515,7 +516,7 @@ impl PipeState for Activable {
     fn on_open_ack(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         let res = self.as_ref().resync_readiness(event_loop);
 
-        transition_if_ok::<Activable, Idle>(self, res, event_loop)
+        transition_if_ok::<Activable, Active>(self, res, event_loop)
     }
 
     fn ready(self: Box<Self>, _: &mut EventLoop, _: mio::EventSet) -> Box<PipeState> {
@@ -533,100 +534,120 @@ impl LivePipeState for Activable {
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// IDLE STATE                                                                //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
-struct Idle {
+/*****************************************************************************/
+/*                                                                           */
+/* ACTIVE STATE                                                              */
+/*                                                                           */
+/*****************************************************************************/
+struct Active {
     body: PipeBody,
+    recv_operation: Option<recv::RecvOperation>,
+    send_operation: Option<send::SendOperation>,
     readable: bool
 }
 
-impl From<Activable> for Idle {
-    fn from(state: Activable) -> Idle {
-        Idle {
+impl From<Activable> for Active {
+    fn from(state: Activable) -> Active {
+        Active {
             body: state.body,
+            recv_operation: None,
+            send_operation: None,
             readable: false
         }
     }
 }
 
-impl From<Receiving> for Idle {
-    fn from(state: Receiving) -> Idle {
-        Idle {
-            body: state.body,
-            readable: false
+impl Active {
+    fn run_recv_op(&mut self, mut operation: recv::RecvOperation) -> io::Result<()> {
+        match operation.recv(self.body.connection()) {
+            Ok(Some(msg)) => self.received_msg(msg),
+            Ok(None)      => self.receiving_msg(operation),
+            Err(e)        => Err(e)
+        }
+    }
+
+    fn received_msg(&mut self, msg: Message) -> io::Result<()> {
+        self.send_sig(PipeEvtSignal::MsgRcv(msg))
+    }
+
+    fn receiving_msg(&mut self, operation: recv::RecvOperation) -> io::Result<()> {
+        self.readable = false;
+        self.recv_operation = Some(operation);
+        Ok(())
+    }
+
+    fn readable_changed(&mut self, readable: bool) -> io::Result<()> {
+        if readable {
+            match self.recv_operation.take() {
+                Some(operation) => return self.run_recv_op(operation),
+                None => self.readable = true
+            }
+        } else {
+            self.readable = false
+        }
+
+        Ok(())
+    }
+
+    fn run_send_op(&mut self, mut operation: send::SendOperation) -> io::Result<()> {
+        match operation.send(self.body.connection()) {
+            Ok(true)  => self.sent_msg(),
+            Ok(false) => self.sending_msg(operation),
+            Err(e)    => Err(e)
+        }
+    }
+
+    fn sent_msg(&mut self) -> io::Result<()> {
+        self.send_sig(PipeEvtSignal::MsgSnd)
+    }
+
+    fn sending_msg(&mut self, operation: send::SendOperation) -> io::Result<()> {
+        self.send_operation = Some(operation);
+        Ok(())
+    }
+
+    fn writable_changed(&mut self, writable: bool) -> io::Result<()> {
+        if writable {
+            match self.send_operation.take() {
+                Some(operation) => self.run_send_op(operation),
+                None => Ok(())
+            }
+        } else {
+            Ok(())
         }
     }
 }
 
-impl From<Sending> for Idle {
-    fn from(state: Sending) -> Idle {
-        Idle {
-            body: state.body,
-            readable: state.readable
-        }
-    }
-}
-
-impl Idle {
-    fn received_msg(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
-        let res = self.send_sig(PipeEvtSignal::MsgRcv(msg));
-
-        no_transition_if_ok(self, res, event_loop)
-    }
-
-    fn receiving_msg(self: Box<Self>, _: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
-        box Receiving::from(*self, op)
-    }
-
-    fn sent_msg(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = self.send_sig(PipeEvtSignal::MsgSnd);
-
-        no_transition_if_ok(self, res, event_loop)
-    }
-
-    fn sending_msg(self: Box<Self>, _: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
-        box Sending::from(*self, op)
-    }
-}
-
-impl PipeState for Idle {
+impl PipeState for Active {
     fn name(&self) -> &'static str {
-        "Idle"
+        "Active"
     }
 
-    fn ready(mut self: Box<Self>, _: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
-        if events.is_readable() {
-            self.readable = true;
-        }
+    fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
+        let res = 
+            self.readable_changed(events.is_readable()).and_then(|_|
+            self.writable_changed(events.is_writable()));
 
-        self
+        no_transition_if_ok(self, res, event_loop)
     }
 
     fn recv(mut self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let mut operation = recv::RecvOperation::new();
+        let operation = recv::RecvOperation::new();
+        let res = self.run_recv_op(operation);
 
-        match operation.recv(self.body.connection()) {
-            Ok(Some(msg)) => self.received_msg(event_loop, msg),
-            Ok(None)      => self.receiving_msg(event_loop, operation),
-            Err(e)        => self.on_error(event_loop, e)
-        }
+        no_transition_if_ok(self, res, event_loop)
     }
 
-    fn cancel_recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+    fn cancel_recv(mut self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        self.recv_operation = None;
         self
     }
 
     fn send(mut self: Box<Self>, event_loop: &mut EventLoop, msg: Rc<Message>) -> Box<PipeState> {
-        let mut operation = send::SendOperation::new(msg);
+        let operation = send::SendOperation::new(msg);
+        let res = self.run_send_op(operation);
 
-        match operation.send(self.body.connection()) {
-            Ok(true)  => self.sent_msg(event_loop),
-            Ok(false) => self.sending_msg(event_loop, operation),
-            Err(e)    => self.on_error(event_loop, e)
-        }
+        no_transition_if_ok(self, res, event_loop)
     }
 
     fn send_nb(mut self: Box<Self>, event_loop: &mut EventLoop, msg: Rc<Message>) -> Box<PipeState> {
@@ -637,7 +658,8 @@ impl PipeState for Idle {
         }
     }
 
-    fn cancel_send(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+    fn cancel_send(mut self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
+        self.send_operation = None;
         self
     }
 
@@ -656,169 +678,17 @@ impl PipeState for Idle {
     }
 }
 
-impl LivePipeState for Idle {
+impl LivePipeState for Active {
     fn body(&self) -> &PipeBody {
         &self.body
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// RECV IN PROGRESS STATE                                                    //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
-struct Receiving {
-    body: PipeBody,
-    operation: Option<recv::RecvOperation>
-}
-
-impl Receiving {
-    fn from(state: Idle, op: recv::RecvOperation) -> Receiving {
-        Receiving {
-            body: state.body,
-            operation: Some(op)
-        }
-    }
-
-    fn received_msg(self: Box<Self>, event_loop: &mut EventLoop, msg: Message) -> Box<PipeState> {
-        let res = self.send_sig(PipeEvtSignal::MsgRcv(msg));
-
-        transition_if_ok::<Receiving, Idle>(self, res, event_loop)
-    }
-
-    fn receiving_msg(mut self: Box<Self>, _: &mut EventLoop, op: recv::RecvOperation) -> Box<PipeState> {
-        self.operation = Some(op);
-        self
-    }
-}
-
-impl PipeState for Receiving {
-    fn name(&self) -> &'static str {
-        "Recv"
-    }
-
-    fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
-
-        if self.operation.is_none() {
-            return box Idle { 
-                body: self.body, 
-                readable: events.is_readable()
-            };
-        }
-
-        if events.is_readable() == false {
-            return self;
-        }
-
-        let mut operation = self.operation.take().unwrap();
-        match operation.recv(self.body.connection()) {
-            Ok(Some(msg)) => self.received_msg(event_loop, msg),
-            Ok(None)      => self.receiving_msg(event_loop, operation),
-            Err(e)        => self.on_error(event_loop, e)
-        }
-    }
-
-    fn cancel_recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        transition::<Receiving, Idle>(self)
-    }
-
-    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        self.as_ref().close(event_loop)
-    }
-}
-
-impl LivePipeState for Receiving {
-    fn body(&self) -> &PipeBody {
-        &self.body
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// SEND IN PROGRESS STATE                                                    //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
-struct Sending {
-    body: PipeBody,
-    operation: Option<send::SendOperation>,
-    readable: bool
-}
-
-impl Sending {
-    fn from(state: Idle, op: send::SendOperation) -> Sending {
-        Sending {
-            body: state.body,
-            operation: Some(op),
-            readable: state.readable
-        }
-    }
-
-    fn sent_msg(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let res = self.send_sig(PipeEvtSignal::MsgSnd);
-
-        transition_if_ok::<Sending, Idle>(self, res, event_loop)
-    }
-
-    fn sending_msg(mut self: Box<Self>, _: &mut EventLoop, op: send::SendOperation) -> Box<PipeState> {
-        self.operation = Some(op);
-        self
-    }
-}
-
-impl PipeState for Sending {
-    fn name(&self) -> &'static str {
-        "Send"
-    }
-
-    fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
-
-        if self.operation.is_none() {
-            return box Idle { 
-                readable: self.readable || events.is_readable(),
-                body: self.body,
-            };
-        }
-
-        if events.is_readable() {
-            self.readable = true
-        }
-
-        if events.is_writable() == false {
-            return self;
-        }
-
-        let mut operation = self.operation.take().unwrap();
-        match operation.send(self.body.connection()) {
-            Ok(true)  => self.sent_msg(event_loop),
-            Ok(false) => self.sending_msg(event_loop, operation),
-            Err(e)    => self.on_error(event_loop, e)
-        }
-    }
-
-    fn cancel_send(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        transition::<Sending, Idle>(self)
-    }
-
-    fn can_recv(&self) -> bool {
-        self.readable
-    }
-
-    fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        self.as_ref().close(event_loop)
-    }
-}
-
-impl LivePipeState for Sending {
-    fn body(&self) -> &PipeBody {
-        &self.body
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//                                                                           //
-// DEAD STATE                                                                //
-//                                                                           //
-///////////////////////////////////////////////////////////////////////////////
+/*****************************************************************************/
+/*                                                                           */
+/* DEAD STATE                                                                */
+/*                                                                           */
+/*****************************************************************************/
 struct Dead;
 
 impl PipeState for Dead {
