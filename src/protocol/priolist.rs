@@ -490,11 +490,4 @@ mod tests {
         list.deactivate_and_advance();
         assert_eq!(None, list.get());
     }
-
-    #[test]
-    fn for_loop_over_empty_range_does_nothing() {
-        for i in 1..1 {
-            panic!("{:?}", i);
-        }
-    }
 }
