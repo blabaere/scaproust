@@ -567,13 +567,13 @@ impl Active {
     }
 
     fn received_msg(&mut self, msg: Message) -> io::Result<()> {
-        self.send_sig(PipeEvtSignal::MsgRcv(msg))
+        self.send_sig(PipeEvtSignal::RecvDone(msg))
     }
 
     fn receiving_msg(&mut self, operation: recv::RecvOperation) -> io::Result<()> {
         self.readable = false;
         self.recv_operation = Some(operation);
-        Ok(())
+        self.send_sig(PipeEvtSignal::RecvPending)
     }
 
     fn readable_changed(&mut self, readable: bool) -> io::Result<()> {
@@ -598,12 +598,12 @@ impl Active {
     }
 
     fn sent_msg(&mut self) -> io::Result<()> {
-        self.send_sig(PipeEvtSignal::MsgSnd)
+        self.send_sig(PipeEvtSignal::SendDone)
     }
 
     fn sending_msg(&mut self, operation: send::SendOperation) -> io::Result<()> {
         self.send_operation = Some(operation);
-        Ok(())
+        self.send_sig(PipeEvtSignal::SendPending)
     }
 
     fn writable_changed(&mut self, writable: bool) -> io::Result<()> {
