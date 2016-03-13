@@ -119,10 +119,10 @@ impl Protocol for Rep {
         self.apply(|s, body| s.send(body, event_loop, Rc::new(raw_msg), timeout));
     }
 
-    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+    fn on_send_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
         self.body.clear_backtrace();
 
-        self.apply(|s, body| s.on_send_by_pipe(body, event_loop, tok));
+        self.apply(|s, body| s.on_send_done(body, event_loop, tok));
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -133,11 +133,11 @@ impl Protocol for Rep {
         self.apply(|s, body| s.recv(body, event_loop, timeout));
     }
 
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
+    fn on_recv_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
         if let Some(msg) = self.body.raw_msg_to_msg(raw_msg, tok) {
             self.body.set_backtrace(&msg.header);
 
-            self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
+            self.apply(|s, body| s.on_recv_done(body, event_loop, tok, msg));
         } else {
             // TODO notify a recv failure, or restart recv
         }
@@ -218,11 +218,11 @@ impl State {
         }
     }
 
-    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+    fn on_send_done(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
         match self {
             State::Sending(token, msg, timeout) => {
                 if token == tok {
-                    body.on_send_by_pipe(event_loop, timeout);
+                    body.on_send_done(event_loop, timeout);
                     State::Idle
                 } else {
                     State::Sending(token, msg, timeout)
@@ -250,11 +250,11 @@ impl State {
         }
     }
 
-    fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) -> State {
+    fn on_recv_done(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) -> State {
         match self {
             State::Receiving(token, timeout) => {
                 if tok == token {
-                    body.on_recv_by_pipe(event_loop, msg, timeout);
+                    body.on_recv_done(event_loop, msg, timeout);
                     State::Active(tok)
                 } else {
                     State::Receiving(token, timeout)

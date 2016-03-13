@@ -100,14 +100,7 @@ impl Socket {
 
     pub fn on_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
         debug!("[{:?}] on_pipe_evt [{:?}]: {}", self.id, tok.as_usize(), evt.name());
-        match evt {
-            PipeEvtSignal::Opened      => self.protocol.on_pipe_opened(event_loop, tok),
-            PipeEvtSignal::Closed      => {},
-            PipeEvtSignal::RecvDone(msg) => self.protocol.on_recv_by_pipe(event_loop, tok, msg),
-            PipeEvtSignal::RecvPending => {},
-            PipeEvtSignal::SendDone      => self.protocol.on_send_by_pipe(event_loop, tok),
-            PipeEvtSignal::SendPending => {},
-        }
+        self.protocol.on_pipe_evt(event_loop, tok, evt);
     }
 
     fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {

@@ -131,8 +131,8 @@ impl Protocol for Surv {
         self.apply(|s, body| s.send(body, event_loop, Rc::new(raw_msg), timeout));
     }
 
-    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.apply(|s, body| s.on_send_by_pipe(body, event_loop, tok));
+    fn on_send_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.apply(|s, body| s.on_send_done(body, event_loop, tok));
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -143,9 +143,9 @@ impl Protocol for Surv {
         self.apply(|s, body| s.recv(body, event_loop, timeout));
     }
 
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
+    fn on_recv_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
         if let Some((msg, survey_id)) = self.body.raw_msg_to_msg(raw_msg, tok) {
-            self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg, survey_id));
+            self.apply(|s, body| s.on_recv_done(body, event_loop, tok, msg, survey_id));
         } else {
             // TODO notify a recv failure, or restart recv
         }
@@ -231,7 +231,7 @@ impl State {
         State::Active(body.send(event_loop, msg))
     }
 
-    fn on_send_by_pipe(self, _: &mut Body, _: &mut EventLoop, _: mio::Token) -> State {
+    fn on_send_done(self, _: &mut Body, _: &mut EventLoop, _: mio::Token) -> State {
         self
     }
 
@@ -255,11 +255,11 @@ impl State {
         }
     }
 
-    fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, msg: Message, survey_id: u32) -> State {
+    fn on_recv_done(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, msg: Message, survey_id: u32) -> State {
         if let State::Receiving(token, p, timeout) = self {
             if token == tok {
                 if survey_id == body.cur_survey_id() {
-                    body.on_recv_by_pipe(event_loop, msg, timeout);
+                    body.on_recv_done(event_loop, msg, timeout);
 
                      State::Active(p)
                 } else {

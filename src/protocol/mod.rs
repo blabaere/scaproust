@@ -11,7 +11,7 @@ use std::io;
 use mio;
 
 use global::{ SocketType, SocketId, invalid_input_io_error };
-use event_loop_msg::{ SocketNotify, SocketOption };
+use event_loop_msg::{ SocketNotify, SocketOption, PipeEvtSignal };
 use pipe::Pipe;
 use EventLoop;
 use Message;
@@ -59,6 +59,11 @@ pub fn create_protocol(socket_id: SocketId, socket_type: SocketType, evt_tx: Rc<
 
 pub trait Protocol {
 
+/*****************************************************************************/
+/*                                                                           */
+/* IDENTIFICATION                                                            */
+/*                                                                           */
+/*****************************************************************************/
     fn get_type(&self) -> SocketType;
 
     fn id(&self) -> u16 {
@@ -68,23 +73,66 @@ pub trait Protocol {
         self.get_type().peer().id()
     }
 
-    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe, ) -> io::Result<()>;
-    fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
-
-    fn open_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token);
-    fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, token: mio::Token);
-
+/*****************************************************************************/
+/*                                                                           */
+/* READINESS CALLBACK                                                        */
+/*                                                                           */
+/*****************************************************************************/
     fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet);
 
+/*****************************************************************************/
+/*                                                                           */
+/* PIPE INSERTION AND REMOVAL                                                */
+/*                                                                           */
+/*****************************************************************************/
+    fn add_pipe(&mut self, token: mio::Token, pipe: Pipe, ) -> io::Result<()>;
+    fn remove_pipe(&mut self, token: mio::Token) -> Option<Pipe>;
+    fn open_pipe(&mut self, event_loop: &mut EventLoop, token: mio::Token);
+
+/*****************************************************************************/
+/*                                                                           */
+/* PIPE EVENT HANDLING                                                       */
+/*                                                                           */
+/*****************************************************************************/
+    fn on_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
+        match evt {
+            PipeEvtSignal::Opened        => self.on_pipe_opened(event_loop, tok),
+            PipeEvtSignal::Closed        => {},
+            PipeEvtSignal::RecvDone(msg) => self.on_recv_done(event_loop, tok, msg),
+            PipeEvtSignal::RecvPending   => self.on_recv_pending(event_loop, tok),
+            PipeEvtSignal::SendDone      => self.on_send_done(event_loop, tok),
+            PipeEvtSignal::SendPending   => self.on_send_pending(event_loop, tok),
+        }
+    }
+
+    fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, token: mio::Token);
+
+/*****************************************************************************/
+/*                                                                           */
+/* SEND RELATED METHODS                                                      */
+/*                                                                           */
+/*****************************************************************************/
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout_handle: Option<mio::Timeout>);
-    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token);
+    fn on_send_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token);
+    fn on_send_pending(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {}
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop);
 
+/*****************************************************************************/
+/*                                                                           */
+/* RECV RELATED METHODS                                                      */
+/*                                                                           */
+/*****************************************************************************/
     fn can_recv(&self) -> bool { false }
     fn recv(&mut self, event_loop: &mut EventLoop, timeout_handle: Option<mio::Timeout>);
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message);
+    fn on_recv_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message);
+    fn on_recv_pending(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {}
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop);
 
+/*****************************************************************************/
+/*                                                                           */
+/* OPTIONS AND PROTOCOL SPECIFIC METHODS                                     */
+/*                                                                           */
+/*****************************************************************************/
     fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
         match option {
             _ => Err(invalid_input_io_error("option not supported by protocol"))

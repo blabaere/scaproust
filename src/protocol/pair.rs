@@ -102,8 +102,8 @@ impl Protocol for Pair {
         self.on_state_transition(|s, body| s.send(body, event_loop, Rc::new(msg), timeout));
     }
 
-    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.on_state_transition(|s, body| s.on_send_by_pipe(body, event_loop, tok));
+    fn on_send_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.on_state_transition(|s, body| s.on_send_done(body, event_loop, tok));
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -114,8 +114,8 @@ impl Protocol for Pair {
         self.on_state_transition(|s, body| s.recv(body, event_loop, timeout));
     }
 
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) {
-        self.on_state_transition(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
+    fn on_recv_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) {
+        self.on_state_transition(|s, body| s.on_recv_done(body, event_loop, tok, msg));
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -184,7 +184,7 @@ impl State {
         }
     }
 
-    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token) -> State {
+    fn on_send_done(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token) -> State {
         if let State::Sending(_, timeout) = self {
             body.send_notify(SocketNotify::MsgSent);
             clear_timeout(event_loop, timeout);
@@ -212,7 +212,7 @@ impl State {
         }
     }
 
-    fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message) -> State {
+    fn on_recv_done(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message) -> State {
         if let State::Receiving(timeout) = self {
             body.send_notify(SocketNotify::MsgRecv(msg));
             clear_timeout(event_loop, timeout);

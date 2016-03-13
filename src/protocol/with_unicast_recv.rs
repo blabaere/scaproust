@@ -27,7 +27,7 @@ pub trait WithUnicastRecv : WithPipes {
         self.get_pipe_mut(&tok).map(|p| p.recv(event_loop)).is_some()
     }
 
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
+    fn on_recv_done(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
         self.send_notify(SocketNotify::MsgRecv(msg));
         
         clear_timeout(event_loop, timeout);

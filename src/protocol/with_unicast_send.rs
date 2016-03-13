@@ -21,7 +21,7 @@ pub trait WithUnicastSend : WithPipes {
         self.get_pipe_mut(&tok).map(|p| p.send(event_loop, msg)).is_some()
     }
 
-    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
+    fn on_send_done(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
         self.send_notify(SocketNotify::MsgSent);
 
         clear_timeout(event_loop, timeout);

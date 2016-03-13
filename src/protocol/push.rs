@@ -106,8 +106,8 @@ impl Protocol for Push {
         self.apply(|s, body| s.send(body, event_loop, Rc::new(msg), timeout));
     }
 
-    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.apply(|s, body| s.on_send_by_pipe(body, event_loop, tok));
+    fn on_send_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.apply(|s, body| s.on_send_done(body, event_loop, tok));
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -118,8 +118,8 @@ impl Protocol for Push {
         self.apply(|s, body| s.recv(body, event_loop, timeout));
     }
 
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) {
-        self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg));
+    fn on_recv_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) {
+        self.apply(|s, body| s.on_recv_done(body, event_loop, tok, msg));
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -181,11 +181,11 @@ impl State {
         }
     }
 
-    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+    fn on_send_done(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
         match self {
             State::Sending(token, msg, timeout) => {
                 if tok == token {
-                    body.on_send_by_pipe(event_loop, timeout);
+                    body.on_send_done(event_loop, timeout);
                     State::Idle
                 } else {
                     State::Sending(token, msg, timeout)
@@ -207,7 +207,7 @@ impl State {
         self
     }
 
-    fn on_recv_by_pipe(self, _: &mut Body, _: &mut EventLoop, _: mio::Token, _: Message) -> State {
+    fn on_recv_done(self, _: &mut Body, _: &mut EventLoop, _: mio::Token, _: Message) -> State {
         self
     }
 

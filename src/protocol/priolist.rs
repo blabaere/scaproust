@@ -71,7 +71,7 @@ impl PrioList {
 
     pub fn remove(&mut self, tok: &mio::Token) {
         let all = self.full_range();
-        if let Some(index) = self.find_item_index(all, &|item| item.token == *tok) {
+        if let Some(index) = self.find_item_index(all, &|item| item.is(tok)) {
             self.remove_index(index);
         }
     }
@@ -221,6 +221,7 @@ impl PrioList {
 struct PrioListItem {
     token: mio::Token,
     priority: u8,
+    visible: bool,
     active: bool
 }
 
@@ -229,8 +230,33 @@ impl PrioListItem {
         PrioListItem {
             token: token,
             priority: priority,
+            visible: false,
             active: false
         }
+    }
+
+    fn is(&self, tok: &mio::Token) -> bool {
+        self.token == *tok
+    }
+
+    fn is_visible(&self) -> bool {
+        self.visible
+    }
+
+    fn is_invisible(&self) -> bool {
+        !self.visible
+    }
+
+    fn is_active(&self) -> bool {
+        self.active
+    }
+
+    fn is_inactive(&self) -> bool {
+        !self.active
+    }
+
+    fn is_activable(&self) -> bool {
+        self.visible && !self.active
     }
 }
 

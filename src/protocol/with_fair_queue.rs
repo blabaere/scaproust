@@ -96,7 +96,7 @@ pub trait WithFairQueue : WithPipes {
         })
     }
 
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
+    fn on_recv_done(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
         self.send_notify(SocketNotify::MsgRecv(msg));
         self.advance_pipe(event_loop);
 

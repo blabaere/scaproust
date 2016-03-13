@@ -131,8 +131,8 @@ impl Protocol for Req {
         self.apply(|s, body| s.send(body, event_loop, Rc::new(raw_msg), timeout));
     }
 
-    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.apply(|s, body| s.on_send_by_pipe(body, event_loop, tok));
+    fn on_send_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.apply(|s, body| s.on_send_done(body, event_loop, tok));
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
@@ -143,9 +143,9 @@ impl Protocol for Req {
         self.apply(|s, body| s.recv(body, event_loop, timeout));
     }
 
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
+    fn on_recv_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token, raw_msg: Message) {
         if let Some((msg, req_id)) = self.body.raw_msg_to_msg(raw_msg, tok) {
-            self.apply(|s, body| s.on_recv_by_pipe(body, event_loop, tok, msg, req_id));
+            self.apply(|s, body| s.on_recv_done(body, event_loop, tok, msg, req_id));
         } else {
             // TODO notify a recv failure, or restart recv
         }
@@ -240,11 +240,11 @@ impl State {
         }
     }
 
-    fn on_send_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+    fn on_send_done(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
         match self {
             State::Sending(token, msg, timeout) => {
                 if token == tok {
-                    let pending_request = body.on_send_by_pipe(event_loop, tok, msg, timeout);
+                    let pending_request = body.on_send_done(event_loop, tok, msg, timeout);
 
                     State::WaitingReply(pending_request)
                 } else {
@@ -297,11 +297,11 @@ impl State {
         }
     }
 
-    fn on_recv_by_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, msg: Message, req_id: u32) -> State {
+    fn on_recv_done(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, msg: Message, req_id: u32) -> State {
         if let State::Receiving(p, timeout) = self {
             if p.peer == tok {
                 if req_id == body.cur_req_id() {
-                    body.on_recv_by_pipe(event_loop, msg, p, timeout);
+                    body.on_recv_done(event_loop, msg, p, timeout);
 
                     State::Idle
                 } else {
@@ -357,8 +357,8 @@ impl Body {
         }
     }
 
-    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Rc<Message>, timeout: Timeout) -> PendingRequest {
-        WithLoadBalancing::on_send_by_pipe(self, event_loop, timeout);
+    fn on_send_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Rc<Message>, timeout: Timeout) -> PendingRequest {
+        WithLoadBalancing::on_send_done(self, event_loop, timeout);
 
         PendingRequest {
             peer: tok,
@@ -367,8 +367,8 @@ impl Body {
         }
     }
 
-    fn on_recv_by_pipe(&mut self, event_loop: &mut EventLoop, msg: Message, pending_request: PendingRequest, timeout: Timeout) {
-        WithUnicastRecv::on_recv_by_pipe(self, event_loop, msg, timeout);
+    fn on_recv_done(&mut self, event_loop: &mut EventLoop, msg: Message, pending_request: PendingRequest, timeout: Timeout) {
+        WithUnicastRecv::on_recv_done(self, event_loop, msg, timeout);
         clear_timeout(event_loop, pending_request.timeout);
     }
 

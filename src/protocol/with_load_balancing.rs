@@ -83,7 +83,7 @@ pub trait WithLoadBalancing : WithPipes {
         })
     }
 
-    fn on_send_by_pipe(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
+    fn on_send_done(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
         self.send_notify(SocketNotify::MsgSent);
         self.advance_pipe(event_loop);
 

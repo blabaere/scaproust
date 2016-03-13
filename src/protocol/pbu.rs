@@ -86,7 +86,7 @@ impl Protocol for Pub {
         clear_timeout(event_loop, timeout);
     }
 
-    fn on_send_by_pipe(&mut self, _: &mut EventLoop, _: mio::Token) {
+    fn on_send_done(&mut self, _: &mut EventLoop, _: mio::Token) {
     }
 
     fn on_send_timeout(&mut self, _: &mut EventLoop) {
@@ -99,7 +99,7 @@ impl Protocol for Pub {
         self.send_notify(ntf);
     }
 
-    fn on_recv_by_pipe(&mut self, _: &mut EventLoop, _: mio::Token, _: Message) {
+    fn on_recv_done(&mut self, _: &mut EventLoop, _: mio::Token, _: Message) {
     }
 
     fn on_recv_timeout(&mut self, _: &mut EventLoop) {
