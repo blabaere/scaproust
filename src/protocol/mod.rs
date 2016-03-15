@@ -20,11 +20,14 @@ pub type Timeout = Option<mio::Timeout>;
 
 pub mod excl;
 pub mod priolist;
+pub mod priolist2;
 
 mod with_notify;
 mod with_pipes;
 mod with_fair_queue;
+mod with_fair_queue2;
 mod with_load_balancing;
+mod with_load_balancing2;
 mod with_unicast_send;
 mod with_unicast_recv;
 mod without_send;
@@ -97,11 +100,11 @@ pub trait Protocol {
     fn on_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
         match evt {
             PipeEvtSignal::Opened        => self.on_pipe_opened(event_loop, tok),
-            PipeEvtSignal::Closed        => {},
             PipeEvtSignal::RecvDone(msg) => self.on_recv_done(event_loop, tok, msg),
-            PipeEvtSignal::RecvPending   => self.on_recv_pending(event_loop, tok),
+            PipeEvtSignal::RecvBlocked   => self.on_recv_blocked(event_loop, tok),
             PipeEvtSignal::SendDone      => self.on_send_done(event_loop, tok),
-            PipeEvtSignal::SendPending   => self.on_send_pending(event_loop, tok),
+            PipeEvtSignal::SendBlocked   => self.on_send_blocked(event_loop, tok),
+            PipeEvtSignal::Closed        => {}
         }
     }
 
@@ -114,7 +117,7 @@ pub trait Protocol {
 /*****************************************************************************/
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout_handle: Option<mio::Timeout>);
     fn on_send_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token);
-    fn on_send_pending(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {}
+    fn on_send_blocked(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {}
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop);
 
 /*****************************************************************************/
@@ -125,7 +128,7 @@ pub trait Protocol {
     fn can_recv(&self) -> bool { false }
     fn recv(&mut self, event_loop: &mut EventLoop, timeout_handle: Option<mio::Timeout>);
     fn on_recv_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token, msg: Message);
-    fn on_recv_pending(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {}
+    fn on_recv_blocked(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {}
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop);
 
 /*****************************************************************************/

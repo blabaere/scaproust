@@ -573,7 +573,7 @@ impl Active {
     fn receiving_msg(&mut self, operation: recv::RecvOperation) -> io::Result<()> {
         self.readable = false;
         self.recv_operation = Some(operation);
-        self.send_sig(PipeEvtSignal::RecvPending)
+        self.send_sig(PipeEvtSignal::RecvBlocked)
     }
 
     fn readable_changed(&mut self, readable: bool) -> io::Result<()> {
@@ -603,7 +603,7 @@ impl Active {
 
     fn sending_msg(&mut self, operation: send::SendOperation) -> io::Result<()> {
         self.send_operation = Some(operation);
-        self.send_sig(PipeEvtSignal::SendPending)
+        self.send_sig(PipeEvtSignal::SendBlocked)
     }
 
     fn writable_changed(&mut self, writable: bool) -> io::Result<()> {

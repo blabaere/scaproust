@@ -160,9 +160,9 @@ pub enum PipeEvtSignal {
     Opened,
     Closed,
     RecvDone(Message),
-    RecvPending,
+    RecvBlocked,
     SendDone,
-    SendPending
+    SendBlocked
 }
 
 impl PipeEvtSignal {
@@ -171,9 +171,9 @@ impl PipeEvtSignal {
             PipeEvtSignal::Opened => "Opened",
             PipeEvtSignal::Closed => "Closed",
             PipeEvtSignal::RecvDone(_) => "RecvDone",
-            PipeEvtSignal::RecvPending => "RecvPending",
+            PipeEvtSignal::RecvBlocked => "RecvBlocked",
             PipeEvtSignal::SendDone => "SendDone",
-            PipeEvtSignal::SendPending => "SendPending"
+            PipeEvtSignal::SendBlocked => "SendBlocked"
         }
     }
 }

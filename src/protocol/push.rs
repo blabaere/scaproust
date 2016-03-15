@@ -12,8 +12,8 @@ use std::io;
 use mio;
 
 use super::{ Protocol, Timeout };
-use super::priolist::*;
-use super::with_load_balancing::WithLoadBalancing;
+use super::priolist2::*;
+use super::with_load_balancing2::WithLoadBalancing;
 use super::without_recv::WithoutRecv;
 use super::with_pipes::WithPipes;
 use super::with_notify::WithNotify;
@@ -188,15 +188,19 @@ impl State {
                     body.on_send_done(event_loop, timeout);
                     State::Idle
                 } else {
+                    body.on_send_done_late(event_loop, tok);
                     State::Sending(token, msg, timeout)
                 }
             }
-            other => other
+            other => {
+                body.on_send_done_late(event_loop, tok);
+                other
+            }
         }
     }
 
     fn on_send_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
-        body.on_send_timeout(event_loop);
+        body.on_send_timeout();
 
         State::Idle
     }

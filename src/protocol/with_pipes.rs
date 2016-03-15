@@ -5,12 +5,14 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::collections::HashMap;
+use std::io;
 
 use mio;
 
 use EventLoop;
 use pipe::Pipe;
 use super::with_notify::WithNotify;
+use global::invalid_data_io_error;
 
 pub trait WithPipes : WithNotify {
     fn get_pipes(&self) -> &HashMap<mio::Token, Pipe>;
@@ -26,5 +28,12 @@ pub trait WithPipes : WithNotify {
 
     fn destroy_pipes(&mut self, event_loop: &mut EventLoop) {
         let _: Vec<_> = self.get_pipes_mut().drain().map(|(_, mut p)| p.close(event_loop)).collect();
+    }
+
+    fn insert_into_pipes(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
+        match self.get_pipes_mut().insert(tok, pipe) {
+            None    => Ok(()),
+            Some(_) => Err(invalid_data_io_error("A pipe has already been added with that token"))
+        }
     }
 }
