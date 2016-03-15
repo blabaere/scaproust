@@ -7,7 +7,7 @@ This would probably end up with the remote end in a state where it is expecting 
 In nanomsg it seems that when a send or recv is not completed right away, the pipe is removed from the 
 fair queue / load balancer and added back only once the operation is completed.  
   
-In this case, cancel would just tell the pipe not to notify the pipe of the operation completion.
+In this case, cancel would just tell the protocol not to notify the facade of the operation completion.
 But there is still a need to add back the pipe to the fq/lb once a readiness occurs AFTER the completion.  
   
 Actions:
@@ -42,6 +42,10 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 When a protocol receives a "malformed" message, the message is dropped, but the facade is not notified of anything and no pipe is asked to recv again
 
 ### Next problems
+- Add some doc comment on each SocketType variant
+- Create a core folder, for socket, acceptor and session modules
+- Create a facade folder for modules named *_facade
+- Create an io (or something better ?) for pipe, send and recv modules
 - Have pipe error forwarded to the session and the socket
 - Handle accept error
 
