@@ -10,9 +10,8 @@ use std::io;
 
 use mio;
 
-use super::{Protocol, Timeout};
-use super::clear_timeout;
-use super::excl::*;
+use super::Protocol;
+use super::policy::*;
 use pipe::Pipe;
 use global::*;
 use event_loop_msg::SocketNotify;

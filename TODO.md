@@ -11,11 +11,11 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 When a protocol receives a "malformed" message, the message is dropped, but the facade is not notified of anything and no pipe is asked to recv again
 
 ### Next problems
-- Add some doc comment on each SocketType variant
 - Create a policy folder in protocol, for with_* and priolist modules
 - Create a core folder, for socket, acceptor and session modules
 - Create a facade folder for modules named *_facade
 - Create an io folder (or something better ?) for pipe, send and recv modules
+- Add some doc comment on each SocketType variant
 - Have pipe error forwarded to the session and the socket
 - Handle accept error
 

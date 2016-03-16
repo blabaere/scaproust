@@ -8,14 +8,14 @@ use std::io;
 
 use mio;
 
-use super::{ Protocol, Timeout };
+use super::{ Timeout };
 use super::clear_timeout;
 use super::priolist::*;
 use pipe::Pipe;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
 use Message;
-use super::with_pipes::WithPipes;
+use super::WithPipes;
 
 pub trait WithFairQueue : WithPipes {
     fn get_fair_queue(&self) -> &PrioList;

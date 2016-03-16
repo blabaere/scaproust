@@ -16,20 +16,7 @@ use pipe::Pipe;
 use EventLoop;
 use Message;
 
-pub type Timeout = Option<mio::Timeout>;
-
-pub mod excl;
-pub mod priolist;
-
-mod with_notify;
-mod with_pipes;
-mod with_fair_queue;
-mod with_load_balancing;
-mod with_unicast_send;
-mod with_unicast_recv;
-mod without_send;
-mod without_recv;
-mod with_backtrace;
+mod policy;
 
 pub mod push;
 pub mod pull;
@@ -147,10 +134,4 @@ pub trait Protocol {
     fn resend(&mut self, _: &mut EventLoop) {}
 
     fn destroy(&mut self, event_loop: &mut EventLoop);
-}
-
-fn clear_timeout(event_loop: &mut EventLoop, handle: Option<mio::Timeout>) {
-    if let Some(timeout) = handle {
-        event_loop.clear_timeout(&timeout);
-    }
 }

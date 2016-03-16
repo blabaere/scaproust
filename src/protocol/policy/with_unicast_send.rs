@@ -9,12 +9,12 @@ use std::io;
 
 use mio;
 
-use super::{ Protocol, Timeout };
+use super::{ Timeout };
 use super::clear_timeout;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
 use Message;
-use super::with_pipes::WithPipes;
+use super::WithPipes;
 
 pub trait WithUnicastSend : WithPipes {
     fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>, tok: mio::Token) -> bool {

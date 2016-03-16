@@ -16,13 +16,8 @@ use time;
 
 use byteorder::*;
 
-use super::{ Protocol, Timeout };
-use super::clear_timeout;
-use super::priolist::*;
-use super::with_unicast_recv::WithUnicastRecv;
-use super::with_load_balancing::WithLoadBalancing;
-use super::with_pipes::WithPipes;
-use super::with_notify::WithNotify;
+use super::Protocol;
+use super::policy::*;
 use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify, EventLoopTimeout };

@@ -11,7 +11,8 @@ use std::io;
 
 use mio;
 
-use super::{ Protocol, Timeout, clear_timeout };
+use super::Protocol;
+use super::policy::*;
 use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify };
