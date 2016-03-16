@@ -7,9 +7,11 @@
 use std::net;
 use std::str;
 use std::io;
-use super::{ Transport, Connection, Listener };
+
 use mio::{ TryRead, TryWrite, Evented };
 use mio::tcp;
+
+use transport::{ Transport, Connection, Listener };
 
 pub struct Tcp;
 

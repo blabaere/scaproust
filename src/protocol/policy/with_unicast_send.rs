@@ -9,8 +9,7 @@ use std::io;
 
 use mio;
 
-use super::{ Timeout };
-use super::clear_timeout;
+use protocol::policy::{ Timeout, clear_timeout };
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
 use Message;
@@ -27,10 +26,9 @@ pub trait WithUnicastSend : WithPipes {
         clear_timeout(event_loop, timeout);
     }
 
-    fn on_send_timeout(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+    fn on_send_timeout(&self) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
 
         self.send_notify(SocketNotify::MsgNotSent(err));
-        self.get_pipe_mut(&tok).map(|p| p.cancel_send(event_loop));
     }
 }

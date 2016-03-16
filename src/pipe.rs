@@ -101,9 +101,9 @@ impl Pipe {
         self.apply(|s| s.recv(event_loop));
     }
 
-    pub fn cancel_recv(&mut self, event_loop: &mut EventLoop) {
+    /*pub fn cancel_recv(&mut self, event_loop: &mut EventLoop) {
         self.apply(|s| s.cancel_recv(event_loop));
-    }
+    }*/
 
     pub fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
         self.apply(|s| s.send(event_loop, msg));
@@ -113,9 +113,9 @@ impl Pipe {
         self.apply(|s| s.send_nb(event_loop, msg));
     }
 
-    pub fn cancel_send(&mut self, event_loop: &mut EventLoop) {
+    /*pub fn cancel_send(&mut self, event_loop: &mut EventLoop) {
         self.apply(|s| s.cancel_send(event_loop));
-    }
+    }*/
 
     pub fn resync_readiness(&mut self, event_loop: &mut EventLoop) {
         self.apply(|s| s.resync_readiness(event_loop));

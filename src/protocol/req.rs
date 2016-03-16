@@ -16,8 +16,8 @@ use time;
 
 use byteorder::*;
 
-use super::Protocol;
-use super::policy::*;
+use protocol::Protocol;
+use protocol::policy::*;
 use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify, EventLoopTimeout };
@@ -372,7 +372,7 @@ impl Body {
     }
 
     fn on_recv_timeout(&mut self, event_loop: &mut EventLoop, pending_request: PendingRequest) {
-        WithUnicastRecv::on_recv_timeout(self, event_loop, pending_request.peer);
+        WithUnicastRecv::on_recv_timeout(self);
         clear_timeout(event_loop, pending_request.timeout);
     }
 

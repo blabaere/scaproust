@@ -11,8 +11,8 @@ use std::io;
 
 use mio;
 
-use super::Protocol;
-use super::policy::*;
+use protocol::Protocol;
+use protocol::policy::*;
 use pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify };
@@ -230,10 +230,10 @@ impl State {
         }
     }
 
-    fn on_send_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
+    fn on_send_timeout(self, body: &mut Body, _: &mut EventLoop) -> State {
         match self {
-            State::Sending(tok, _, _)   |
-            State::SendOnHold(tok, _, _) => body.on_send_timeout(event_loop, tok),
+            State::Sending(_, _, _)   |
+            State::SendOnHold(_, _, _) => body.on_send_timeout(),
             _ => {}
         }
 

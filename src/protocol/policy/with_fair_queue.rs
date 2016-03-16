@@ -8,9 +8,8 @@ use std::io;
 
 use mio;
 
-use super::{ Timeout };
-use super::clear_timeout;
-use super::priolist::*;
+use protocol::policy::{ Timeout, clear_timeout };
+use protocol::policy::priolist::*;
 use pipe::Pipe;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;

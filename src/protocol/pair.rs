@@ -10,8 +10,8 @@ use std::io;
 
 use mio;
 
-use super::Protocol;
-use super::policy::*;
+use protocol::Protocol;
+use protocol::policy::*;
 use pipe::Pipe;
 use global::*;
 use event_loop_msg::SocketNotify;
@@ -183,20 +183,21 @@ impl State {
         }
     }
 
-    fn on_send_done(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token) -> State {
-        if let State::Sending(_, timeout) = self {
-            body.send_notify(SocketNotify::MsgSent);
-            clear_timeout(event_loop, timeout);
+    fn on_send_done(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+        match self {
+            State::Sending(_, timeout) => {
+                body.on_send_done(event_loop, timeout);
+                State::Idle
+            },
+            other => {
+                body.on_send_done_late(tok);
+                other
+            }
         }
-
-        State::Idle
     }
 
-    fn on_send_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
-
-        body.send_notify(SocketNotify::MsgNotSent(err));
-        body.get_active_pipe().map(|p| p.cancel_send(event_loop));
+    fn on_send_timeout(self, body: &mut Body, _: &mut EventLoop) -> State {
+        body.on_send_timeout();
 
         State::Idle
     }
@@ -273,6 +274,23 @@ impl Body {
 
     fn get_pipe(&mut self, tok: mio::Token) -> Option<&mut Pipe> {
         self.excl.get(tok)
+    }
+
+    fn on_send_done(&self, event_loop: &mut EventLoop, timeout: Timeout) {
+        self.send_notify(SocketNotify::MsgSent);
+
+        clear_timeout(event_loop, timeout);
+    }
+
+    fn on_send_done_late(&mut self, tok: mio::Token) {
+        self.excl.activate(tok);
+    }
+
+    fn on_send_timeout(&mut self) {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
+
+        self.send_notify(SocketNotify::MsgNotSent(err));
+        self.excl.deactivate();
     }
 
     fn on_recv_done(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Option<mio::Timeout>) {

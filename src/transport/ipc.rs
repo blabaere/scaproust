@@ -11,7 +11,7 @@ use std::fs;
 use mio::{ TryRead, TryWrite, Evented };
 use mio::unix;
 
-use super::{ Transport, Connection, Listener };
+use transport::{ Transport, Connection, Listener };
 
 pub struct Ipc;
 
