@@ -859,3 +859,27 @@ fn can_shutdown_connect_endpoint() {
     let not_received_b = client3.recv().unwrap_err();
     assert_eq!(io::ErrorKind::TimedOut, not_received_b.kind());
 }
+
+#[test]
+fn can_recover_from_timeout() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut pull = session.create_socket(SocketType::Pull).unwrap();
+    let mut push = session.create_socket(SocketType::Push).unwrap();
+
+    pull.bind("tcp://127.0.0.1:5489").unwrap();
+    pull.set_recv_timeout(time::Duration::from_millis(250)).unwrap();
+    push.connect("tcp://127.0.0.1:5489").unwrap();
+    push.set_send_timeout(time::Duration::from_millis(10)).unwrap();
+    sleep_enough_for_connections_to_establish();
+
+    let big_msg = vec![65; 3 * 1024 * 1024];
+    let not_sent = push.send(big_msg).unwrap_err();
+    assert_eq!(io::ErrorKind::TimedOut, not_sent.kind());
+
+    let received = pull.recv().unwrap();
+    assert_eq!(3 * 1024 * 1024, received.len());
+
+    push.send(vec![65, 66, 88]).unwrap();
+    pull.recv().unwrap();
+}

@@ -13,7 +13,6 @@ use super::{ Protocol, Timeout };
 use super::clear_timeout;
 use super::priolist::*;
 use pipe::Pipe;
-use global::*;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
 use Message;
@@ -23,11 +22,14 @@ pub trait WithLoadBalancing : WithPipes {
     fn get_load_balancer(&self) -> &PrioList;
     fn get_load_balancer_mut(&mut self) -> &mut PrioList;
 
+    fn insert_into_load_balancer(&mut self, tok: mio::Token, priority: u8) {
+        self.get_load_balancer_mut().insert(tok, priority)
+    }
+
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
-        match self.get_pipes_mut().insert(tok, pipe) {
-            None    => Ok(()),
-            Some(_) => Err(invalid_data_io_error("A pipe has already been added with that token"))
-        }
+        let priority = pipe.get_send_priority();
+
+        self.insert_into_pipes(tok, pipe).map(|_| self.insert_into_load_balancer(tok, priority))
     }
 
     fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
@@ -40,9 +42,7 @@ pub trait WithLoadBalancing : WithPipes {
     }
 
     fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        let priority = self.get_pipe(&tok).map_or(8, |p| p.get_send_priority());
-
-        self.get_load_balancer_mut().insert(tok, priority);
+        self.get_load_balancer_mut().show(tok);
         self.get_pipe_mut(&tok).map(|p| p.on_open_ack(event_loop));
     }
 
@@ -51,15 +51,6 @@ pub trait WithLoadBalancing : WithPipes {
             Some(tok) => self.get_pipe_mut(&tok),
             None      => None
         }
-    }
-
-    fn is_active_pipe(&self, tok: mio::Token) -> bool {
-        self.get_load_balancer().get() == Some(tok)
-    }
-
-    fn advance_pipe(&mut self, event_loop: &mut EventLoop) {
-        self.get_active_pipe().map(|p| p.resync_readiness(event_loop));
-        self.get_load_balancer_mut().advance();
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
@@ -85,16 +76,21 @@ pub trait WithLoadBalancing : WithPipes {
 
     fn on_send_done(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
         self.send_notify(SocketNotify::MsgSent);
-        self.advance_pipe(event_loop);
+        self.get_active_pipe().map(|p| p.resync_readiness(event_loop));
+        self.get_load_balancer_mut().advance();
 
         clear_timeout(event_loop, timeout);
     }
 
-    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
+    fn on_send_done_late(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        self.get_load_balancer_mut().show(tok);
+        self.get_pipe_mut(&tok).map(|p| p.resync_readiness(event_loop));
+    }
+
+    fn on_send_timeout(&mut self) {
         let err = io::Error::new(io::ErrorKind::TimedOut, "send timeout reached");
 
         self.send_notify(SocketNotify::MsgNotSent(err));
-        self.get_active_pipe().map(|p| p.cancel_send(event_loop));
-        self.advance_pipe(event_loop);
+        self.get_load_balancer_mut().skip();
     }
 }

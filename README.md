@@ -16,9 +16,9 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 * Idiomatic rust API first, mimic the original C API second.
 
 ## Maybe
+* Nonblocking operations.
 * Polling, on several sockets.
 * Other transports (Inproc, TLS, WebSockets).
-* Nonblocking operations.
 
 ## Non goals
 * Ability to use a socket as a raw file descriptor with system level functions.

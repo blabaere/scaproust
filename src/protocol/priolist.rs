@@ -70,8 +70,7 @@ impl PrioList {
     }
 
     pub fn remove(&mut self, tok: &mio::Token) {
-        let all = self.full_range();
-        if let Some(index) = self.find_item_index(all, &|item| item.is(tok)) {
+        if let Some(index) = self.find_item_index(&|item| item.is(tok)) {
             self.remove_index(index);
         }
     }
@@ -98,6 +97,12 @@ impl PrioList {
             self.set(index);
         } else { // index > current
             self.items.swap_remove(index);
+        }
+    }
+
+    pub fn show(&mut self, tok: mio::Token) {
+        if let Some(index) = self.find_item_index(&|item| item.is(&tok)) {
+            self.items[index].visible = true;
         }
     }
 
@@ -150,14 +155,20 @@ impl PrioList {
         }
     }
 
+    pub fn skip(&mut self) {
+        if let Some(index) = self.current {
+            self.items[index].visible = false;
+
+            self.deactivate_index_and_advance(index);
+        }
+    }
+
     fn find_activable_index(&self, tok: &mio::Token) -> Option<usize> {
-        let all = self.full_range();
-        self.find_item_index(all, &|item| item.is(tok) && item.active == false)
+        self.find_item_index(&|item| item.is(tok) && item.is_activable())
     }
 
     fn find_deactivable_index(&self, tok: &mio::Token) -> Option<usize> {
-        let all = self.full_range();
-        self.find_item_index(all, &|item| item.is(tok) && item.active == true)
+        self.find_item_index(&|item| item.is(tok) && item.is_active())
     }
 
     fn find_active_index_after(&self, pivot: usize, priority: u8) -> Option<usize> {
@@ -172,10 +183,15 @@ impl PrioList {
     }
 
     fn find_active_index(&self, range: Range<usize>, priority: u8) -> Option<usize> {
-        self.find_item_index(range, &|item| item.active && item.priority == priority)
+        self.find_item_index_in(range, &|item| item.is_active() && item.has(priority))
     }
 
-    fn find_item_index<P>(&self, range: Range<usize>, predicate: &P) -> Option<usize> where P: Fn(&PrioListItem) -> bool {
+    fn find_item_index<P>(&self, predicate: &P) -> Option<usize> where P: Fn(&PrioListItem) -> bool {
+        let range = self.full_range();
+        self.find_item_index_in(range, predicate)
+    }
+
+    fn find_item_index_in<P>(&self, range: Range<usize>, predicate: &P) -> Option<usize> where P: Fn(&PrioListItem) -> bool {
         for i in range {
             if predicate(&self.items[i]) {
                 return Some(i);
@@ -183,14 +199,6 @@ impl PrioList {
         }
 
         None
-    }
-
-    pub fn deactivate_and_advance(&mut self) {
-        if let Some(index) = self.current {
-            self.deactivate_index_and_advance(index)
-        } else {
-            self.advance()
-        }
     }
 
     fn deactivate_index_and_advance(&mut self, index: usize) {
@@ -239,20 +247,12 @@ impl PrioListItem {
         self.token == *tok
     }
 
-    fn is_visible(&self) -> bool {
-        self.visible
-    }
-
-    fn is_invisible(&self) -> bool {
-        !self.visible
+    fn has(&self, prio: u8) -> bool {
+        self.priority == prio
     }
 
     fn is_active(&self) -> bool {
         self.active
-    }
-
-    fn is_inactive(&self) -> bool {
-        !self.active
     }
 
     fn is_activable(&self) -> bool {
@@ -265,6 +265,17 @@ mod tests {
     use super::PrioList;
 
     use mio;
+
+    trait InsertAndShow {
+        fn insert_and_show(&mut self, tok: mio::Token, priority: u8);
+    }
+
+    impl InsertAndShow for PrioList {
+        fn insert_and_show(&mut self, tok: mio::Token, priority: u8) {
+            self.insert(tok, priority);
+            self.show(tok);
+        }
+    }
     
     #[test]
     fn when_created_list_is_empty() {
@@ -275,17 +286,16 @@ mod tests {
     }
 
     #[test]
-    fn when_item_is_added_it_is_not_active() {
+    fn when_item_is_added_it_does_not_set_current() {
         let mut list = PrioList::new();
-        let token = mio::Token(1);
 
-        list.insert(token, 8);
+        list.insert(mio::Token(1), 8);
 
         assert!(list.get().is_none());
     }
 
     #[test]
-    fn when_2nd_item_is_added_it_is_not_active() {
+    fn when_2nd_item_is_added_it_does_not_set_current() {
         let mut list = PrioList::new();
 
         list.insert(mio::Token(1), 8);
@@ -302,11 +312,26 @@ mod tests {
         let tok_3 = mio::Token(3);
 
         list.insert(tok_1, 8);
+        assert_eq!(None, list.find_activable_index(&tok_1));
+        list.show(tok_1);
         assert_eq!(Some(0), list.find_activable_index(&tok_1));
+
         list.insert(tok_2, 8);
+        assert_eq!(Some(0), list.find_activable_index(&tok_1));
+        assert_eq!(None, list.find_activable_index(&tok_2));
+        list.show(tok_2);
+        assert_eq!(Some(0), list.find_activable_index(&tok_1));
+        assert_eq!(Some(1), list.find_activable_index(&tok_2));
+
+        list.insert(tok_3, 8);
         assert_eq!(Some(0), list.find_activable_index(&tok_1));
         assert_eq!(Some(1), list.find_activable_index(&tok_2));
         assert_eq!(None, list.find_activable_index(&tok_3));
+
+        list.show(tok_3);
+        assert_eq!(Some(0), list.find_activable_index(&tok_1));
+        assert_eq!(Some(1), list.find_activable_index(&tok_2));
+        assert_eq!(Some(2), list.find_activable_index(&tok_3));
     }
 
     #[test]
@@ -315,6 +340,10 @@ mod tests {
         let token = mio::Token(1);
 
         list.insert(token, 8);
+        list.activate(token);
+        assert_eq!(None, list.get());
+
+        list.show(token);
         list.activate(token);
         assert_eq!(Some(token), list.get());
     }
@@ -326,9 +355,9 @@ mod tests {
         let tok_2 = mio::Token(2);
         let tok_3 = mio::Token(3);
 
-        list.insert(tok_1, 8);
-        list.insert(tok_2, 8);
-        list.insert(tok_3, 8);
+        list.insert_and_show(tok_1, 8);
+        list.insert_and_show(tok_2, 8);
+        list.insert_and_show(tok_3, 8);
 
         list.activate(tok_1);
         assert_eq!(Some(tok_1), list.get());
@@ -341,11 +370,11 @@ mod tests {
         let tok_2 = mio::Token(2);
         let tok_3 = mio::Token(3);
 
-        list.insert(tok_1, 8);
-        list.insert(tok_2, 8);
+        list.insert_and_show(tok_1, 8);
+        list.insert_and_show(tok_2, 8);
         list.activate(tok_1);
         assert_eq!(Some(tok_1), list.get());
-        list.insert(tok_3, 8);
+        list.insert_and_show(tok_3, 8);
         list.activate(tok_1);
     }
 
@@ -353,8 +382,8 @@ mod tests {
     fn when_activating_another_item_with_same_priority_it_does_not_become_current() {
         let mut list = PrioList::new();
 
-        list.insert(mio::Token(10), 8);
-        list.insert(mio::Token(20), 8);
+        list.insert_and_show(mio::Token(10), 8);
+        list.insert_and_show(mio::Token(20), 8);
         list.activate(mio::Token(20));
         assert_eq!(Some(mio::Token(20)), list.get());
         list.activate(mio::Token(10));
@@ -365,11 +394,25 @@ mod tests {
     fn when_activating_another_item_with_higher_priority_it_becomes_current() {
         let mut list = PrioList::new();
         
-        list.insert(mio::Token(10), 8);
-        list.insert(mio::Token(20), 2);
+        list.insert_and_show(mio::Token(10), 8);
+        list.insert_and_show(mio::Token(20), 2);
 
         list.activate(mio::Token(10));
         list.activate(mio::Token(20));
+        assert_eq!(Some(mio::Token(20)), list.get());
+    }
+
+    #[test]
+    fn when_activating_another_item_with_lower_priority_it_does_not_becomes_current() {
+        let mut list = PrioList::new();
+        
+        list.insert_and_show(mio::Token(10), 8);
+        list.insert_and_show(mio::Token(20), 2);
+
+        list.activate(mio::Token(20));
+        assert_eq!(Some(mio::Token(20)), list.get());
+
+        list.activate(mio::Token(10));
         assert_eq!(Some(mio::Token(20)), list.get());
     }
 
@@ -393,20 +436,21 @@ mod tests {
     #[test]
     fn advance_with_single_active_item_loops() {
         let mut list = PrioList::new();
+        let token = mio::Token(10);
 
-        list.insert(mio::Token(10), 8);
-        list.activate(mio::Token(10));
+        list.insert_and_show(token, 8);
+        list.activate(token);
         list.advance();
-        assert_eq!(Some(mio::Token(10)), list.get());
+        assert_eq!(Some(token), list.get());
     }
 
     #[test]
     fn find_active_index_after_works() {
         let mut list = PrioList::new();
         
-        list.insert(mio::Token(10), 8);
-        list.insert(mio::Token(20), 8);
-        list.insert(mio::Token(30), 8);
+        list.insert_and_show(mio::Token(10), 8);
+        list.insert_and_show(mio::Token(20), 8);
+        list.insert_and_show(mio::Token(30), 8);
 
         assert_eq!(None, list.find_active_index_after(0, 8));
         assert_eq!(None, list.find_active_index_after(1, 8));
@@ -432,9 +476,9 @@ mod tests {
     fn find_active_index_before_works() {
         let mut list = PrioList::new();
         
-        list.insert(mio::Token(10), 8);
-        list.insert(mio::Token(20), 8);
-        list.insert(mio::Token(30), 8);
+        list.insert_and_show(mio::Token(10), 8);
+        list.insert_and_show(mio::Token(20), 8);
+        list.insert_and_show(mio::Token(30), 8);
 
         assert_eq!(None, list.find_active_index_before(0, 8));
         assert_eq!(None, list.find_active_index_before(1, 8));
@@ -460,9 +504,9 @@ mod tests {
     fn advance_can_move_forward() {
         let mut list = PrioList::new();
         
-        list.insert(mio::Token(10), 8);
-        list.insert(mio::Token(20), 8);
-        list.insert(mio::Token(30), 8);
+        list.insert_and_show(mio::Token(10), 8);
+        list.insert_and_show(mio::Token(20), 8);
+        list.insert_and_show(mio::Token(30), 8);
 
         list.activate(mio::Token(10));
         list.activate(mio::Token(20));
@@ -475,9 +519,9 @@ mod tests {
     fn advance_can_skip_lower_priority() {
         let mut list = PrioList::new();
         
-        list.insert(mio::Token(10), 1);
-        list.insert(mio::Token(20), 9);
-        list.insert(mio::Token(30), 1);
+        list.insert_and_show(mio::Token(10), 1);
+        list.insert_and_show(mio::Token(20), 9);
+        list.insert_and_show(mio::Token(30), 1);
 
         list.activate(mio::Token(10));
         list.activate(mio::Token(20));
@@ -486,41 +530,4 @@ mod tests {
         assert_eq!(Some(mio::Token(30)), list.get());
     }
 
-    #[test]
-    fn deactivate_and_advance_can_jump_to_lower_priority() {
-        let mut list = PrioList::new();
-        
-        list.insert(mio::Token(10), 8);
-        list.insert(mio::Token(20), 10);
-        list.insert(mio::Token(30), 10);
-
-        list.activate(mio::Token(10));
-        list.activate(mio::Token(20));
-        list.activate(mio::Token(30));
-        assert_eq!(Some(mio::Token(10)), list.get());
-
-        list.deactivate_and_advance();
-        assert_eq!(Some(mio::Token(20)), list.get());
-
-        list.advance();
-        assert_eq!(Some(mio::Token(30)), list.get());
-
-        list.advance();
-        assert_eq!(Some(mio::Token(20)), list.get());
-
-        list.activate(mio::Token(10));
-        assert_eq!(Some(mio::Token(10)), list.get());
-    }
-
-    #[test]
-    fn deactivate_the_only_item_unsets_current() {
-        let mut list = PrioList::new();
-        
-        list.insert(mio::Token(10), 8);
-        list.activate(mio::Token(10));
-        assert_eq!(Some(mio::Token(10)), list.get());
-
-        list.deactivate_and_advance();
-        assert_eq!(None, list.get());
-    }
 }

@@ -143,8 +143,8 @@ impl Protocol for Resp {
         }
     }
 
-    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.apply(|s, body| s.on_recv_timeout(body, event_loop));
+    fn on_recv_timeout(&mut self, _: &mut EventLoop) {
+        self.apply(|s, body| s.on_recv_timeout(body));
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
@@ -261,15 +261,19 @@ impl State {
                     body.on_recv_done(event_loop, msg, timeout);
                     State::Active(tok)
                 } else {
+                    body.on_recv_done_late(event_loop, tok);
                     State::Receiving(token, timeout)
                 }
             }
-            other => other
+            other => {
+                body.on_recv_done_late(event_loop, tok);
+                other
+            }
         }
     }
 
-    fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
-        body.on_recv_timeout(event_loop);
+    fn on_recv_timeout(self, body: &mut Body) -> State {
+        body.on_recv_timeout();
 
         State::Idle
     }

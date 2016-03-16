@@ -12,8 +12,8 @@ use std::io;
 use mio;
 
 use super::{ Protocol, Timeout };
-use super::priolist2::*;
-use super::with_load_balancing2::WithLoadBalancing;
+use super::priolist::*;
+use super::with_load_balancing::WithLoadBalancing;
 use super::without_recv::WithoutRecv;
 use super::with_pipes::WithPipes;
 use super::with_notify::WithNotify;
@@ -110,8 +110,8 @@ impl Protocol for Push {
         self.apply(|s, body| s.on_send_done(body, event_loop, tok));
     }
 
-    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.apply(|s, body| s.on_send_timeout(body, event_loop));
+    fn on_send_timeout(&mut self, _: &mut EventLoop) {
+        self.apply(|s, body| s.on_send_timeout(body));
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
@@ -122,8 +122,8 @@ impl Protocol for Push {
         self.apply(|s, body| s.on_recv_done(body, event_loop, tok, msg));
     }
 
-    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.apply(|s, body| s.on_recv_timeout(body, event_loop));
+    fn on_recv_timeout(&mut self, _: &mut EventLoop) {
+        self.apply(|s, body| s.on_recv_timeout(body));
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
@@ -199,7 +199,7 @@ impl State {
         }
     }
 
-    fn on_send_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
+    fn on_send_timeout(self, body: &mut Body) -> State {
         body.on_send_timeout();
 
         State::Idle
@@ -215,7 +215,7 @@ impl State {
         self
     }
 
-    fn on_recv_timeout(self, _: &mut Body, _: &mut EventLoop) -> State {
+    fn on_recv_timeout(self, _: &mut Body) -> State {
         self
     }
 

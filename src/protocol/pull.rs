@@ -12,8 +12,8 @@ use std::io;
 use mio;
 
 use super::{ Protocol, Timeout };
-use super::priolist2::*;
-use super::with_fair_queue2::WithFairQueue;
+use super::priolist::*;
+use super::with_fair_queue::WithFairQueue;
 use super::without_send::WithoutSend;
 use super::with_pipes::WithPipes;
 use super::with_notify::WithNotify;
@@ -122,7 +122,7 @@ impl Protocol for Pull {
         self.apply(|s, body| s.on_recv_done(body, event_loop, tok, msg));
     }
 
-    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
+    fn on_recv_timeout(&mut self, _: &mut EventLoop) {
         self.apply(|s, body| s.on_recv_timeout(body));
     }
 

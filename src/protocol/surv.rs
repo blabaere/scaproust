@@ -151,8 +151,8 @@ impl Protocol for Surv {
         }
     }
 
-    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.apply(|s, body| s.on_recv_timeout(body, event_loop));
+    fn on_recv_timeout(&mut self, _: &mut EventLoop) {
+        self.apply(|s, body| s.on_recv_timeout(body));
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
@@ -266,15 +266,17 @@ impl State {
                     try_recv(body, event_loop, timeout, p)
                 }
             } else {
+                body.on_recv_done_late(event_loop, tok);
                 State::Receiving(token, p, timeout)
             }
         } else {
+            body.on_recv_done_late(event_loop, tok);
             State::Idle
         }
     }
 
-    fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
-        body.on_recv_timeout(event_loop);
+    fn on_recv_timeout(self, body: &mut Body) -> State {
+        body.on_recv_timeout();
 
         match self {
             State::Receiving(_,p, _) |

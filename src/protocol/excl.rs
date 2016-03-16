@@ -57,6 +57,10 @@ impl Excl {
         };
     }
 
+    pub fn deactivate(&mut self) {
+        self.active = false;
+    }
+
     pub fn get(&mut self, tok: mio::Token) -> Option<&mut Pipe> {
         if self.token == Some(tok) {
             self.pipe.as_mut()

@@ -135,8 +135,8 @@ impl Protocol for Req {
         self.apply(|s, body| s.on_send_done(body, event_loop, tok));
     }
 
-    fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.apply(|s, body| s.on_send_timeout(body, event_loop));
+    fn on_send_timeout(&mut self, _: &mut EventLoop) {
+        self.apply(|s, body| s.on_send_timeout(body));
     }
 
     fn recv(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
@@ -248,15 +248,19 @@ impl State {
 
                     State::WaitingReply(pending_request)
                 } else {
+                    body.on_send_done_late(event_loop, tok);
                     State::Sending(token, msg, timeout)
                 }
             },
-            other => other
+            other => {
+                body.on_send_done_late(event_loop, tok);
+                other
+            }
         }
     }
 
-    fn on_send_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
-        body.on_send_timeout(event_loop);
+    fn on_send_timeout(self, body: &mut Body) -> State {
+        body.on_send_timeout();
 
         State::Idle
     }

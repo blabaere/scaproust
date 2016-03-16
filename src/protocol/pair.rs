@@ -118,8 +118,8 @@ impl Protocol for Pair {
         self.on_state_transition(|s, body| s.on_recv_done(body, event_loop, tok, msg));
     }
 
-    fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.on_state_transition(|s, body| s.on_recv_timeout(body, event_loop));
+    fn on_recv_timeout(&mut self, _: &mut EventLoop) {
+        self.on_state_transition(|s, body| s.on_recv_timeout(body));
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
@@ -212,20 +212,21 @@ impl State {
         }
     }
 
-    fn on_recv_done(self, body: &mut Body, event_loop: &mut EventLoop, _: mio::Token, msg: Message) -> State {
-        if let State::Receiving(timeout) = self {
-            body.send_notify(SocketNotify::MsgRecv(msg));
-            clear_timeout(event_loop, timeout);
+    fn on_recv_done(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token, msg: Message) -> State {
+        match self {
+            State::Receiving(timeout) => {
+                body.on_recv_done(event_loop, msg, timeout);
+                State::Idle
+            }
+            other => {
+                body.on_recv_done_late(tok);
+                other
+            }
         }
-
-        State::Idle
     }
 
-    fn on_recv_timeout(self, body: &mut Body, event_loop: &mut EventLoop) -> State {
-        let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
-
-        body.send_notify(SocketNotify::MsgNotRecv(err));
-        body.get_active_pipe().map(|p| p.cancel_recv(event_loop));
+    fn on_recv_timeout(self, body: &mut Body) -> State {
+        body.on_recv_timeout();
 
         State::Idle
     }
@@ -273,6 +274,23 @@ impl Body {
 
     fn get_pipe(&mut self, tok: mio::Token) -> Option<&mut Pipe> {
         self.excl.get(tok)
+    }
+
+    fn on_recv_done(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Option<mio::Timeout>) {
+        self.send_notify(SocketNotify::MsgRecv(msg));
+
+        clear_timeout(event_loop, timeout);
+    }
+
+    fn on_recv_done_late(&mut self, tok: mio::Token) {
+        self.excl.activate(tok);
+    }
+
+    fn on_recv_timeout(&mut self) {
+        let err = io::Error::new(io::ErrorKind::TimedOut, "recv timeout reached");
+
+        self.send_notify(SocketNotify::MsgNotRecv(err));
+        self.excl.deactivate();
     }
 
     fn can_recv(&self) -> bool {
