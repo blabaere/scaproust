@@ -13,19 +13,19 @@ use mio;
 
 use global::*;
 use event_loop_msg::*;
-use socket_facade::*;
-use device_facade::*;
+use facade::socket::*;
+use facade::device::*;
 use EventLoop;
-use core::session::Session;
+use core;
 
 /// This is the entry point of scaproust API.
-pub struct SessionFacade {
+pub struct Session {
     cmd_sender: mio::Sender<EventLoopSignal>,
     evt_receiver: mpsc::Receiver<SessionNotify>
 }
 
-impl SessionFacade {
-    pub fn new() -> io::Result<SessionFacade> {
+impl Session {
+    pub fn new() -> io::Result<Session> {
         let mut builder = mio::EventLoopBuilder::new();
 
         builder.
@@ -37,17 +37,17 @@ impl SessionFacade {
 
         let mut event_loop = try!(builder.build());
         let (tx, rx) = mpsc::channel();
-        let session = SessionFacade { 
+        let session = Session { 
             cmd_sender: event_loop.channel(),
             evt_receiver: rx };
 
-        thread::spawn(move || SessionFacade::run_event_loop(&mut event_loop, tx));
+        thread::spawn(move || Session::run_event_loop(&mut event_loop, tx));
 
         Ok(session)
     }
 
     fn run_event_loop(event_loop: &mut EventLoop, evt_tx: mpsc::Sender<SessionNotify>) {
-        let mut handler = Session::new(evt_tx);
+        let mut handler = core::session::Session::new(evt_tx);
         let exec = event_loop.run(&mut handler);
 
         match exec {
@@ -68,7 +68,7 @@ impl SessionFacade {
     /// The newly created socket is initially not associated with any endpoints.
     /// In order to establish a message flow at least one endpoint has to be added to the socket 
     /// using [connect](struct.Socket.html#method.connect) and [bind](struct.Socket.html#method.bind) methods.
-    pub fn create_socket(&self, socket_type: SocketType) -> io::Result<SocketFacade> {
+    pub fn create_socket(&self, socket_type: SocketType) -> io::Result<Socket> {
         let cmd = SessionCmdSignal::CreateSocket(socket_type);
 
         try!(self.send_cmd(cmd));
@@ -80,15 +80,15 @@ impl SessionFacade {
         }
     }
 
-    fn new_socket(&self, id: SocketId, socket_type: SocketType, rx: mpsc::Receiver<SocketNotify>) -> SocketFacade {
-        SocketFacade::new(id, socket_type, self.cmd_sender.clone(), rx)
+    fn new_socket(&self, id: SocketId, socket_type: SocketType, rx: mpsc::Receiver<SocketNotify>) -> Socket {
+        Socket::new(id, socket_type, self.cmd_sender.clone(), rx)
     }
 
-    pub fn create_relay_device(&self, socket: SocketFacade) -> io::Result<Box<DeviceFacade>> {
+    pub fn create_relay_device(&self, socket: Socket) -> io::Result<Box<Device>> {
         Ok(box RelayDevice::new(socket))
     }
 
-    pub fn create_bridge_device(&self, left: SocketFacade, right: SocketFacade) -> io::Result<Box<DeviceFacade>> {
+    pub fn create_bridge_device(&self, left: Socket, right: Socket) -> io::Result<Box<Device>> {
         if !left.matches(&right) {
             return Err(other_io_error("Socket types do not match"));
         }
@@ -105,11 +105,11 @@ impl SessionFacade {
         }
     }
 
-    fn create_one_way_device(&self, left: SocketFacade, right: SocketFacade) -> io::Result<Box<DeviceFacade>> {
+    fn create_one_way_device(&self, left: Socket, right: Socket) -> io::Result<Box<Device>> {
         Ok(box OneWayDevice::new(left, right))
     }
 
-    fn create_two_way_device(&self, mut left: SocketFacade, mut right: SocketFacade) -> io::Result<Box<DeviceFacade>> {
+    fn create_two_way_device(&self, mut left: Socket, mut right: Socket) -> io::Result<Box<Device>> {
         try!(left.set_option(SocketOption::DeviceItem(true)));
         try!(right.set_option(SocketOption::DeviceItem(true)));
         let cmd = SessionCmdSignal::CreateProbe(left.get_id(), right.get_id());
@@ -124,12 +124,12 @@ impl SessionFacade {
         }
     }
 
-    fn new_device(&self, id: ProbeId, rx: mpsc::Receiver<ProbeNotify>, left: SocketFacade, right: SocketFacade) -> Box<DeviceFacade> {
+    fn new_device(&self, id: ProbeId, rx: mpsc::Receiver<ProbeNotify>, left: Socket, right: Socket) -> Box<Device> {
         box TwoWayDevice::new(id, self.cmd_sender.clone(), rx, left, right)
     }
 }
 
-impl Drop for SessionFacade {
+impl Drop for Session {
     fn drop(&mut self) {
         let _ = self.send_cmd(SessionCmdSignal::Shutdown);
     }

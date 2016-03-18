@@ -14,16 +14,16 @@ use event_loop_msg::*;
 /// [connect](struct.Socket.html#method.connect) methods.  
 /// Can only be used to shutdown an endpoint.  
 /// Note that droping an endpoint will **NOT** call shutdown.
-pub struct EndpointFacade {
+pub struct Endpoint {
     socket_id: SocketId,
     endpoint_id: mio::Token,
     cmd_sender: mio::Sender<EventLoopSignal>
 }
 
-impl EndpointFacade {
+impl Endpoint {
     #[doc(hidden)]
-    pub fn new(id: SocketId, tok: mio::Token, cmd_tx: mio::Sender<EventLoopSignal>) -> EndpointFacade {
-        EndpointFacade {
+    pub fn new(id: SocketId, tok: mio::Token, cmd_tx: mio::Sender<EventLoopSignal>) -> Endpoint {
+        Endpoint {
             socket_id: id,
             endpoint_id: tok,
             cmd_sender: cmd_tx

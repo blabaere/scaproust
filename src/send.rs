@@ -135,7 +135,6 @@ impl SendOperation {
                 Some(x) => x,
                 None => 0
             };
-            //debug!("Sent {}/{} bytes.", written, fragment.len());
 
             Ok(written)
         } else {

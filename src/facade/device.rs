@@ -11,10 +11,10 @@ use mio::Sender;
 
 use global::*;
 use event_loop_msg::*;
-use socket_facade::*;
+use facade::socket::*;
 
 
-pub trait DeviceFacade : Send {
+pub trait Device : Send {
     fn run(self: Box<Self>) -> io::Result<()>;
 }
 
@@ -25,16 +25,16 @@ pub trait DeviceFacade : Send {
 /*****************************************************************************/
 
 pub struct RelayDevice {
-    socket: Option<SocketFacade>
+    socket: Option<Socket>
 }
 
 impl RelayDevice {
-    pub fn new(s: SocketFacade) -> RelayDevice {
+    pub fn new(s: Socket) -> RelayDevice {
         RelayDevice { socket: Some(s) }
     }
 }
 
-impl DeviceFacade for RelayDevice {
+impl Device for RelayDevice {
     fn run(mut self: Box<Self>) -> io::Result<()> {
         let mut socket = self.socket.take().unwrap();
         loop {
@@ -50,12 +50,12 @@ impl DeviceFacade for RelayDevice {
 /*****************************************************************************/
 
 pub struct OneWayDevice {
-    left: Option<SocketFacade>,
-    right: Option<SocketFacade>
+    left: Option<Socket>,
+    right: Option<Socket>
 }
 
 impl OneWayDevice {
-    pub fn new(l: SocketFacade, r: SocketFacade) -> OneWayDevice {
+    pub fn new(l: Socket, r: Socket) -> OneWayDevice {
         OneWayDevice {
             left: Some(l),
             right: Some(r)
@@ -63,7 +63,7 @@ impl OneWayDevice {
     }
 }
 
-impl DeviceFacade for OneWayDevice {
+impl Device for OneWayDevice {
     fn run(mut self: Box<Self>) -> io::Result<()> {
         let mut left = self.left.take().unwrap();
         let mut right = self.right.take().unwrap();
@@ -84,12 +84,12 @@ pub struct TwoWayDevice {
     id: ProbeId,
     cmd_sender: Sender<EventLoopSignal>,
     evt_receiver: Receiver<ProbeNotify>,
-    left: Option<SocketFacade>,
-    right: Option<SocketFacade>
+    left: Option<Socket>,
+    right: Option<Socket>
 }
 
 impl TwoWayDevice {
-    pub fn new(id: ProbeId, cmd_tx: Sender<EventLoopSignal>, evt_tx: Receiver<ProbeNotify>, l: SocketFacade, r: SocketFacade) -> TwoWayDevice {
+    pub fn new(id: ProbeId, cmd_tx: Sender<EventLoopSignal>, evt_tx: Receiver<ProbeNotify>, l: Socket, r: Socket) -> TwoWayDevice {
         TwoWayDevice {
             id: id,
             cmd_sender: cmd_tx,
@@ -107,7 +107,7 @@ impl TwoWayDevice {
     }
 }
 
-impl DeviceFacade for TwoWayDevice {
+impl Device for TwoWayDevice {
     fn run(mut self: Box<Self>) -> io::Result<()> {
         let mut left = self.left.take().unwrap();
         let mut right = self.right.take().unwrap();

@@ -14,12 +14,12 @@ use mio::Sender;
 use global::*;
 use event_loop_msg::*;
 use Message;
-use endpoint_facade::EndpointFacade;
+use facade::endpoint::Endpoint;
 
 /// Socket is the main access that applications use to access the SP system.  
 /// It is an abstraction of an application's "connection" to a messaging topology.  
 /// Applications can have more than one Socket open at a time.
-pub struct SocketFacade {
+pub struct Socket {
     id: SocketId,
     socket_type: SocketType,
     cmd_sender: Sender<EventLoopSignal>,
@@ -28,10 +28,10 @@ pub struct SocketFacade {
                                           * or something that would help for poll */
 }
 
-impl SocketFacade {
+impl Socket {
     #[doc(hidden)]
-    pub fn new(id: SocketId, socket_type: SocketType, cmd_tx: Sender<EventLoopSignal>, evt_rx: Receiver<SocketNotify>) -> SocketFacade {
-        SocketFacade {
+    pub fn new(id: SocketId, socket_type: SocketType, cmd_tx: Sender<EventLoopSignal>, evt_rx: Receiver<SocketNotify>) -> Socket {
+        Socket {
             id: id,
             socket_type: socket_type,
             cmd_sender: cmd_tx,
@@ -64,7 +64,7 @@ impl SocketFacade {
     /// Note that bind and connect may be called multiple times on the same socket,
     /// thus allowing the socket to communicate with multiple heterogeneous endpoints.
     /// On success, returns an [Endpoint](struct.Endpoint.html) that can be later used to remove the endpoint from the socket.
-    pub fn connect(&mut self, addr: &str) -> Result<EndpointFacade, io::Error> {
+    pub fn connect(&mut self, addr: &str) -> Result<Endpoint, io::Error> {
         let cmd = SocketCmdSignal::Connect(addr.to_owned());
 
         try!(self.send_cmd(cmd));
@@ -84,7 +84,7 @@ impl SocketFacade {
     /// Note that bind and connect may be called multiple times on the same socket,
     /// thus allowing the socket to communicate with multiple heterogeneous endpoints.
     /// On success, returns an [Endpoint](struct.Endpoint.html) that can be later used to remove the endpoint from the socket.
-    pub fn bind(&mut self, addr: &str) -> Result<EndpointFacade, io::Error> {
+    pub fn bind(&mut self, addr: &str) -> Result<Endpoint, io::Error> {
         let cmd = SocketCmdSignal::Bind(addr.to_owned());
 
         try!(self.send_cmd(cmd));
@@ -97,8 +97,8 @@ impl SocketFacade {
         }
     }
 
-    fn new_endpoint(&self, tok: mio::Token) -> EndpointFacade {
-        EndpointFacade::new(self.id, tok, self.cmd_sender.clone())
+    fn new_endpoint(&self, tok: mio::Token) -> Endpoint {
+        Endpoint::new(self.id, tok, self.cmd_sender.clone())
     }
 
     /// Sends a message.
@@ -189,17 +189,17 @@ impl SocketFacade {
     }
 
     #[doc(hidden)]
-    pub fn matches(&self, other: &SocketFacade) -> bool {
+    pub fn matches(&self, other: &Socket) -> bool {
         self.socket_type.matches(other.socket_type)
     }
 
     #[doc(hidden)]
-    pub fn forward_msg(&mut self, other: &mut SocketFacade) -> io::Result<()> {
+    pub fn forward_msg(&mut self, other: &mut Socket) -> io::Result<()> {
         self.recv_msg().and_then(|msg| other.send_msg(msg))
     }
 }
 
-impl Drop for SocketFacade {
+impl Drop for Socket {
     fn drop(&mut self) {
         let cmd = SessionCmdSignal::DestroySocket(self.id);
         let cmd_sig = CmdSignal::Session(cmd);
