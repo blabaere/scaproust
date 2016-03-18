@@ -1,3 +1,6 @@
+### Make broadcast `send_blocked` aware
+When a pipe raises a `send_blocked`, it should be removed from the list, and added back when `send_done`.
+
 ### When the sending/receiving pipe is removed, it probably means the operation has failed
 
 ### REQ resend cannot be implemented with the current design
