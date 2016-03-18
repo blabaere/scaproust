@@ -877,9 +877,9 @@ fn can_recover_from_timeout() {
     let not_sent = push.send(big_msg).unwrap_err();
     assert_eq!(io::ErrorKind::TimedOut, not_sent.kind());
 
-    let received = pull.recv().unwrap();
+    let received = pull.recv().expect("Pull should have received the big msg");
     assert_eq!(3 * 1024 * 1024, received.len());
 
-    push.send(vec![65, 66, 88]).unwrap();
-    pull.recv().unwrap();
+    push.send(vec![65, 66, 88]).expect("Push should have sent a small msg");
+    pull.recv().expect("Pull should have received the small msg");
 }
