@@ -16,7 +16,7 @@ use event_loop_msg::*;
 use socket_facade::*;
 use device_facade::*;
 use EventLoop;
-use session::Session;
+use core::session::Session;
 
 /// This is the entry point of scaproust API.
 pub struct SessionFacade {

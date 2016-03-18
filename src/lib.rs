@@ -69,15 +69,12 @@ mod session_facade;
 mod socket_facade;
 mod device_facade;
 mod endpoint_facade;
-mod session;
-mod socket;
+mod core;
 mod protocol;
 mod transport;
 mod pipe;
 mod send;
 mod recv;
-mod acceptor;
-mod probe;
 
 pub use session_facade::SessionFacade as Session;
 pub use socket_facade::SocketFacade as Socket;
@@ -88,7 +85,7 @@ pub use global::SocketType;
 pub use event_loop_msg::SocketOption;
 
 #[doc(hidden)]
-pub type EventLoop = mio::EventLoop<session::Session>;
+pub type EventLoop = mio::EventLoop<core::session::Session>;
 
 /// Message encapsulates the messages that are exchanged back and forth.  
 /// The meaning of the header and body fields, and where the splits occur, 

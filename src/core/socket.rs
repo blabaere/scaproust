@@ -17,7 +17,7 @@ use event_loop_msg::*;
 
 use protocol::Protocol;
 use pipe::Pipe;
-use acceptor::Acceptor;
+use core::acceptor::Acceptor;
 use transport::{create_transport, Connection, Listener};
 
 use EventLoop;

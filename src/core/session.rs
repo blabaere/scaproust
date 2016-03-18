@@ -13,10 +13,9 @@ use mio;
 
 use global::*;
 use event_loop_msg::*;
-
-use socket::Socket;
 use protocol;
-use probe::Probe;
+use core::socket::Socket;
+use core::probe::Probe;
 
 use EventLoop;
 
