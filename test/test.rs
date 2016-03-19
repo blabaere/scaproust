@@ -19,7 +19,7 @@ fn sleep_enough_for_connections_to_establish() {
     thread::sleep(time::Duration::from_millis(250));
 }
 
-#[test]
+//#[test]
 fn test_pipeline_connected_to_bound() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -37,7 +37,7 @@ fn test_pipeline_connected_to_bound() {
 }
 
 
-#[test]
+//#[test]
 fn test_pipeline_bound_to_connected() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -55,7 +55,7 @@ fn test_pipeline_bound_to_connected() {
 }
 
 
-#[test]
+//#[test]
 fn test_send_while_not_connected() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -79,7 +79,7 @@ fn test_send_while_not_connected() {
 }
 
 
-#[test]
+//#[test]
 fn test_send_timeout() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -95,7 +95,7 @@ fn test_send_timeout() {
 }
 
 
-#[test]
+//#[test]
 fn test_recv_while_not_connected() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -120,7 +120,7 @@ fn test_recv_while_not_connected() {
 }
 
 
-#[test]
+//#[test]
 fn test_recv_timeout() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -138,7 +138,7 @@ fn test_recv_timeout() {
 }
 
 
-#[test]
+//#[test]
 fn test_pair_connected_to_bound() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -159,7 +159,7 @@ fn test_pair_connected_to_bound() {
 }
 
 
-#[test]
+//#[test]
 fn test_pair_bound_to_connected() {
     let _ = env_logger::init();
     info!("test_pair_bound_to_connected");
@@ -181,7 +181,7 @@ fn test_pair_bound_to_connected() {
 }
 
 
-#[test]
+//#[test]
 fn test_req_rep() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -205,7 +205,7 @@ fn test_req_rep() {
     assert_eq!(vec![67, 66, 65], client_reply);
 }
 
-#[test]
+//#[test]
 fn test_pub_sub() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -234,7 +234,7 @@ fn test_pub_sub() {
     assert_eq!(io::ErrorKind::TimedOut, not_received_c.kind());
 }
 
-#[test]
+//#[test]
 fn test_bus() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -259,7 +259,7 @@ fn test_bus() {
     assert_eq!(vec![65, 66, 67], received2);
 }
 
-#[test]
+//#[test]
 fn test_survey() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -296,7 +296,7 @@ fn test_survey() {
 }
 
 
-#[test]
+//#[test]
 fn test_send_reply_before_send_request() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -307,7 +307,7 @@ fn test_send_reply_before_send_request() {
 }
 
 
-#[test]
+//#[test]
 fn test_recv_reply_before_send_request() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -321,7 +321,7 @@ fn test_recv_reply_before_send_request() {
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
-#[test]
+//#[test]
 fn test_survey_deadline() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -351,7 +351,7 @@ fn test_survey_deadline() {
     assert_eq!(io::ErrorKind::Other, err.kind());
 }
 
-// #[test]
+// //#[test]
 // fn test_req_resend() {
 //    let session = Session::new().unwrap();
 //    let mut server = session.create_socket(SocketType::Rep).unwrap();
@@ -385,7 +385,7 @@ fn test_survey_deadline() {
 
 
 #[cfg(not(windows))]
-#[test]
+//#[test]
 fn test_ipc() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -404,7 +404,7 @@ fn test_ipc() {
     assert_eq!(vec![67, 66, 65], received);
 }
 
-#[test]
+//#[test]
 fn test_device_bus() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -439,7 +439,7 @@ fn test_device_bus() {
     device_thread.join().unwrap().unwrap_err();
 }
 
-#[test]
+//#[test]
 fn test_device_pipeline() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -474,7 +474,7 @@ fn test_device_pipeline() {
     device_thread.join().unwrap().unwrap_err();
 }
 
-#[test]
+//#[test]
 fn check_readable_pipe_is_used_for_recv() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -517,7 +517,7 @@ fn check_readable_pipe_is_used_for_recv() {
     assert_eq!(vec![66, 67, 68], received3);
 }
 
-#[test]
+//#[test]
 fn check_readable_pipe_is_used_for_recv_when_receiving_two_messages_in_one_event() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -543,7 +543,7 @@ fn check_readable_pipe_is_used_for_recv_when_receiving_two_messages_in_one_event
     assert_eq!(vec![67, 66, 65], received2);
 }
 
-#[test]
+//#[test]
 fn device_req_rep() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -581,7 +581,7 @@ fn device_req_rep() {
     device_thread.join().unwrap().unwrap_err();
 }
 
-#[test]
+//#[test]
 fn device_surv_resp_with_sequence_reply() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -631,7 +631,7 @@ fn device_surv_resp_with_sequence_reply() {
     device_thread.join().unwrap().unwrap_err();
 }
 
-#[test]
+//#[test]
 fn device_pair_left_to_right() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -669,7 +669,7 @@ fn device_pair_left_to_right() {
     device_thread.join().unwrap().unwrap_err();
 }
 
-#[test]
+//#[test]
 fn device_pair_right_to_left() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -708,7 +708,7 @@ fn device_pair_right_to_left() {
 }
 
 
-#[test]
+//#[test]
 fn device_surv_resp_with_parallel_reply() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -759,7 +759,7 @@ fn device_surv_resp_with_parallel_reply() {
     device_thread.join().unwrap().unwrap_err();
 }
 
-#[test]
+//#[test]
 fn sub_can_skip_crap_and_keep_crop() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -782,7 +782,7 @@ fn sub_can_skip_crap_and_keep_crop() {
     assert_eq!(vec![65, 66, 67], received);
 }
 
-#[test]
+//#[test]
 fn load_balancing_chooses_the_highest_priority() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
@@ -810,7 +810,7 @@ fn load_balancing_chooses_the_highest_priority() {
     assert_eq!(vec![65, 66, 67], received)
 }
 
-#[test]
+//#[test]
 fn can_shutdown_connect_endpoint() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();

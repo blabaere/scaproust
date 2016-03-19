@@ -8,5 +8,5 @@ install:
 build: false
 
 test_script:
-  - REM SET RUST_LOG=scaproust,test & SET RUST_TEST_THREADS=1& cargo test --verbose
-  - cargo test
+  - SET RUST_LOG=scaproust,test & SET RUST_TEST_THREADS=1& cargo test --verbose
+  - REM cargo test
