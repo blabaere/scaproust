@@ -868,7 +868,7 @@ fn can_recover_from_timeout() {
     let mut push = session.create_socket(SocketType::Push).unwrap();
 
     pull.bind("tcp://127.0.0.1:5489").unwrap();
-    pull.set_recv_timeout(time::Duration::from_millis(500)).unwrap();
+    pull.set_recv_timeout(time::Duration::from_millis(1000)).unwrap();
     push.connect("tcp://127.0.0.1:5489").unwrap();
     push.set_send_timeout(time::Duration::from_millis(10)).unwrap();
     sleep_enough_for_connections_to_establish();
