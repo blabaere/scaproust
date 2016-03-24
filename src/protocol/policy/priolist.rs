@@ -226,6 +226,12 @@ impl PrioList {
     }
 }
 
+impl Default for PrioList {
+    fn default() -> Self {
+        PrioList::new()
+    }
+}
+
 struct PrioListItem {
     token: mio::Token,
     priority: u8,

@@ -5,7 +5,7 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::rc::Rc;
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::io;
 
@@ -30,7 +30,6 @@ pub struct Bus {
 struct Body {
     notify_sender: Rc<Sender<SocketNotify>>,
     pipes: HashMap<mio::Token, Pipe>,
-    dist: HashSet<mio::Token>,
     fq: PrioList
 }
 
@@ -45,7 +44,6 @@ impl Bus {
         let body = Body {
             notify_sender: notify_tx,
             pipes: HashMap::new(),
-            dist: HashSet::new(),
             fq: PrioList::new()
         };
 
@@ -181,13 +179,15 @@ impl State {
         }
     }
 
-    fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, origin: Option<mio::Token>, _: Option<mio::Timeout>) -> State {
-        body.send(event_loop, msg, origin);
+    fn send(self, body: &mut Body, event_loop: &mut EventLoop, msg: Rc<Message>, origin: Option<mio::Token>, timeout: Option<mio::Timeout>) -> State {
+        body.send(event_loop, msg, origin, timeout);
 
         State::Idle
     }
 
-    fn on_send_done(self, _: &mut Body, _: &mut EventLoop, _: mio::Token) -> State {
+    fn on_send_done(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {
+        body.on_send_done(event_loop, tok);
+
         self
     }
 
@@ -239,31 +239,11 @@ impl State {
 
 impl Body {
 
-    fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
-        self.dist.remove(&tok);
-        WithFairQueue::remove_pipe(self, tok)
-    }
-
-    fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.dist.insert(tok);
-        WithFairQueue::on_pipe_opened(self, event_loop, tok);
-    }
-
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>, origin: Option<mio::Token>) {
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>, origin: Option<mio::Token>, timeout: Timeout) {
         if let Some(excluded) = origin {
-            self.broadcast(event_loop, msg, &mut |&tok| tok != excluded);
+            self.send_all_but(event_loop, msg, timeout, excluded);
         } else {
-            self.broadcast(event_loop, msg, &mut |_| true);
-        }
-
-        self.send_notify(SocketNotify::MsgSent);
-    }
-
-    fn broadcast<P>(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>, predicate: &mut P) where P : FnMut(&mio::Token) -> bool {
-        for tok in self.dist.iter().filter(|t| predicate(t)) {
-            let msg = msg.clone();
-
-            self.pipes.get_mut(tok).map(|p| p.send_nb(event_loop, msg));
+            self.send_all(event_loop, msg, timeout);
         }
     }
 
@@ -293,6 +273,9 @@ impl WithFairQueue for Body {
     fn get_fair_queue_mut(&mut self) -> &mut PrioList {
         &mut self.fq
     }
+}
+
+impl WithBroadcast for Body {
 }
 
 fn decode(raw_msg: Message, pipe_id: mio::Token) -> Message {

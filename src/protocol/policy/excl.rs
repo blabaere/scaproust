@@ -89,3 +89,9 @@ impl Excl {
         self.pipe.as_mut()
     }
 }
+
+impl Default for Excl {
+    fn default() -> Self {
+        Excl::new()
+    }
+}

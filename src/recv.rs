@@ -36,6 +36,12 @@ pub struct RecvOperation {
     buffer: Option<Vec<u8>>
 }
 
+impl Default for RecvOperation {
+    fn default() -> Self {
+        RecvOperation::new()
+    }
+}
+
 impl RecvOperation {
 
     pub fn new() -> RecvOperation {

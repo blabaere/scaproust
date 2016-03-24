@@ -22,6 +22,7 @@ pub mod with_fair_queue;
 pub mod with_load_balancing;
 pub mod with_unicast_send;
 pub mod with_unicast_recv;
+pub mod with_broadcast;
 
 pub use self::excl::Excl;
 pub use self::priolist::PrioList;
@@ -30,6 +31,7 @@ pub use self::with_fair_queue::WithFairQueue;
 pub use self::with_load_balancing::WithLoadBalancing;
 pub use self::with_unicast_send::WithUnicastSend;
 pub use self::with_unicast_recv::WithUnicastRecv;
+pub use self::with_broadcast::WithBroadcast;
 
 pub type Timeout = Option<mio::Timeout>;
 

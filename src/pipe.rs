@@ -73,6 +73,14 @@ impl Pipe {
         }
     }
 
+    pub fn can_send(&self) -> bool {
+        match self.state.as_ref().map(|s| s.can_send()) {
+            Some(true)  => true,
+            Some(false) => false,
+            None        => false
+        }
+    }
+
     fn apply<F>(&mut self, transition: F) where F : FnOnce(Box<PipeState>) -> Box<PipeState> {
         if let Some(old_state) = self.state.take() {
             let old_name = old_state.name();
@@ -197,19 +205,11 @@ trait PipeState {
         box Dead
     }
 
-    fn cancel_recv(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        box Dead
-    }
-
     fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
         box Dead
     }
 
     fn send_nb(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
-        box Dead
-    }
-
-    fn cancel_send(self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
         box Dead
     }
 
@@ -222,6 +222,10 @@ trait PipeState {
     }
 
     fn can_recv(&self) -> bool {
+        false
+    }
+
+    fn can_send(&self) -> bool {
         false
     }
 
@@ -535,7 +539,8 @@ struct Active {
     body: PipeBody,
     recv_operation: Option<recv::RecvOperation>,
     send_operation: Option<send::SendOperation>,
-    readable: bool
+    readable: bool,
+    writable: bool
 }
 
 impl From<Activable> for Active {
@@ -544,7 +549,8 @@ impl From<Activable> for Active {
             body: state.body,
             recv_operation: None,
             send_operation: None,
-            readable: false
+            readable: false,
+            writable: false
         }
     }
 }
@@ -573,9 +579,9 @@ impl Active {
             match self.recv_operation.take() {
                 Some(operation) => return self.run_recv_op(operation),
                 None => self.readable = true
-            }
+            };
         } else {
-            self.readable = false
+            self.readable = false;
         }
 
         Ok(())
@@ -594,6 +600,7 @@ impl Active {
     }
 
     fn sending_msg(&mut self, operation: send::SendOperation) -> io::Result<()> {
+        self.writable = false;
         self.send_operation = Some(operation);
         self.send_sig(PipeEvtSignal::SendBlocked)
     }
@@ -601,12 +608,14 @@ impl Active {
     fn writable_changed(&mut self, writable: bool) -> io::Result<()> {
         if writable {
             match self.send_operation.take() {
-                Some(operation) => self.run_send_op(operation),
-                None => Ok(())
-            }
+                Some(operation) => return self.run_send_op(operation),
+                None => self.writable = true
+            };
         } else {
-            Ok(())
+            self.writable = false;
         }
+        
+        Ok(())
     }
 }
 
@@ -630,11 +639,6 @@ impl PipeState for Active {
         no_transition_if_ok(self, res, event_loop)
     }
 
-    fn cancel_recv(mut self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        self.recv_operation = None;
-        self
-    }
-
     fn send(mut self: Box<Self>, event_loop: &mut EventLoop, msg: Rc<Message>) -> Box<PipeState> {
         let operation = send::SendOperation::new(msg);
         let res = self.run_send_op(operation);
@@ -650,11 +654,6 @@ impl PipeState for Active {
         }
     }
 
-    fn cancel_send(mut self: Box<Self>, _: &mut EventLoop) -> Box<PipeState> {
-        self.send_operation = None;
-        self
-    }
-
     fn resync_readiness(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         let res = self.as_ref().resync_readiness(event_loop);
 
@@ -663,6 +662,10 @@ impl PipeState for Active {
 
     fn can_recv(&self) -> bool {
         self.readable
+    }
+
+    fn can_send(&self) -> bool {
+        self.writable
     }
 
     fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {

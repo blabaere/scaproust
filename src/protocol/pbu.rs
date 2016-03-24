@@ -5,7 +5,7 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::rc::Rc;
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::io;
 
@@ -21,36 +21,14 @@ use Message;
 
 pub struct Pub {
     notify_sender: Rc<Sender<SocketNotify>>,
-    pipes: HashMap<mio::Token, Pipe>,
-    dist: HashSet<mio::Token>
+    pipes: HashMap<mio::Token, Pipe>
 }
 
 impl Pub {
     pub fn new(_: SocketId, notify_tx: Rc<Sender<SocketNotify>>) -> Pub {
         Pub {
             notify_sender: notify_tx,
-            pipes: HashMap::new(),
-            dist: HashSet::new()
-        }
-    }
-
-    fn send_notify(&self, evt: SocketNotify) {
-        let send_res = self.notify_sender.send(evt);
-
-        if send_res.is_err() {
-            error!("Failed to send notify to the facade: '{:?}'", send_res.err());
-        }
-    }
-
-    fn get_pipe<'a>(&'a mut self, tok: &mio::Token) -> Option<&'a mut Pipe> {
-        self.pipes.get_mut(&tok)
-    }
-
-    fn broadcast(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
-        for tok in self.dist.iter() {
-            let msg = msg.clone();
-
-            self.pipes.get_mut(tok).map(|p| p.send_nb(event_loop, msg));
+            pipes: HashMap::new()
         }
     }
 }
@@ -61,14 +39,10 @@ impl Protocol for Pub {
     }
 
     fn add_pipe(&mut self, tok: mio::Token, pipe: Pipe) -> io::Result<()> {
-        match self.pipes.insert(tok, pipe) {
-            None    => Ok(()),
-            Some(_) => Err(invalid_data_io_error("A pipe has already been added with that token"))
-        }
+        WithPipes::insert_into_pipes(self, tok, pipe)
      }
 
     fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
-        self.dist.remove(&tok);
         self.pipes.remove(&tok)
     }
 
@@ -77,27 +51,23 @@ impl Protocol for Pub {
     }
 
     fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.dist.insert(tok);
         self.pipes.get_mut(&tok).map(|p| p.on_open_ack(event_loop));
     }
 
     fn send(&mut self, event_loop: &mut EventLoop, msg: Message, timeout: Timeout) {
-        self.broadcast(event_loop, Rc::new(msg));
-        self.send_notify(SocketNotify::MsgSent);
-        clear_timeout(event_loop, timeout);
+        self.send_all(event_loop, Rc::new(msg), timeout);
     }
 
-    fn on_send_done(&mut self, _: &mut EventLoop, _: mio::Token) {
+    fn on_send_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+        WithBroadcast::on_send_done(self, event_loop, tok);
     }
 
     fn on_send_timeout(&mut self, _: &mut EventLoop) {
     }
 
-    fn recv(&mut self, _: &mut EventLoop, _: Timeout) {
-        let err = other_io_error("recv not supported by protocol");
-        let ntf = SocketNotify::MsgNotRecv(err);
-
-        self.send_notify(ntf);
+    fn recv(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
+        WithoutRecv::recv(self);
+        clear_timeout(event_loop, timeout);
     }
 
     fn on_recv_done(&mut self, _: &mut EventLoop, _: mio::Token, _: Message) {
@@ -107,14 +77,31 @@ impl Protocol for Pub {
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        self.get_pipe(&tok).map(|p| p.ready(event_loop, events));
+        self.get_pipe_mut(&tok).map(|p| p.ready(event_loop, events));
     }
 
     fn destroy(&mut self, event_loop: &mut EventLoop) {
-        for (_, pipe) in self.pipes.iter_mut() {
-            pipe.close(event_loop);
-        }
-
-        self.pipes.clear();
+        WithPipes::destroy_pipes(self, event_loop);
     }
+}
+
+impl WithNotify for Pub {
+    fn get_notify_sender(&self) -> &Sender<SocketNotify> {
+        &self.notify_sender
+    }
+}
+
+impl WithPipes for Pub {
+    fn get_pipes(&self) -> &HashMap<mio::Token, Pipe> {
+        &self.pipes
+    }
+    fn get_pipes_mut(&mut self) -> &mut HashMap<mio::Token, Pipe> {
+        &mut self.pipes
+    }
+}
+
+impl WithBroadcast for Pub {
+}
+
+impl WithoutRecv for Pub {
 }

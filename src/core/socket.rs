@@ -423,6 +423,12 @@ impl SocketImplOptions {
     }
 }
 
+impl Default for SocketImplOptions {
+    fn default() -> Self {
+        SocketImplOptions::new()
+    }
+}
+
 fn is_valid_priority(priority: u8) -> bool {
     priority >= 1 && priority <=16
 }

@@ -87,6 +87,12 @@ impl IdSequence {
     }
 }
 
+impl Default for IdSequence {
+    fn default() -> Self {
+        IdSequence::new()
+    }
+}
+
 pub fn other_io_error(msg: &'static str) -> Error {
     Error::new(ErrorKind::Other, msg)
 }

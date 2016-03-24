@@ -5,7 +5,7 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::rc::Rc;
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::io;
 
@@ -35,7 +35,6 @@ struct Body {
     id: SocketId,
     notify_sender: Rc<Sender<SocketNotify>>,
     pipes: HashMap<mio::Token, Pipe>,
-    dist: HashSet<mio::Token>,
     fq: PrioList,
     survey_id_seq: u32,
     deadline_ms: u64,
@@ -59,7 +58,6 @@ impl Surv {
             id: socket_id,
             notify_sender: notify_tx,
             pipes: HashMap::new(),
-            dist: HashSet::new(),
             fq: PrioList::new(),
             survey_id_seq: ext_time::get_time().nsec as u32,
             deadline_ms: 1_000,
@@ -222,9 +220,8 @@ impl State {
         if let State::Active(p) = self {
             clear_timeout(event_loop, p.timeout);
         }
-        clear_timeout(event_loop, timeout);
 
-        State::Active(body.send(event_loop, msg))
+        State::Active(body.send(event_loop, msg, timeout))
     }
 
     fn on_send_done(self, _: &mut Body, _: &mut EventLoop, _: mio::Token) -> State {
@@ -326,30 +323,11 @@ impl Body {
             unwrap_or_else(|_| None)
     }
 
-    fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
-        self.dist.remove(&tok);
-        WithFairQueue::remove_pipe(self, tok)
-    }
-
-    fn on_pipe_opened(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.dist.insert(tok);
-        WithFairQueue::on_pipe_opened(self, event_loop, tok);
-    }
-
-    fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>,) -> PendingSurvey {
-        self.broadcast(event_loop, msg);
-        self.send_notify(SocketNotify::MsgSent);
+    fn send(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>, timeout: Timeout) -> PendingSurvey {
+        self.send_all(event_loop, msg, timeout);
 
         PendingSurvey {
             timeout: self.schedule_deadline(event_loop)
-        }
-    }
-
-    fn broadcast(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
-        for tok in self.dist.iter() {
-            let msg = msg.clone();
-
-            self.pipes.get_mut(tok).map(|p| p.send_nb(event_loop, msg));
         }
     }
 
@@ -405,6 +383,10 @@ impl WithFairQueue for Body {
         &mut self.fq
     }
 }
+
+impl WithBroadcast for Body {
+}
+
 fn encode(msg: Message, survey_id: u32) -> Message {
     let mut raw_msg = msg;
     let mut survey_id_bytes: [u8; 4] = [0; 4];
