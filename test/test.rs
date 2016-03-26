@@ -759,6 +759,16 @@ fn device_surv_resp_with_parallel_reply() {
     device_thread.join().unwrap().unwrap_err();
 }
 
+#[cfg(windows)]
+fn sleep_between_broacast() {
+    thread::sleep(time::Duration::from_millis(250));
+}
+
+#[cfg(not(windows))]
+fn sleep_between_broacast() {
+    thread::sleep(time::Duration::from_millis(10));
+}
+
 #[test]
 fn sub_can_skip_crap_and_keep_crop() {
     let _ = env_logger::init();
@@ -776,6 +786,11 @@ fn sub_can_skip_crap_and_keep_crop() {
     sleep_enough_for_connections_to_establish();
 
     server.send(vec![99, 99, 99]).unwrap();
+
+    // this is required because broadcast will only use pipe that are ready to send,
+    // and given that mio behavior on windows is currently _sub obtimal_ is this case
+    sleep_between_broacast();
+
     server.send(vec![65, 66, 67]).unwrap();
 
     let received = client.recv().unwrap();
