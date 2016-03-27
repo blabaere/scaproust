@@ -12,6 +12,7 @@ use byteorder::*;
 use Message;
 use transport::Connection;
 
+#[cfg(not(windows))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Step {
     Prefix,
@@ -20,6 +21,7 @@ enum Step {
     Done
 }
 
+#[cfg(not(windows))]
 impl Step {
     fn next(&self) -> Step {
         match *self {
@@ -30,6 +32,7 @@ impl Step {
     }
 }
 
+#[cfg(not(windows))]
 pub struct SendOperation {
     prefix: [u8; 8],
     msg: Rc<Message>,
@@ -37,6 +40,7 @@ pub struct SendOperation {
     written: usize
 }
 
+#[cfg(not(windows))]
 impl SendOperation {
     pub fn new(msg: Rc<Message>) -> SendOperation {
         let mut prefix = [0u8; 8];
@@ -115,5 +119,51 @@ impl SendOperation {
         } else {
             Ok(0)
         }
+    }
+}
+
+#[cfg(windows)]
+pub struct SendOperation {
+    buffer: Vec<u8>,
+    written: usize
+}
+
+#[cfg(windows)]
+impl SendOperation {
+    pub fn new(msg: Rc<Message>) -> SendOperation {
+        let msg_len = msg.len();
+        let buf_len = 8 + msg_len;
+        let mut buffer = Vec::with_capacity(buf_len);
+        let mut prefix = [0u8; 8];
+
+        BigEndian::write_u64(&mut prefix, msg_len as u64);
+        buffer.extend_from_slice(&prefix);
+        buffer.extend_from_slice(msg.get_header());
+        buffer.extend_from_slice(msg.get_body());
+
+        SendOperation {
+            buffer: buffer,
+            written: 0
+        }
+    }
+
+    pub fn send(&mut self, connection: &mut Connection) -> io::Result<bool> {
+        if self.done() {
+            return Ok(true);
+        }
+        
+        let fragment = &self.buffer[self.written..];
+        let written = match try!(connection.try_write(fragment)) {
+            Some(x) => x,
+            None => 0
+        };
+
+        self.written += written;
+
+        Ok(self.done())
+    }
+
+    fn done(&self) -> bool {
+        self.written == self.buffer.len()
     }
 }
