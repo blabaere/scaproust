@@ -12,31 +12,6 @@ use byteorder::*;
 use Message;
 use transport::Connection;
 
-#[cfg(not(windows))]
-pub fn send_nb(connection: &mut Connection, msg: Rc<Message>) -> io::Result<bool> {
-    SendOperation::new(msg).send(connection)
-}
-
-#[cfg(windows)]
-pub fn send_nb(connection: &mut Connection, msg: Rc<Message>) -> io::Result<bool> {
-    let msg_len = msg.len();
-    let buf_len = 8 + msg_len;
-    let mut buffer = Vec::with_capacity(buf_len);
-    let mut prefix = [0u8; 8];
-
-    BigEndian::write_u64(&mut prefix, msg_len as u64);
-    buffer.extend_from_slice(&prefix);
-    buffer.extend_from_slice(msg.get_header());
-    buffer.extend_from_slice(msg.get_body());
-
-    let written = match try!(connection.try_write(&buffer)) {
-        Some(x) => x,
-        None => 0
-    };
-
-    Ok(written == buf_len)
-}
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Step {
     Prefix,

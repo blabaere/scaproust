@@ -70,8 +70,11 @@ mod core;
 mod protocol;
 mod transport;
 mod pipe;
-mod send;
 mod recv;
+#[cfg(not(windows))]
+mod send;
+#[cfg(windows)]
+mod send_win;
 
 pub use facade::session::Session as Session;
 pub use facade::socket::Socket as Socket;

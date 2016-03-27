@@ -113,10 +113,6 @@ impl Pipe {
         self.apply(|s| s.send(event_loop, msg));
     }
 
-    pub fn send_nb(&mut self, event_loop: &mut EventLoop, msg: Rc<Message>) {
-        self.apply(|s| s.send_nb(event_loop, msg));
-    }
-
     pub fn resync_readiness(&mut self, event_loop: &mut EventLoop) {
         self.apply(|s| s.resync_readiness(event_loop));
     }
@@ -206,10 +202,6 @@ trait PipeState {
     }
 
     fn send(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
-        box Dead
-    }
-
-    fn send_nb(self: Box<Self>, _: &mut EventLoop, _: Rc<Message>) -> Box<PipeState> {
         box Dead
     }
 
@@ -644,14 +636,6 @@ impl PipeState for Active {
         let res = self.run_send_op(operation);
 
         no_transition_if_ok(self, res, event_loop)
-    }
-
-    fn send_nb(mut self: Box<Self>, event_loop: &mut EventLoop, msg: Rc<Message>) -> Box<PipeState> {
-        match send::send_nb(self.body.connection(), msg) {
-            Ok(true)  => self,
-            Ok(false) => self.on_error(event_loop, global::would_block_io_error("Non blocking send requested, but would block.")),
-            Err(e)    => self.on_error(event_loop, e)
-        }
     }
 
     fn resync_readiness(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
