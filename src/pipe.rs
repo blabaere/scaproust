@@ -16,10 +16,7 @@ use Message;
 use transport::Connection;
 use global;
 use event_loop_msg::*;
-#[cfg(not(windows))]
 use send;
-#[cfg(windows)]
-use send_win;
 use recv;
 
 /// A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
