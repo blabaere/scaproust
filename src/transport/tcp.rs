@@ -13,7 +13,21 @@ use mio::tcp;
 
 use transport::{ Transport, Connection, Listener };
 
-pub struct Tcp;
+pub struct Tcp {
+    no_delay: bool
+}
+
+impl Tcp {
+    pub fn new() -> Tcp {
+        Tcp { no_delay: false }
+    }
+}
+
+impl Default for Tcp {
+    fn default() -> Tcp {
+        Tcp::new()
+    }
+}
 
 impl Transport for Tcp {
 
@@ -31,12 +45,17 @@ impl Transport for Tcp {
         }
     }
 
+    fn set_nodelay(&mut self, value: bool) {
+        self.no_delay = value;
+    }
 }
 
 impl Tcp {
 
     fn connect(&self, addr: net::SocketAddr) -> Result<Box<Connection>, io::Error> {
         let tcp_stream = try!(tcp::TcpStream::connect(&addr));
+        try!(tcp_stream.set_nodelay(self.no_delay));
+
         let connection = TcpConnection { stream: tcp_stream };
 
         Ok(box connection)
@@ -44,7 +63,10 @@ impl Tcp {
     
     fn bind(&self, addr: net::SocketAddr) -> Result<Box<Listener>, io::Error> {
         let tcp_listener = try!(tcp::TcpListener::bind(&addr));
-        let listener = TcpListener { listener: tcp_listener };
+        let listener = TcpListener { 
+            listener: tcp_listener,
+            no_delay: self.no_delay
+        };
 
         Ok(box listener)
     }
@@ -76,7 +98,8 @@ impl Connection for TcpConnection {
 }
 
 struct TcpListener {
-    listener: tcp::TcpListener
+    listener: tcp::TcpListener,
+    no_delay: bool
 }
 
 impl Listener for TcpListener {
@@ -89,6 +112,7 @@ impl Listener for TcpListener {
         let mut conns: Vec<Box<Connection>> = Vec::new();
 
         while let Some((s, _)) = try!(self.listener.accept()) {
+            try!(s.set_nodelay(self.no_delay));
             conns.push(box TcpConnection { stream: s });
         }
 

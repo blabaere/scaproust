@@ -139,8 +139,9 @@ impl Socket {
         let addr_parts: Vec<&str> = addr.split("://").collect();
         let scheme = addr_parts[0];
         let specific_addr = addr_parts[1];
-        let transport = try!(create_transport(scheme));
+        let mut transport = try!(create_transport(scheme));
 
+        transport.set_nodelay(self.options.tcp_nodelay);
         transport.connect(specific_addr)
     }
 
@@ -178,8 +179,9 @@ impl Socket {
         let addr_parts: Vec<&str> = addr.split("://").collect();
         let scheme = addr_parts[0];
         let specific_addr = addr_parts[1];
-        let transport = try!(create_transport(scheme));
+        let mut transport = try!(create_transport(scheme));
         
+        transport.set_nodelay(self.options.tcp_nodelay);
         transport.bind(specific_addr)
     }
 
@@ -335,6 +337,7 @@ impl Socket {
             SocketOption::RecvTimeout(timeout)   => self.options.set_recv_timeout(timeout),
             SocketOption::SendPriority(priority) => self.options.set_send_priority(priority),
             SocketOption::RecvPriority(priority) => self.options.set_recv_priority(priority),
+            SocketOption::TcpNoDelay(flag)       => self.options.set_tcp_nodelay(flag),
             SocketOption::DeviceItem(value)      => self.set_device_item(value),
             option                               => self.protocol.set_option(event_loop, option)
         };
@@ -370,6 +373,7 @@ struct SocketImplOptions {
     pub recv_timeout_ms: Option<u64>,
     pub send_priority: u8,
     pub recv_priority: u8,
+    pub tcp_nodelay: bool,
     pub is_device_item: bool
 }
 
@@ -380,6 +384,7 @@ impl SocketImplOptions {
             recv_timeout_ms: None,
             send_priority: 8,
             recv_priority: 8,
+            tcp_nodelay: false,
             is_device_item: false
         }
     }
@@ -416,6 +421,11 @@ impl SocketImplOptions {
         } else {
             Err(invalid_data_io_error("Invalid priority"))
         }
+    }
+
+    fn set_tcp_nodelay(&mut self, value: bool) -> io::Result<()> {
+        self.tcp_nodelay = value;
+        Ok(())
     }
 
     fn set_device_item(&mut self, value: bool) {

@@ -179,6 +179,14 @@ impl Socket {
         self.set_option(SocketOption::SendPriority(priority))
     }
 
+    /// This option, when set to `true`, disables Nagle’s algorithm.
+    /// It also disables delaying of TCP acknowledgments. 
+    /// Using this option improves latency at the expense of throughput.
+    /// Default value is `false`.
+    pub fn set_tcp_nodelay(&mut self, value: bool) -> io::Result<()> {
+        self.set_option(SocketOption::TcpNoDelay(value))
+    }
+
     /// Sets inbound priority for endpoints subsequently added to the socket.  
     /// This option has no effect on socket types that are not able to receive messages.  
     /// When receiving a message, messages from peer with higher priority 

@@ -1,5 +1,4 @@
-### Make broadcast `send_blocked` aware
-When a pipe raises a `send_blocked`, it should be removed from the list, and added back when `send_done`.
+### Define a default max size for messages, and let the user change it
 
 ### When the sending/receiving pipe is removed, it probably means the operation has failed
 
@@ -14,19 +13,16 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 When a protocol receives a "malformed" message, the message is dropped, but the facade is not notified of anything and no pipe is asked to recv again
 
 ### Next problems
-- Create an io folder (or something better ?) for pipe, send and recv modules
 - Add some doc comment on each SocketType variant
 - Have pipe error forwarded to the session and the socket
 - Handle accept error
 
 ### Refactors:
 - Rename session into something less oriented ? (context, environment ...)
-- Implement Read & Write trait on sockets
 - Use a pool for payloads and buffers (if any)
 
 ### Features:
 - Implement nanocat
-- Expose the event loop configuration ?
 - STAR protocol
 
 ### Stuff to look at:
@@ -39,9 +35,3 @@ https://github.com/dwrensha/gj
 https://github.com/zonyitoo/simplesched  
 https://github.com/alexcrichton/wio (for appveyor ci script and doc publication too)  
 https://github.com/burrows-labs/mio-websockets  
-
-### Windows problem: non-blocking send not available
-The way mio works on Windows currently makes it impossible to send several chunks of bytes
-without having to wait for an event loop round-trip.
-This is required for dist based protocols to work (pub, survey and bus).
-The applied workaround is to create a buffer for each non-blocking send operation.

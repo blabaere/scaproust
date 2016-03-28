@@ -12,6 +12,12 @@ use byteorder::*;
 use Message;
 use transport::Connection;
 
+/*****************************************************************************/
+/*                                                                           */
+/* NOT WINDOWS, SEND PIECE BY PIECE                                          */
+/*                                                                           */
+/*****************************************************************************/
+
 #[cfg(not(windows))]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Step {
@@ -121,6 +127,12 @@ impl SendOperation {
         }
     }
 }
+
+/*****************************************************************************/
+/*                                                                           */
+/* WINDOWS, COPY EVERYTHING IN A BUFFER AND SEND IT                          */
+/*                                                                           */
+/*****************************************************************************/
 
 #[cfg(windows)]
 pub struct SendOperation {

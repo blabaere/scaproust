@@ -47,7 +47,6 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 - [ ] Transports
   - [x] TCP
   - [x] IPC (*nix only)
-  - [ ] INPROC  
 
 - [ ] Socket options
   - [ ] Linger
@@ -68,8 +67,8 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
   - [x] SUB subscribe
   - [x] SUB unsubscribe
 
-- [ ] Transport options
-  - [ ] TCP no delay
+- [x] Transport options
+  - [x] TCP no delay
 
 ## License
 

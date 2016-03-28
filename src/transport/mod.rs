@@ -15,6 +15,7 @@ pub mod ipc;
 pub trait Transport {
     fn connect(&self, addr: &str) -> io::Result<Box<Connection>>;
     fn bind(&self, addr: &str) -> io::Result<Box<Listener>>;
+    fn set_nodelay(&mut self, _: bool) {}
 }
 
 // represents a connection in a given media
@@ -34,7 +35,7 @@ pub trait Listener {
 
 pub fn create_transport(name: &str) -> io::Result<Box<Transport>> {
     match name {
-        "tcp" => Ok(box tcp::Tcp),
+        "tcp" => Ok(box tcp::Tcp::new()),
         #[cfg(not(windows))]
         "ipc" => Ok(box ipc::Ipc),
         _     => Err(io::Error::new(io::ErrorKind::InvalidData, format!("'{}' is not a supported protocol (tcp or ipc)", name)))

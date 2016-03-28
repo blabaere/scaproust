@@ -107,7 +107,10 @@ pub enum SocketOption {
     Subscribe(String),
     Unsubscribe(String),
     SurveyDeadline(time::Duration),
-    ResendInterval(time::Duration)
+    ResendInterval(time::Duration),
+
+    /// See [Socket::set_tcp_nodelay](struct.Socket.html#method.set_tcp_nodelay).
+    TcpNoDelay(bool)
 }
 
 /// Commands sent to a probe
