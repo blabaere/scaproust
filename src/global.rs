@@ -14,9 +14,53 @@ use mio::NotifyError;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SocketType {
+
+    /// **One-to-one protocol**
+    /// Pair protocol is the simplest and least scalable scalability protocol. 
+    /// It allows scaling by breaking the application in exactly two pieces. 
+    /// For example, if a monolithic application handles both accounting and agenda of HR department, 
+    /// it can be split into two applications (accounting vs. HR) that are run on two separate servers. 
+    /// These applications can then communicate via PAIR sockets. 
+    /// The downside of this protocol is that its scaling properties are very limited. 
+    /// Splitting the application into two pieces allows to scale the two servers. 
+    /// To add the third server to the cluster, application has to be split once more, 
+    /// say by separating HR functionality into hiring module and salary computation module. 
+    /// Whenever possible, try to use one of the more scalable protocols instead.  
+    ///  
+    /// Socket for communication with exactly one peer.
+    /// Each party can send messages at any time. 
+    /// If the peer is not available or send buffer is full subsequent calls to [send](struct.Socket.html#method.send) 
+    /// will block until it’s possible to send the message.
     Pair       = (    16),
+
+    /// **Publish/subscribe protocol**
+    /// Broadcasts messages to multiple destinations.
+    /// Messages are sent from `Pub` sockets and will only be received 
+    /// by `Sub` sockets that have subscribed to the matching topic. 
+    /// Topic is an arbitrary sequence of bytes at the beginning of the message body. 
+    /// The `Sub` socket will determine whether a message should be delivered 
+    /// to the user by comparing the subscribed topics to the bytes initial bytes 
+    /// in the incomming message, up to the size of the topic.  
+    /// Subscribing via [set_option](struct.Socket.html#method.set_option) and [SocketOption::Subscribe](enum.SocketOption.html#variant.Subscribe)
+    /// Will match any message with intial 5 bytes being "Hello", for example, message "Hello, World!" will match.
+    /// Topic with zero length matches any message.
+    /// If the socket is subscribed to multiple topics, 
+    /// message matching any of them will be delivered to the user.
+    /// Since the filtering is performed on the Subscriber side, 
+    /// all the messages from Publisher will be sent over the transport layer.
+    /// The entire message, including the topic, is delivered to the user.  
+    ///   
+    /// This socket is used to distribute messages to multiple destinations. Receive operation is not defined.
     Pub        = (2 * 16),
+
+    /// Receives messages from the publisher. 
+    /// Only messages that the socket is subscribed to are received. 
+    /// When the socket is created there are no subscriptions 
+    /// and thus no messages will be received. 
+    /// Send operation is not defined on this socket.
     Sub        = (2 * 16) + 1,
+
+    /// 
     Req        = (3 * 16),
     Rep        = (3 * 16) + 1,
     Push       = (5 * 16),
