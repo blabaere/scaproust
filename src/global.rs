@@ -17,11 +17,12 @@ use mio::NotifyError;
 pub enum SocketType {
 
     /// **One-to-one protocol**   
+    ///   
     /// Pair protocol is the simplest and least scalable scalability protocol. 
     /// It allows scaling by breaking the application in exactly two pieces. 
     /// For example, if a monolithic application handles both accounting and agenda of HR department, 
     /// it can be split into two applications (accounting vs. HR) that are run on two separate servers. 
-    /// These applications can then communicate via Pair sockets. 
+    /// These applications can then communicate via `Pair` sockets. 
     /// The downside of this protocol is that its scaling properties are very limited. 
     /// Splitting the application into two pieces allows to scale the two servers. 
     /// To add the third server to the cluster, application has to be split once more, 
@@ -35,6 +36,7 @@ pub enum SocketType {
     Pair       = (    16),
 
     /// **Publish/subscribe protocol**   
+    ///   
     /// Broadcasts messages to multiple destinations.
     /// Messages are sent from `Pub` sockets and will only be received 
     /// by `Sub` sockets that have subscribed to the matching topic. 
@@ -62,6 +64,7 @@ pub enum SocketType {
     Sub        = (2 * 16) + 1,
 
     /// **Request/reply protocol**   
+    ///   
     /// This protocol is used to distribute the workload among multiple stateless workers.
     /// Please note that request/reply applications should be stateless.
     /// It’s important to include all the information necessary to process the request in the request itself, 
@@ -81,6 +84,7 @@ pub enum SocketType {
     Rep        = (3 * 16) + 1,
 
     /// **Pipeline protocol**   
+    ///   
     /// Fair queues messages from the previous processing step and load balances them among instances of the next processing step.  
     ///   
     /// This socket is used to send messages to a cluster of load-balanced nodes. Receive operation is not implemented on this socket type.
@@ -90,6 +94,7 @@ pub enum SocketType {
     Pull       = (5 * 16) + 1,
 
     /// **Survey protocol**   
+    ///   
     /// Allows to broadcast a survey to multiple locations and gather the responses.  
     ///   
     /// Used to send the survey. The survey is delivered to all the connected respondents. 
@@ -103,12 +108,14 @@ pub enum SocketType {
     Respondent = (6 * 16) + 3,
 
     /// **Message bus protocol**   
+    ///   
     /// Broadcasts messages from any node to all other nodes in the topology. 
     /// The socket should never receives messages that it sent itself.
     /// This pattern scales only to local level (within a single machine or within a single LAN). 
     /// Trying to scale it further can result in overloading individual nodes with messages.  
-    /// _Warning_ For bus topology to function correctly, user is responsible for ensuring 
-    /// that path from each node to any other node exists within the topology.  
+    ///   
+    /// _Warning For bus topology to function correctly, user is responsible for ensuring 
+    /// that path from each node to any other node exists within the topology._  
     ///   
     /// Sent messages are distributed to all nodes in the topology. 
     /// Incoming messages from all other nodes in the topology are fair-queued in the socket.
