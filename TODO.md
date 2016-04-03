@@ -1,3 +1,13 @@
+### Pair does not behave as expected
+The td-pair example output shows that sometime no socket receives messages past the first ones.
+It seems a test is lacking on pair: 
+thread 1 connect, loop {recv with timeout, sleep, send without timeout}
+thread 2 sleep, bind, loop {recv with timeout, sleep, send without timeout}
+
+### IPC transport is NOT COMPATIBLE with nanomsg ?!
+Seems that IPC transports requires a single byte header with value 1 or 2 to denote 'normal' or 'shared memory'. See sipc.c:333
+Looks like the transport should be responsible for sending struct of type Message and not just &[u8] buffers.
+
 ### Define a default max size for messages, and let the user change it
 
 ### When the sending/receiving pipe is removed, it probably means the operation has failed
@@ -12,18 +22,25 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 ### Receving a malformed message will cause the recv operation to end in timeout
 When a protocol receives a "malformed" message, the message is dropped, but the facade is not notified of anything and no pipe is asked to recv again
 
-### Next problems
+### Next tasks
 - Add some doc comment on each SocketType variant
 - Have pipe error forwarded to the session and the socket
 - Handle accept error
 
-### Refactors:
+### AUTOMATE ALL THE THINGS !!!
+Create some scaproust/nanomsg compatibility tests.
+This could be done with nanocat, the Tim Dysinger examples and some scripts checking the output of each process.
+
+### Misc:
 - Rename session into something less oriented ? (context, environment ...)
-- Use a pool for payloads and buffers (if any)
+- Add create_xxx_socket helper functions on session ?
 
 ### Features:
 - Implement nanocat
 - STAR protocol
+
+### Performance
+- Use a pool for payloads and buffers (if any)
 
 ### Stuff to look at:
 **mioco now has a timeout feature !**  

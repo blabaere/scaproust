@@ -100,7 +100,11 @@ impl Socket {
 
     pub fn on_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
         debug!("[{:?}] on_pipe_evt [{:?}]: {}", self.id, tok.as_usize(), evt.name());
-        self.protocol.on_pipe_evt(event_loop, tok, evt);
+
+        match evt {
+            PipeEvtSignal::Error => self.remove_pipe_and_schedule_reconnect(event_loop, tok),
+            other => self.protocol.on_pipe_evt(event_loop, tok, other)
+        }
     }
 
     fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
@@ -239,14 +243,14 @@ impl Socket {
     fn pipe_ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         debug!("[{:?}] pipe [{:?}] ready: '{:?}'", self.id, tok.as_usize(), events);
 
+        self.protocol.ready(event_loop, tok, events);
+
+        if self.options.is_device_item && self.protocol.can_recv() {
+            self.send_event(SocketEvtSignal::Readable);
+        }
+
         if events.is_hup() | events.is_error() {
             self.remove_pipe_and_schedule_reconnect(event_loop, tok);
-        } else {
-            self.protocol.ready(event_loop, tok, events);
-
-            if self.options.is_device_item && self.protocol.can_recv() {
-                self.send_event(SocketEvtSignal::Readable);
-            }
         }
     }
 

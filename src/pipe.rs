@@ -250,6 +250,11 @@ trait LivePipeState {
         let _ = self.body().unsubscribe(event_loop);
         box Dead
     }
+
+    fn on_error(&self, _: &mut EventLoop, _: io::Error) -> Box<PipeState> {
+        let _ = self.send_sig(PipeEvtSignal::Error);
+        box Dead
+    }
 }
 
 fn transition<F, T>(f: Box<F>) -> Box<T> where
@@ -259,7 +264,6 @@ fn transition<F, T>(f: Box<F>) -> Box<T> where
 {
     box From::from(*f)
 }
-
 fn transition_if_ok<F, T : 'static>(f: Box<F>, res: io::Result<()>, event_loop: &mut EventLoop) -> Box<PipeState> where
     F : PipeState,
     T : From<F>,
@@ -270,7 +274,6 @@ fn transition_if_ok<F, T : 'static>(f: Box<F>, res: io::Result<()>, event_loop: 
         Err(e) => f.on_error(event_loop, e)
     }
 }
-
 fn no_transition_if_ok<F : PipeState + 'static>(f: Box<F>, res: io::Result<()>, event_loop: &mut EventLoop) -> Box<PipeState> 
 {
     match res {
@@ -315,6 +318,10 @@ impl PipeState for Initial {
 
     fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         self.as_ref().close(event_loop)
+    }
+
+    fn on_error(self: Box<Self>, event_loop: &mut EventLoop, err: io::Error) -> Box<PipeState> {
+        self.as_ref().on_error(event_loop, err)
     }
 }
 
@@ -392,6 +399,10 @@ impl PipeState for HandshakeTx {
 
     fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         self.as_ref().close(event_loop)
+    }
+
+    fn on_error(self: Box<Self>, event_loop: &mut EventLoop, err: io::Error) -> Box<PipeState> {
+        self.as_ref().on_error(event_loop, err)
     }
 }
 
@@ -471,6 +482,10 @@ impl PipeState for HandshakeRx {
     fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         self.as_ref().close(event_loop)
     }
+
+    fn on_error(self: Box<Self>, event_loop: &mut EventLoop, err: io::Error) -> Box<PipeState> {
+        self.as_ref().on_error(event_loop, err)
+    }
 }
 
 impl LivePipeState for HandshakeRx {
@@ -513,6 +528,10 @@ impl PipeState for Activable {
 
     fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         self.as_ref().close(event_loop)
+    }
+
+    fn on_error(self: Box<Self>, event_loop: &mut EventLoop, err: io::Error) -> Box<PipeState> {
+        self.as_ref().on_error(event_loop, err)
     }
 }
 
@@ -655,6 +674,10 @@ impl PipeState for Active {
     fn close(self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
         self.as_ref().close(event_loop)
     }
+
+    fn on_error(self: Box<Self>, event_loop: &mut EventLoop, err: io::Error) -> Box<PipeState> {
+        self.as_ref().on_error(event_loop, err)
+    }
 }
 
 impl LivePipeState for Active {
@@ -681,9 +704,9 @@ mod tests {
 
     #[test]
     fn can_compare_array_slices() {
-        let handshake1 : [u8; 8]= [0, 1, 2, 3, 4, 5, 6, 7];
-        let handshake2 : [u8; 8]= [0, 1, 2, 3, 4, 5, 6, 7];
-        let handshake3 : [u8; 8]= [0, 0, 0, 3, 4, 5, 6, 7];
+        let handshake1: [u8; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
+        let handshake2: [u8; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
+        let handshake3: [u8; 8] = [0, 0, 0, 3, 4, 5, 6, 7];
 
         assert!(&handshake1 == &handshake2);
         assert!(&handshake1 != &handshake3);

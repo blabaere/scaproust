@@ -162,6 +162,7 @@ impl SocketEvtSignal {
 pub enum PipeEvtSignal {
     Opened,
     Closed,
+    Error,
     RecvDone(Message),
     RecvBlocked,
     SendDone,
@@ -173,6 +174,7 @@ impl PipeEvtSignal {
         match *self {
             PipeEvtSignal::Opened => "Opened",
             PipeEvtSignal::Closed => "Closed",
+            PipeEvtSignal::Error => "Error",
             PipeEvtSignal::RecvDone(_) => "RecvDone",
             PipeEvtSignal::RecvBlocked => "RecvBlocked",
             PipeEvtSignal::SendDone => "SendDone",
@@ -181,7 +183,7 @@ impl PipeEvtSignal {
     }
 }
 
-/// Events raised by a previoulsy configured timer
+/// Events raised by a timer
 pub enum EventLoopTimeout {
     Reconnect(mio::Token, String),
     Rebind(mio::Token, String),
