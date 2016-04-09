@@ -1,3 +1,12 @@
+### Move send & recv operation inside connection ?
+This would solve the difference between TCP and IPC transport.
+But this would also require to move handshake related operations.
+And the common part should not be duplicated.
+And maybe it should not be named 'Connection', and certainly not stream.
+```rust
+
+```
+
 ### Pair does not behave as expected
 The td-pair example output shows that sometime no socket receives messages past the first ones.
 It seems a test is lacking on pair: 
@@ -6,7 +15,8 @@ thread 2 sleep, bind, loop {recv with timeout, sleep, send without timeout}
 
 ### IPC transport is NOT COMPATIBLE with nanomsg ?!
 Seems that IPC transports requires a single byte header with value 1 or 2 to denote 'normal' or 'shared memory'. See sipc.c:333
-Looks like the transport should be responsible for sending struct of type Message and not just &[u8] buffers.
+It seems the 'prefix' size should be decided by the transport, the last 8 bytes are the size of the messages, and the remaining first ones are transport specifics.
+Maybe the connection should be responsible for creating instances of [send|recv]::Operation ?
 
 ### Define a default max size for messages, and let the user change it
 

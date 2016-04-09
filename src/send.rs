@@ -163,7 +163,7 @@ impl SendOperation {
         if self.done() {
             return Ok(true);
         }
-        
+
         let fragment = &self.buffer[self.written..];
         let written = match try!(connection.try_write(fragment)) {
             Some(x) => x,
@@ -177,5 +177,29 @@ impl SendOperation {
 
     fn done(&self) -> bool {
         self.written == self.buffer.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use byteorder::*;
+    #[test]
+    fn can_write_msg_size_as_u64_in_vec_at_start() {
+        let msg_len: u64 = 54;
+        let mut buffer = vec![0; 8];
+        BigEndian::write_u64(&mut buffer, msg_len);
+        assert_eq!(0u8, buffer[0]);
+        assert_eq!(0u8, buffer[1]);
+        assert_eq!(54u8, buffer[7]);
+    }
+
+    #[test]
+    fn can_write_msg_size_as_u64_in_vec_at_pos() {
+        let msg_len: u64 = 54;
+        let mut buffer = vec![1; 9];
+        BigEndian::write_u64(&mut buffer[1..9], msg_len);
+        assert_eq!(1u8, buffer[0]);
+        assert_eq!(0u8, buffer[1]);
+        assert_eq!(54u8, buffer[8]);
     }
 }
