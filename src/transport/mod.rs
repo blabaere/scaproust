@@ -19,6 +19,8 @@ pub mod tcp;
 #[cfg(not(windows))]
 pub mod ipc;
 
+pub mod pipe;
+
 pub fn create_transport(name: &str) -> io::Result<Box<Transport>> {
     match name {
         "tcp" => Ok(box tcp::Tcp::new()),
@@ -29,21 +31,18 @@ pub fn create_transport(name: &str) -> io::Result<Box<Transport>> {
     
 }
 
-// represents the transport media 
+pub trait AsEvented {
+    fn as_evented(&self) -> &mio::Evented;
+}
+
 pub trait Transport {
-    fn connect(&self, addr: &str) -> io::Result<Box<Connection>>;
     fn bind(&self, addr: &str) -> io::Result<Box<Listener>>;
+    fn connect(&self, addr: &str) -> io::Result<Box<Connection>>;
     fn set_nodelay(&mut self, _: bool) {}
 }
 
-// represents a connection in a given media
-// only needs to expose mio compatible features:
-// - transfert bytes in non-blocking manner
-// - being registrable into the event loop
-pub trait Connection {
-    fn as_evented(&self) -> &mio::Evented;
-    fn try_read(&mut self, buf: &mut [u8]) -> io::Result<Option<usize>>;
-    fn try_write(&mut self, buf: &[u8]) -> io::Result<Option<usize>>;
+pub trait Listener : AsEvented {
+    fn accept(&mut self) -> io::Result<Vec<Box<Connection>>>;
 }
 
 pub trait Sender {
@@ -58,21 +57,12 @@ pub trait Receiver {
     fn has_pending_recv(&self) -> bool;
 }
 
-pub trait AsEvented {
-    fn as_evented(&self) -> &mio::Evented; // can't get AsRef to compile
-}
-
 pub trait Handshake {
     fn send_handshake(&mut self, socket_type: SocketType) -> io::Result<()>;
     fn recv_handshake(&mut self, socket_type: SocketType) -> io::Result<()>;
 }
 
-pub trait Conn2 : AsEvented+Handshake+Sender+Receiver {
-}
-
-pub trait Listener {
-    fn as_evented(&self) -> &mio::Evented;
-    fn accept(&mut self) -> io::Result<Vec<Box<Connection>>>;
+pub trait Connection : AsEvented+Handshake+Sender+Receiver {
 }
 
 pub trait TryWriteBuffer {

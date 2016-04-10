@@ -13,7 +13,7 @@ use mio;
 
 use protocol::Protocol;
 use protocol::policy::*;
-use pipe::Pipe;
+use transport::pipe::Pipe;
 use global::*;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;

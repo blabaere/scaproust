@@ -9,16 +9,15 @@ use std::net;
 use std::str;
 use std::io;
 
-use byteorder::*;
+use byteorder::{ BigEndian, ByteOrder };
 
 use mio::{ TryRead, TryWrite, Evented };
 use mio::tcp;
 
 use transport::{ 
     Transport, 
-    Connection, 
     Listener, 
-    Conn2, 
+    Connection, 
     Handshake,
     Sender, 
     Receiver, 
@@ -32,6 +31,12 @@ use transport::{
 use Message;
 use SocketType;
 use global;
+
+/*****************************************************************************/
+/*                                                                           */
+/* TRANSPORT                                                                 */
+/*                                                                           */
+/*****************************************************************************/
 
 pub struct Tcp {
     no_delay: bool
@@ -76,7 +81,7 @@ impl Tcp {
         let tcp_stream = try!(tcp::TcpStream::connect(&addr));
         try!(tcp_stream.set_nodelay(self.no_delay));
 
-        let connection = TcpConnection { stream: tcp_stream };
+        let connection = TcpConnection::new(tcp_stream);
 
         Ok(box connection)
     }
@@ -93,8 +98,46 @@ impl Tcp {
     
 }
 
+/*****************************************************************************/
+/*                                                                           */
+/* LISTENER                                                                  */
+/*                                                                           */
+/*****************************************************************************/
+
+struct TcpListener {
+    listener: tcp::TcpListener,
+    no_delay: bool
+}
+
+impl AsEvented for TcpListener {
+    fn as_evented(&self) -> &Evented {
+        &self.listener
+    }
+}
+
+impl Listener for TcpListener {
+    fn accept(&mut self) -> io::Result<Vec<Box<Connection>>> {
+        let mut conns: Vec<Box<Connection>> = Vec::new();
+
+        while let Some((stream, _)) = try!(self.listener.accept()) {
+            try!(stream.set_nodelay(self.no_delay));
+            conns.push(box TcpConnection::new(stream));
+        }
+
+        Ok(conns)
+    }
+}
+
+/*****************************************************************************/
+/*                                                                           */
+/* CONNECTION                                                                */
+/*                                                                           */
+/*****************************************************************************/
+
 struct TcpConnection {
-    stream: tcp::TcpStream
+    stream: tcp::TcpStream,
+    send_operation: Option<TcpSendOperation>,
+    recv_operation: Option<TcpRecvOperation>
 }
 
 impl Drop for TcpConnection {
@@ -103,50 +146,15 @@ impl Drop for TcpConnection {
     }
 }
 
-impl Connection for TcpConnection {
-    fn try_read(&mut self, buf: &mut [u8]) -> io::Result<Option<usize>> {
-        self.stream.try_read(buf)
-    }
-
-    fn try_write(&mut self, buf: &[u8]) -> io::Result<Option<usize>> {
-        self.stream.try_write(buf)
-    }
-
-    fn as_evented(&self) -> &Evented {
-        &self.stream
-    }
-}
-
-struct TcpListener {
-    listener: tcp::TcpListener,
-    no_delay: bool
-}
-
-impl Listener for TcpListener {
-
-    fn as_evented(&self) -> &Evented {
-        &self.listener
-    }
-
-    fn accept(&mut self) -> io::Result<Vec<Box<Connection>>> {
-        let mut conns: Vec<Box<Connection>> = Vec::new();
-
-        while let Some((s, _)) = try!(self.listener.accept()) {
-            try!(s.set_nodelay(self.no_delay));
-            conns.push(box TcpConnection { stream: s });
+impl TcpConnection {
+    fn new(stream: tcp::TcpStream) -> TcpConnection {
+        TcpConnection {
+            stream: stream,
+            send_operation: None,
+            recv_operation: None
         }
-
-        Ok(conns)
     }
-}
 
-struct TcpConn2 {
-    stream: tcp::TcpStream,
-    send_operation: Option<TcpSendOperation>,
-    recv_operation: Option<TcpRecvOperation>
-}
-
-impl TcpConn2 {
     fn run_send_operation(&mut self, mut send_operation: TcpSendOperation) -> io::Result<bool> {
         if try!(send_operation.run(&mut self.stream)) {
             Ok(true)
@@ -167,13 +175,15 @@ impl TcpConn2 {
     }
 }
 
-impl AsEvented for TcpConn2 {
+impl Connection for TcpConnection {}
+
+impl AsEvented for TcpConnection {
     fn as_evented(&self) -> &Evented {
         &self.stream
     }
 }
 
-impl Handshake for TcpConn2 {
+impl Handshake for TcpConnection {
     fn send_handshake(&mut self, socket_type: SocketType) -> io::Result<()> {
         send_and_check_handshake(&mut self.stream, socket_type)
     }
@@ -183,7 +193,13 @@ impl Handshake for TcpConn2 {
     }
 }
 
-impl Sender for TcpConn2 {
+/*****************************************************************************/
+/*                                                                           */
+/* SENDER for CONNECTION                                                     */
+/*                                                                           */
+/*****************************************************************************/
+
+impl Sender for TcpConnection {
     fn start_send(&mut self, msg: Rc<Message>) -> io::Result<bool> {
         let send_operation = TcpSendOperation::new(msg);
 
@@ -316,7 +332,13 @@ fn try_write_buffer<T:TryWrite>(stream: &mut T, buffer: &[u8], written: &mut usi
     Ok(*written == buffer.len())
 }
 
-impl Receiver for TcpConn2 {
+/*****************************************************************************/
+/*                                                                           */
+/* RECEIVER for CONNECTION                                                   */
+/*                                                                           */
+/*****************************************************************************/
+
+impl Receiver for TcpConnection {
     fn start_recv(&mut self) -> io::Result<Option<Message>> {
         let recv_operation = TcpRecvOperation::new();
 
@@ -333,6 +355,44 @@ impl Receiver for TcpConn2 {
 
     fn has_pending_recv(&self) -> bool {
         self.recv_operation.is_some()
+    }
+}
+
+struct TcpRecvOperation {
+    step: Option<RecvOperationStep>
+}
+
+impl TcpRecvOperation {
+    fn new() -> TcpRecvOperation {
+        TcpRecvOperation {
+            step: Some(RecvOperationStep::Header([0; 8], 0))
+        }
+    }
+
+    fn run<T:TryRead>(&mut self, stream: &mut T) -> io::Result<Option<Message>> {
+        if let Some(step) = self.step.take() {
+            self.resume_at(stream, step)
+        } else {
+            Err(global::other_io_error("Cannot resume already finished recv operation"))
+        }
+    }
+
+    fn resume_at<T:TryRead>(&mut self, stream: &mut T, step: RecvOperationStep) -> io::Result<Option<Message>> {
+        let mut cur_step = step;
+
+        loop {
+            let (passed, next_step) = try!(cur_step.advance(stream));
+
+            if !passed {
+                self.step = Some(next_step);
+                return Ok(None);
+            }
+
+            match next_step {
+                RecvOperationStep::Terminal(msg) => return Ok(Some(msg)),
+                other => cur_step = other
+            }
+        }
     }
 }
 
@@ -375,41 +435,11 @@ fn read_payload<T:TryRead>(stream: &mut T, mut buffer: Vec<u8>, mut read: usize)
     }
 }
 
-struct TcpRecvOperation {
-    step: Option<RecvOperationStep>
-}
-
-impl TcpRecvOperation {
-    fn new() -> TcpRecvOperation {
-        TcpRecvOperation {
-            step: Some(RecvOperationStep::Header([0; 8], 0))
-        }
-    }
-
-    fn run<T:TryRead>(&mut self, stream: &mut T) -> io::Result<Option<Message>> {
-        if let Some(step) = self.step.take() {
-            self.resume_at(stream, step)
-        } else {
-            Err(global::other_io_error("Cannot resume already finished recv operation"))
-        }
-    }
-
-    fn resume_at<T:TryRead>(&mut self, stream: &mut T, step: RecvOperationStep) -> io::Result<Option<Message>> {
-        let (passed, next_step) = try!(step.advance(stream));
-
-        if !passed {
-            self.step = Some(next_step);
-            return Ok(None);
-        }
-
-        match next_step {
-            RecvOperationStep::Terminal(msg) => return Ok(Some(msg)),
-            other => self.resume_at(stream, other)
-        }
-    }
-}
-
-impl Conn2 for TcpConn2 {}
+/*****************************************************************************/
+/*                                                                           */
+/* TESTS                                                                     */
+/*                                                                           */
+/*****************************************************************************/
 
 #[cfg(test)]
 mod tests {
@@ -447,4 +477,3 @@ mod tests {
         assert_eq!(&expected_bytes, msg.get_body());
     }
 }
-

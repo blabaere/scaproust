@@ -1,12 +1,3 @@
-### Move send & recv operation inside connection ?
-This would solve the difference between TCP and IPC transport.
-But this would also require to move handshake related operations.
-And the common part should not be duplicated.
-And maybe it should not be named 'Connection', and certainly not stream.
-```rust
-
-```
-
 ### Pair does not behave as expected
 The td-pair example output shows that sometime no socket receives messages past the first ones.
 It seems a test is lacking on pair: 

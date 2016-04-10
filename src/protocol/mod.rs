@@ -12,7 +12,7 @@ use mio;
 
 use global::{ SocketType, SocketId, invalid_input_io_error };
 use event_loop_msg::{ SocketNotify, SocketOption, PipeEvtSignal };
-use pipe::Pipe;
+use transport::pipe::Pipe;
 use EventLoop;
 use Message;
 

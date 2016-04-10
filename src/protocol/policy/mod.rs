@@ -12,7 +12,7 @@ use mio;
 
 use EventLoop;
 use event_loop_msg::{ SocketNotify };
-use pipe::Pipe;
+use transport::pipe::Pipe;
 use global;
 
 pub mod excl;

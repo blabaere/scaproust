@@ -11,7 +11,7 @@ use mio;
 
 use protocol::policy::{ Timeout, clear_timeout };
 use protocol::policy::priolist::*;
-use pipe::Pipe;
+use transport::pipe::Pipe;
 use event_loop_msg::{ SocketNotify };
 use EventLoop;
 use Message;

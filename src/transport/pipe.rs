@@ -7,17 +7,14 @@
 use std::rc::Rc;
 use std::io;
 
-use byteorder::*;
-
 use mio;
 
+use SocketType;
 use EventLoop;
 use Message;
-use transport::Connection;
+use transport::{ Connection, Sender, Receiver };
 use global;
 use event_loop_msg::*;
-use send;
-use recv;
 
 /// A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
 /// That means send/receive size prefix and then message payload.
@@ -35,12 +32,11 @@ impl Pipe {
     pub fn new(
         tok: mio::Token,
         addr: Option<String>,
-        ids: (u16, u16),
+        socket_type: SocketType,
         priorities: (u8, u8),
         conn: Box<Connection>,
         sig_tx: mio::Sender<EventLoopSignal>) -> Pipe {
 
-        let (p_id, p_peer_id) = ids;
         let (send_prio, recv_prio) = priorities;
         let state = Initial {
             body : PipeBody {
@@ -48,8 +44,7 @@ impl Pipe {
                 connection: conn,
                 sig_sender: sig_tx
             },
-            protocol_id: p_id,
-            protocol_peer_id: p_peer_id
+            socket_type: socket_type
         };
 
         Pipe {
@@ -284,25 +279,12 @@ fn no_transition_if_ok<F : PipeState + 'static>(f: Box<F>, res: io::Result<()>, 
 
 /*****************************************************************************/
 /*                                                                           */
-/* HANDSHAKE                                                                 */
-/*                                                                           */
-/*****************************************************************************/
-fn create_handshake(protocol_id: u16) -> [u8; 8] {
-    // handshake is Zero, 'S', 'P', Version, Proto[2], Rsvd[2]
-    let mut handshake = [0, 83, 80, 0, 0, 0, 0, 0];
-    BigEndian::write_u16(&mut handshake[4..6], protocol_id);
-    handshake
-}
-
-/*****************************************************************************/
-/*                                                                           */
 /* INITIAL STATE                                                             */
 /*                                                                           */
 /*****************************************************************************/
 struct Initial {
     body: PipeBody, 
-    protocol_id: u16,
-    protocol_peer_id: u16
+    socket_type: SocketType
 }
 
 impl PipeState for Initial {
@@ -338,16 +320,14 @@ impl LivePipeState for Initial {
 /*****************************************************************************/
 struct HandshakeTx {
     body: PipeBody, 
-    protocol_id: u16,
-    protocol_peer_id: u16
+    socket_type: SocketType
 }
 
 impl From<Initial> for HandshakeTx {
     fn from(state: Initial) -> HandshakeTx {
         HandshakeTx {
             body: state.body,
-            protocol_id: state.protocol_id,
-            protocol_peer_id: state.protocol_peer_id
+            socket_type: state.socket_type
         }
     }
 }
@@ -355,20 +335,9 @@ impl From<Initial> for HandshakeTx {
 impl HandshakeTx {
 
     fn write_handshake(&mut self) -> io::Result<()> {
-        let handshake = create_handshake(self.protocol_id);
-        try!(
-            self.body.connection().try_write(&handshake).
-            and_then(|w| self.check_sent_handshake(w)));
-        self.debug("handshake sent.");
-        Ok(())
-    }
-
-    fn check_sent_handshake(&self, written: Option<usize>) -> io::Result<()> {
-        match written {
-            Some(8) => Ok(()),
-            Some(_) => Err(io::Error::new(io::ErrorKind::WouldBlock, "failed to send full handshake")),
-            _       => Err(io::Error::new(io::ErrorKind::WouldBlock, "failed to send handshake"))
-        }
+        let connection = self.body.connection();
+        let socket_type = self.socket_type;
+        connection.send_handshake(socket_type)
     }
 
     fn subscribe_to_readable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
@@ -419,14 +388,14 @@ impl LivePipeState for HandshakeTx {
 /*****************************************************************************/
 struct HandshakeRx {
     body: PipeBody, 
-    protocol_peer_id: u16
+    socket_type: SocketType
 }
 
 impl From<HandshakeTx> for HandshakeRx {
     fn from(state: HandshakeTx) -> HandshakeRx {
         HandshakeRx {
             body: state.body,
-            protocol_peer_id: state.protocol_peer_id
+            socket_type: state.socket_type
         }
     }
 }
@@ -434,23 +403,9 @@ impl From<HandshakeTx> for HandshakeRx {
 impl HandshakeRx {
 
     fn read_handshake(&mut self) -> io::Result<()> {
-        let mut handshake = [0u8; 8];
-        try!(
-            self.body.connection().try_read(&mut handshake).
-            and_then(|_| self.check_received_handshake(&handshake)));
-        self.debug("handshake received.");
-        Ok(())
-    }
-
-    fn check_received_handshake(&self, handshake: &[u8; 8]) -> io::Result<()> {
-        let expected_handshake = create_handshake(self.protocol_peer_id);
-
-        if handshake == &expected_handshake {
-            Ok(())
-        } else {
-            error!("expected '{:?}' but received '{:?}' !", expected_handshake, handshake);
-            Err(io::Error::new(io::ErrorKind::InvalidData, "received bad handshake"))
-        }
+        let connection = self.body.connection();
+        let socket_type = self.socket_type;
+        connection.recv_handshake(socket_type)
     }
 
     fn subscribe_to_readable(&self, event_loop: &mut EventLoop) -> io::Result<()> {
@@ -548,8 +503,6 @@ impl LivePipeState for Activable {
 /*****************************************************************************/
 struct Active {
     body: PipeBody,
-    recv_operation: Option<recv::RecvOperation>,
-    send_operation: Option<send::SendOperation>,
     readable: bool,
     writable: bool
 }
@@ -558,8 +511,6 @@ impl From<Activable> for Active {
     fn from(state: Activable) -> Active {
         Active {
             body: state.body,
-            recv_operation: None,
-            send_operation: None,
             readable: false,
             writable: false
         }
@@ -567,11 +518,11 @@ impl From<Activable> for Active {
 }
 
 impl Active {
-    fn run_recv_op(&mut self, mut operation: recv::RecvOperation) -> io::Result<()> {
-        match operation.recv(self.body.connection()) {
+    fn on_recv_progress(&mut self, progress: io::Result<Option<Message>>) -> io::Result<()> {
+        match progress {
             Ok(Some(msg)) => self.received_msg(msg),
-            Ok(None)      => self.receiving_msg(operation),
-            Err(e)        => Err(e)
+            Ok(None) => self.receiving_msg(),
+            Err(e) => Err(e)
         }
     }
 
@@ -579,18 +530,19 @@ impl Active {
         self.send_sig(PipeEvtSignal::RecvDone(msg))
     }
 
-    fn receiving_msg(&mut self, operation: recv::RecvOperation) -> io::Result<()> {
+    fn receiving_msg(&mut self) -> io::Result<()> {
         self.readable = false;
-        self.recv_operation = Some(operation);
         self.send_sig(PipeEvtSignal::RecvBlocked)
     }
 
     fn readable_changed(&mut self, readable: bool) -> io::Result<()> {
         if readable {
-            match self.recv_operation.take() {
-                Some(operation) => return self.run_recv_op(operation),
-                None => self.readable = true
-            };
+            if self.body.connection.has_pending_recv() {
+                let progress = self.body.connection.resume_recv();
+                return self.on_recv_progress(progress);
+            } else {
+                self.readable = true
+            }
         } else {
             self.readable = false;
         }
@@ -598,11 +550,11 @@ impl Active {
         Ok(())
     }
 
-    fn run_send_op(&mut self, mut operation: send::SendOperation) -> io::Result<()> {
-        match operation.send(self.body.connection()) {
-            Ok(true)  => self.sent_msg(),
-            Ok(false) => self.sending_msg(operation),
-            Err(e)    => Err(e)
+    fn on_send_progress(&mut self, progress: io::Result<bool>) -> io::Result<()> {
+        match progress {
+            Ok(true) => self.sent_msg(),
+            Ok(false) => self.sending_msg(),
+            Err(e) => Err(e)
         }
     }
 
@@ -610,22 +562,23 @@ impl Active {
         self.send_sig(PipeEvtSignal::SendDone)
     }
 
-    fn sending_msg(&mut self, operation: send::SendOperation) -> io::Result<()> {
+    fn sending_msg(&mut self) -> io::Result<()> {
         self.writable = false;
-        self.send_operation = Some(operation);
         self.send_sig(PipeEvtSignal::SendBlocked)
     }
 
     fn writable_changed(&mut self, writable: bool) -> io::Result<()> {
         if writable {
-            match self.send_operation.take() {
-                Some(operation) => return self.run_send_op(operation),
-                None => self.writable = true
-            };
+            if self.body.connection.has_pending_send() {
+                let progress = self.body.connection.resume_send();
+                return self.on_send_progress(progress);
+            } else {
+                self.writable = true
+            }
         } else {
             self.writable = false;
         }
-        
+
         Ok(())
     }
 }
@@ -644,15 +597,15 @@ impl PipeState for Active {
     }
 
     fn recv(mut self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
-        let operation = recv::RecvOperation::new();
-        let res = self.run_recv_op(operation);
+        let progress = self.body.connection.start_recv();
+        let res = self.on_recv_progress(progress);
 
         no_transition_if_ok(self, res, event_loop)
     }
 
     fn send(mut self: Box<Self>, event_loop: &mut EventLoop, msg: Rc<Message>) -> Box<PipeState> {
-        let operation = send::SendOperation::new(msg);
-        let res = self.run_send_op(operation);
+        let progress = self.body.connection.start_send(msg);
+        let res = self.on_send_progress(progress);
 
         no_transition_if_ok(self, res, event_loop)
     }

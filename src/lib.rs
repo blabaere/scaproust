@@ -69,9 +69,6 @@ mod facade;
 mod core;
 mod protocol;
 mod transport;
-mod pipe;
-mod recv;
-mod send;
 
 pub use facade::session::Session as Session;
 pub use facade::socket::Socket as Socket;

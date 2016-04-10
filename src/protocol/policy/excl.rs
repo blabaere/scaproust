@@ -6,7 +6,7 @@
 
 use mio;
 
-use pipe::Pipe;
+use transport::pipe::Pipe;
 
 pub struct Excl {
     token: Option<mio::Token>,

@@ -16,7 +16,7 @@ use global::*;
 use event_loop_msg::*;
 
 use protocol::Protocol;
-use pipe::Pipe;
+use transport::pipe::Pipe;
 use core::acceptor::Acceptor;
 use transport::{create_transport, Connection, Listener};
 
@@ -152,10 +152,10 @@ impl Socket {
     fn on_connection_created(&mut self, addr: Option<String>, conn: Box<Connection>, token: Option<mio::Token>) -> io::Result<mio::Token> {
         debug!("[{:?}] on_connection_created: '{:?}'", self.id, addr);
         let token = token.unwrap_or_else(|| self.next_token());
-        let protocol_ids = (self.protocol.id(), self.protocol.peer_id());
+        let socket_type = self.protocol.get_type();
         let priorities = self.options.priorities();
         let sig_sender = self.sig_sender.clone();
-        let pipe = Pipe::new(token, addr, protocol_ids, priorities, conn, sig_sender);
+        let pipe = Pipe::new(token, addr, socket_type, priorities, conn, sig_sender);
 
         self.protocol.add_pipe(token, pipe).
             map(|_|self.send_event(SocketEvtSignal::PipeAdded(token))).
