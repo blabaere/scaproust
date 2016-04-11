@@ -19,6 +19,13 @@ fi
 
 # TEST CASE 2
 msg="cornofulgur"
-nanocat --pull --bind tcp://127.0.0.1:5454 --ascii > testcase2.log & ncat=$!
+nanocat --pull --bind tcp://127.0.0.1:5454 --ascii > /tmp/pipeline_tc_2.log & ncat=$!
 ./target/debug/examples/td-pipeline node1 tcp://127.0.0.1:5454 "$msg" > /dev/null & node1=$!
 sleep 0.5 && kill $ncat && kill $node1
+result=`cat /tmp/pipeline_tc_2.log`
+expected=`cat $COMPAT_PATH/pipeline_tc_2_expected.log`
+if [[ $result == $expected ]]; then
+    echo "test case 2 SUCCEEDED !" 
+else
+    echo "test case 2 FAILED !" 
+fi
