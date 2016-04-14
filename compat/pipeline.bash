@@ -3,6 +3,18 @@
 COMPAT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
 EXAMPLE_PATH="$( cd "$COMPAT_PATH/../target/debug/examples" ; pwd -P )"
 
+NO_COLOR='\033[0m' 
+RED_COLOR='\033[0;31m'
+GREEN_COLOR='\033[0;32m'
+
+function echo_test_case_succeeded {
+    echo -e "$1 ${GREEN_COLOR}SUCCEEDED${NO_COLOR}" 
+}
+
+function echo_test_case_failed {
+    echo -e "$1 ${RED_COLOR}FAILED !${NO_COLOR}" 
+}
+
 # TEST CASE 1
 # Checks that scaproust can receive a message sent by nanocat
 # Arguments : URL
@@ -15,9 +27,9 @@ function testcase_pipeline1 {
     result=`cat /tmp/pipeline_tc_1.log`
     expected=`cat $COMPAT_PATH/pipeline_tc_1_expected.log`
     if [[ $result == $expected ]]; then
-        echo "pipeline test case 1 $URL SUCCEEDED !" 
+        echo_test_case_succeeded "pipeline test case 1 $URL"
     else
-        echo "pipeline test case 1 $URL FAILED !" 
+        echo_test_case_failed "pipeline test case 1 $URL"
     fi
 }
 
@@ -33,9 +45,9 @@ function testcase_pipeline2 {
     result=`cat /tmp/pipeline_tc_2.log`
     expected=`cat $COMPAT_PATH/pipeline_tc_2_expected.log`
     if [[ $result == $expected ]]; then
-        echo "pipeline test case 2 $URL SUCCEEDED !" 
+        echo_test_case_succeeded "pipeline test case 2 $URL"
     else
-        echo "pipeline test case 2 $URL FAILED !" 
+        echo_test_case_failed "pipeline test case 2 $URL"
     fi
 }
 

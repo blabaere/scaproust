@@ -29,12 +29,14 @@ fn node0(url: &str) {
 
         if request == DATE {
             println!("NODE0: RECEIVED DATE REQUEST");
-            let date = std::time::SystemTime::now();
+            let date = "1970/01/01 00:00:00.666";
             println!("NODE0: SENDING DATE {:?}", date);
             let reply = fmt::format(format_args!("{:?}!", date));
             let buffer = From::from(reply.as_bytes());
 
             socket.send(buffer).expect("Send reply failed !")
+        } else {
+            println!("NODE0: RECEIVED UNEXPECTED REQUEST: {}", request);
         }
    }
 }
