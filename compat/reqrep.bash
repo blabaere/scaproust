@@ -20,22 +20,44 @@ function echo_test_case_failed {
 # Arguments : URL
 function testcase_reqrep1 {
     URL=$1
-    $EXAMPLE_PATH/td-request-reply node0 $URL > /tmp/reqrep_tc_1.log & node0=$!
-    nanocat --req --connect $URL --data "DATE" > /dev/null -i2 & ncat=$!
+    $EXAMPLE_PATH/td-request-reply node0 $URL > /tmp/reqrep_tc1_node0.log & node0=$!
+    nanocat --req --connect $URL --data "DATE" --ascii > /tmp/reqrep_tc1_nanocat.log -i2 & ncat=$!
     sleep 0.5 && kill $ncat && kill $node0
-    result=`cat /tmp/reqrep_tc_1.log`
-    expected=`cat $COMPAT_PATH/reqrep_tc_1_expected.log`
-    if [[ $result == $expected ]]; then
+    result_node0=`cat /tmp/reqrep_tc1_node0.log`
+    expected_node0=`cat $COMPAT_PATH/reqrep_tc1_node0_expected.log`
+    result_nanocat=`cat /tmp/reqrep_tc1_nanocat.log`
+    expected_nanocat=`cat $COMPAT_PATH/reqrep_tc1_nanocat_expected.log`
+    if [[ $result_node0 == $expected_node0 && $result_nanocat == $expected_nanocat ]]; then
         echo_test_case_succeeded "reqrep test case 1 $URL"
     else
         echo_test_case_failed "reqrep test case 1 $URL"
+    fi 
+}
+
+# TEST CASE 2
+# Checks that scaproust can send a request to nanocat and receive a reply
+# Arguments : URL
+function testcase_reqrep2 {
+    URL=$1
+    msg="pulvonium"
+    nanocat --rep --bind $URL --ascii --data $msg > /tmp/reqrep_tc2_nanocat.log & ncat=$!
+    ./target/debug/examples/td-request-reply node1 $URL > /tmp/reqrep_tc2_node1.log & node1=$!
+    sleep 0.5 && kill $ncat && kill $node1
+    result_node1=`cat /tmp/reqrep_tc2_node1.log`
+    expected_node1=`cat $COMPAT_PATH/reqrep_tc2_node1_expected.log`
+    result_nanocat=`cat /tmp/reqrep_tc2_nanocat.log`
+    expected_nanocat=`cat $COMPAT_PATH/reqrep_tc2_nanocat_expected.log`
+    if [[ $result_node1 == $expected_node1 && $result_nanocat == $expected_nanocat ]]; then
+        echo_test_case_succeeded "reqrep test case 2 $URL"
+    else
+        echo_test_case_failed "reqrep test case 2 $URL"
     fi
 }
 
-function testcase_reqrep2 {
-    URL=$1
-    echo_test_case_failed "reqrep test case 2 $URL"
-}
+#function testcase_reqrep2 {
+#    URL=$1
+#    echo_test_case_failed "reqrep test case 2 $URL"
+#}
 
 function test_reqrep {
     testcase_reqrep1 $1
