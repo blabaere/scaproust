@@ -175,8 +175,24 @@ impl State {
         self
     }
 
-    fn on_pipe_removed(self, _: &mut Body, _: mio::Token) -> State {
-        self
+    fn on_pipe_removed(self, _: &mut Body, tok: mio::Token) -> State {
+        match self {
+            State::Sending(token, msg, timeout) => {
+                if token == tok {
+                    State::SendOnHold(token, msg, timeout)
+                } else {
+                    State::Sending(token, msg, timeout)
+                }
+            },
+            State::Receiving(token, timeout) => {
+                if tok == token {
+                    State::RecvOnHold(timeout)
+                } else {
+                    State::Receiving(token, timeout)
+                }
+            },
+            other => other
+        }
     }
 
     fn open_pipe(self, body: &mut Body, event_loop: &mut EventLoop, tok: mio::Token) -> State {

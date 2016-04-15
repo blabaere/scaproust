@@ -175,8 +175,20 @@ impl State {
         self
     }
 
-    fn on_pipe_removed(self, _: &mut Body, tok: mio::Token) -> State {
+    fn on_pipe_removed(self, body: &mut Body, tok: mio::Token) -> State {
         match self {
+            State::Sending(token, msg, timeout) => {
+                if token == tok {
+                    let err = other_io_error("peer disconnected");
+                    let ntf = SocketNotify::MsgNotSent(err);
+                    
+                    body.send_notify(ntf);
+
+                    State::Idle
+                } else {
+                    State::Sending(token, msg, timeout)
+                }
+            },
             State::Receiving(token, timeout) => {
                 if tok == token {
                     State::RecvOnHold(timeout)
