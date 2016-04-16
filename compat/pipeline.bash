@@ -15,9 +15,9 @@ function testcase_pipeline1 {
     result=`cat /tmp/pipeline_tc_1.log`
     expected=`cat $COMPAT_PATH/pipeline_tc_1_expected.log`
     if [[ $result == $expected ]]; then
-        echo_test_case_succeeded "pipeline test case 1 $URL"
+        echo_test_case_succeeded "pipeline test case 1 ${URL:0:3}"
     else
-        echo_test_case_failed "pipeline test case 1 $URL"
+        echo_test_case_failed "pipeline test case 1 ${URL:0:3}"
     fi
 }
 
@@ -33,9 +33,9 @@ function testcase_pipeline2 {
     result=`cat /tmp/pipeline_tc_2.log`
     expected=`cat $COMPAT_PATH/pipeline_tc_2_expected.log`
     if [[ $result == $expected ]]; then
-        echo_test_case_succeeded "pipeline test case 2 $URL"
+        echo_test_case_succeeded "pipeline test case 2 ${URL:0:3}"
     else
-        echo_test_case_failed "pipeline test case 2 $URL"
+        echo_test_case_failed "pipeline test case 2 ${URL:0:3}"
     fi
 }
 

@@ -16,9 +16,9 @@ function testcase_pair1 {
     result_node1=`cat /tmp/pair_tc_1_node1.log`
     expected_node1=`cat $COMPAT_PATH/pair_tc_1_node1_expected.log`
     if [[ $result_node0 == $expected_node0 && $result_node1 == $expected_node1 ]]; then
-        echo_test_case_succeeded "pair test case 1 $URL"
+        echo_test_case_succeeded "pair test case 1 ${URL:0:3}"
     else
-        echo_test_case_failed "pair test case 1 $URL"
+        echo_test_case_failed "pair test case 1 ${URL:0:3}"
     fi
 }
 

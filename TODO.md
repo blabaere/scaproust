@@ -17,6 +17,8 @@ When a protocol receives a "malformed" message, the message is dropped, but the 
 Create some scaproust/nanomsg compatibility tests.
 This could be done with nanocat, the Tim Dysinger examples and some scripts checking the output of each process.
 
+Test reconnect feature
+
 ### Misc:
 - Rename session into something less oriented ? (context, environment ...)
 - Add create_xxx_socket helper functions on session ?
