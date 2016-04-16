@@ -182,12 +182,12 @@ impl Session {
         }
     }
 
-    fn reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
-        self.on_socket_by_token(&tok, |s| s.reconnect(addr, event_loop, tok));
+    fn reconnect(&mut self, event_loop: &mut EventLoop, id: SocketId, tok: mio::Token, addr: String) {
+        self.on_socket_by_id(&id, |s| s.reconnect(addr, event_loop, tok));
     }
 
-    fn rebind(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
-        self.on_socket_by_token(&tok, |s| s.rebind(addr, event_loop, tok));
+    fn rebind(&mut self, event_loop: &mut EventLoop, id: SocketId, tok: mio::Token, addr: String) {
+        self.on_socket_by_id(&id, |s| s.rebind(addr, event_loop, tok));
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop, id: SocketId) {
@@ -228,12 +228,12 @@ impl mio::Handler for Session {
 
     fn timeout(&mut self, event_loop: &mut EventLoop, timeout: Self::Timeout) {
         match timeout {
-            EventLoopTimeout::Reconnect(token, addr)  => self.reconnect(event_loop, token, addr),
-            EventLoopTimeout::Rebind(token, addr)     => self.rebind(event_loop, token, addr),
-            EventLoopTimeout::CancelSend(socket_id)   => self.on_send_timeout(event_loop, socket_id),
-            EventLoopTimeout::CancelRecv(socket_id)   => self.on_recv_timeout(event_loop, socket_id),
-            EventLoopTimeout::CancelSurvey(socket_id) => self.on_survey_timeout(event_loop, socket_id),
-            EventLoopTimeout::Resend(socket_id)       => self.resend(event_loop, socket_id)
+            EventLoopTimeout::Reconnect(socket_id, tok, addr) => self.reconnect(event_loop, socket_id, tok, addr),
+            EventLoopTimeout::Rebind(socket_id, tok, addr)    => self.rebind(event_loop, socket_id, tok, addr),
+            EventLoopTimeout::CancelSend(socket_id)           => self.on_send_timeout(event_loop, socket_id),
+            EventLoopTimeout::CancelRecv(socket_id)           => self.on_recv_timeout(event_loop, socket_id),
+            EventLoopTimeout::CancelSurvey(socket_id)         => self.on_survey_timeout(event_loop, socket_id),
+            EventLoopTimeout::Resend(socket_id)               => self.resend(event_loop, socket_id)
         }
     }
 

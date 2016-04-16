@@ -185,8 +185,8 @@ impl PipeEvtSignal {
 
 /// Events raised by a timer
 pub enum EventLoopTimeout {
-    Reconnect(mio::Token, String),
-    Rebind(mio::Token, String),
+    Reconnect(SocketId, mio::Token, String),
+    Rebind(SocketId, mio::Token, String),
     CancelSend(SocketId),
     CancelRecv(SocketId),
     CancelSurvey(SocketId),

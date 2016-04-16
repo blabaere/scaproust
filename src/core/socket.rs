@@ -264,16 +264,17 @@ impl Socket {
     }
 
     fn schedule_reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
+        debug!("[{:?}] pipe [{:?}] schedule_reconnect: '{}'", self.id, tok.as_usize(), addr);
         let timespan = time::Duration::from_millis(500);
         let _ = event_loop.
-            timeout(EventLoopTimeout::Reconnect(tok, addr), timespan).
+            timeout(EventLoopTimeout::Reconnect(self.id, tok, addr), timespan).
             map_err(|err| error!("[{:?}] pipe [{:?}] reconnect timeout failed: '{:?}'", self.id, tok.as_usize(), err));
     }
 
     fn schedule_rebind(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
         let timespan = time::Duration::from_millis(500);
         let _ = event_loop.
-            timeout(EventLoopTimeout::Rebind(tok, addr), timespan).
+            timeout(EventLoopTimeout::Rebind(self.id, tok, addr), timespan).
             map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok.as_usize(), err));
     }
 
@@ -293,7 +294,7 @@ impl Socket {
                 unwrap_or_else(|err| debug!("[{:?}] acceptor [{:?}] error while closing: '{:?}'", self.id, tok, err));
             let timespan = time::Duration::from_millis(500);
             let _ = event_loop.
-                timeout(EventLoopTimeout::Rebind(tok, acceptor.addr()), timespan).
+                timeout(EventLoopTimeout::Rebind(self.id, tok, acceptor.addr()), timespan).
                 map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok, err));
 
         }
