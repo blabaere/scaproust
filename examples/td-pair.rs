@@ -36,7 +36,7 @@ fn send_name(socket: &mut Socket, name: &str) {
 }
 
 fn send_recv(mut socket: Socket, name: &str) -> ! {
-    socket.set_recv_timeout(duration_ms(100)).expect("Failed to set ercv timeout !");
+    socket.set_recv_timeout(duration_ms(100)).expect("Failed to set recv timeout !");
     loop {
         recv_name(&mut socket, name);
         sleep_ms(1000);

@@ -1,17 +1,4 @@
-### Pair does not behave as expected
-The td-pair example output shows that sometime no socket receives messages past the first ones.
-It seems a test is lacking on pair: 
-thread 1 connect, loop {recv with timeout, sleep, send without timeout}
-thread 2 sleep, bind, loop {recv with timeout, sleep, send without timeout}
-
-### IPC transport is NOT COMPATIBLE with nanomsg ?!
-Seems that IPC transports requires a single byte header with value 1 or 2 to denote 'normal' or 'shared memory'. See sipc.c:333
-It seems the 'prefix' size should be decided by the transport, the last 8 bytes are the size of the messages, and the remaining first ones are transport specifics.
-Maybe the connection should be responsible for creating instances of [send|recv]::Operation ?
-
 ### Define a default max size for messages, and let the user change it
-
-### When the sending/receiving pipe is removed, it probably means the operation has failed
 
 ### REQ resend cannot be implemented with the current design
 There can be only one operation in progress for a given socket but resend occurs in background.
@@ -24,8 +11,6 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 When a protocol receives a "malformed" message, the message is dropped, but the facade is not notified of anything and no pipe is asked to recv again
 
 ### Next tasks
-- Add some doc comment on each SocketType variant
-- Have pipe error forwarded to the session and the socket
 - Handle accept error
 
 ### AUTOMATE ALL THE THINGS !!!

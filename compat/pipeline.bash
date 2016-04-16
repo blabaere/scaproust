@@ -1,19 +1,7 @@
 #!/bin/bash
 
 COMPAT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
-EXAMPLE_PATH="$( cd "$COMPAT_PATH/../target/debug/examples" ; pwd -P )"
-
-NO_COLOR='\033[0m' 
-RED_COLOR='\033[0;31m'
-GREEN_COLOR='\033[0;32m'
-
-function echo_test_case_succeeded {
-    echo -e "$1 ${GREEN_COLOR}SUCCEEDED${NO_COLOR}" 
-}
-
-function echo_test_case_failed {
-    echo -e "$1 ${RED_COLOR}FAILED !${NO_COLOR}" 
-}
+source "$COMPAT_PATH/test_helper.bash"
 
 # TEST CASE 1
 # Checks that scaproust can receive a message sent by nanocat
@@ -55,6 +43,10 @@ function test_pipeline {
     testcase_pipeline1 $1
     testcase_pipeline2 $1
 }
+
+if [[ -f "/tmp/pipeline_test.ipc" ]]; then
+    rm -f "/tmp/pipeline_test.ipc"
+fi
 
 test_pipeline "tcp://127.0.0.1:5454"
 test_pipeline "ipc:///tmp/pipeline_test.ipc"

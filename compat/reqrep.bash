@@ -1,19 +1,7 @@
 #!/bin/bash
 
 COMPAT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
-EXAMPLE_PATH="$( cd "$COMPAT_PATH/../target/debug/examples" ; pwd -P )"
-
-NO_COLOR='\033[0m' 
-RED_COLOR='\033[0;31m'
-GREEN_COLOR='\033[0;32m'
-
-function echo_test_case_succeeded {
-    echo -e "$1 ${GREEN_COLOR}SUCCEEDED${NO_COLOR}" 
-}
-
-function echo_test_case_failed {
-    echo -e "$1 ${RED_COLOR}FAILED !${NO_COLOR}" 
-}
+source "$COMPAT_PATH/test_helper.bash"
 
 # TEST CASE 1
 # Checks that scaproust can receive a request from nanocat and send a reply
@@ -54,17 +42,14 @@ function testcase_reqrep2 {
     fi
 }
 
-#function testcase_reqrep2 {
-#    URL=$1
-#    echo_test_case_failed "reqrep test case 2 $URL"
-#}
-
 function test_reqrep {
     testcase_reqrep1 $1
     testcase_reqrep2 $1
 }
 
+if [[ -f "/tmp/reqrep_test.ipc" ]]; then
+    rm -f "/tmp/reqrep_test.ipc"
+fi
+
 test_reqrep "tcp://127.0.0.1:5454"
 test_reqrep "ipc:///tmp/reqrep_test.ipc"
-
-#encéphalopulseur...

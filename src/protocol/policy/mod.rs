@@ -15,7 +15,6 @@ use event_loop_msg::{ SocketNotify };
 use transport::pipe::Pipe;
 use global;
 
-pub mod excl;
 pub mod priolist;
 
 pub mod with_fair_queue;
@@ -24,7 +23,6 @@ pub mod with_unicast_send;
 pub mod with_unicast_recv;
 pub mod with_broadcast;
 
-pub use self::excl::Excl;
 pub use self::priolist::PrioList;
 
 pub use self::with_fair_queue::WithFairQueue;
