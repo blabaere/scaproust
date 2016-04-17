@@ -917,3 +917,15 @@ fn can_recover_from_connect_before_bind_tcp() {
 fn can_recover_from_connect_before_bind_ipc() {
     can_recover_from_connect_before_bind("ipc:///tmp/lol_i_dont_exist.ipc");
 }
+
+#[test]
+fn can_recover_from_bind_failure() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut pull1 = session.create_socket(SocketType::Pull).unwrap();
+    let mut pull2 = session.create_socket(SocketType::Pull).unwrap();
+
+    pull1.bind("tcp://127.0.0.1:5491").unwrap();
+    sleep_enough_for_connections_to_establish();
+    pull2.bind("tcp://127.0.0.1:5491").unwrap();
+}

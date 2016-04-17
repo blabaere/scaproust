@@ -141,7 +141,7 @@ impl Socket {
         let token = self.next_token();
         transport.connect(specific_addr).
             map(|conn|{
-                self.on_connection_created(Some(conn_addr), conn, token).
+                self.create_and_add_pipe(Some(conn_addr), conn, token).
                     map(|_| self.send_notify(SocketNotify::Connected(token))).
                     unwrap_or_else(|e| self.send_notify(SocketNotify::NotConnected(e)));
             }).
@@ -157,7 +157,7 @@ impl Socket {
         let conn_addr = addr.clone();
         let reconn_addr = addr.clone();
         let _ = self.create_connection(&addr).
-            and_then(|conn| self.on_connection_created(Some(conn_addr), conn, tok)).
+            and_then(|conn| self.create_and_add_pipe(Some(conn_addr), conn, tok)).
             map_err(|_| self.schedule_reconnect(event_loop, tok, reconn_addr));
     }
 
@@ -173,8 +173,8 @@ impl Socket {
         transport.connect(specific_addr)
     }
 
-    fn on_connection_created(&mut self, addr: Option<String>, conn: Box<Connection>, tok: mio::Token) -> io::Result<()> {
-        debug!("[{:?}] on_connection_created: '{:?}'", self.id, addr);
+    fn create_and_add_pipe(&mut self, addr: Option<String>, conn: Box<Connection>, tok: mio::Token) -> io::Result<()> {
+        debug!("[{:?}] create_and_add_pipe: '{:?}'", self.id, addr);
         let socket_type = self.protocol.get_type();
         let priorities = self.options.priorities();
         let sig_sender = self.sig_sender.clone();
@@ -186,17 +186,40 @@ impl Socket {
     pub fn bind(&mut self, event_loop: &mut EventLoop, addr: String) {
         debug!("[{:?}] bind: '{}'", self.id, addr);
 
-        self.create_listener(&addr).
-            map(|lst| self.on_listener_created(addr, lst, None)).
-            map(|t| self.send_notify(SocketNotify::Bound(t))).
-            unwrap_or_else(|err| self.send_notify(SocketNotify::NotBound(err)));
+        let bind_addr = addr.clone();
+        let rebind_addr = addr.clone();
+        let addr_parts: Vec<&str> = addr.split("://").collect();
+        let scheme = addr_parts[0];
+        let specific_addr = addr_parts[1];
+
+        let transport = match create_transport(scheme) {
+            Ok(mut transport) => {
+                transport.set_nodelay(self.options.tcp_nodelay);
+                transport
+            },
+            Err(e) => {
+                self.send_notify(SocketNotify::NotBound(e));
+                return;
+            }
+        };
+
+        let token = self.next_token();
+        transport.bind(specific_addr).
+            map(|listener|{
+                self.create_and_add_acceptor(bind_addr, listener, token);
+                self.send_notify(SocketNotify::Bound(token));
+            }).
+            unwrap_or_else(|_| {
+                self.schedule_rebind(event_loop, token, rebind_addr);
+                self.send_notify(SocketNotify::Bound(token));
+            })
     }
 
     pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
         debug!("[{:?}] acceptor [{:?}] rebind: '{}'", self.id, tok.as_usize(), addr);
 
         let _ = self.create_listener(&addr).
-            map(|lst| self.on_listener_created(addr.clone(), lst, Some(tok))).
+            map(|lst| self.create_and_add_acceptor(addr.clone(), lst, tok)).
             map_err(|_| self.schedule_rebind(event_loop, tok, addr.clone()));
     }
 
@@ -210,14 +233,11 @@ impl Socket {
         transport.bind(specific_addr)
     }
 
-    fn on_listener_created(&mut self, addr: String, listener: Box<Listener>, tok: Option<mio::Token>) -> mio::Token {
-        let tok = tok.unwrap_or_else(|| self.next_token());
+    fn create_and_add_acceptor(&mut self, addr: String, listener: Box<Listener>, tok: mio::Token) {
         let acceptor = Acceptor::new(tok, addr, listener);
 
         self.add_acceptor(tok, acceptor);
         self.send_event(SocketEvtSignal::AcceptorAdded(tok));
-
-        tok
     }
 
     fn add_acceptor(&mut self, token: mio::Token, acceptor: Acceptor) {
@@ -302,7 +322,7 @@ impl Socket {
     fn on_connections_accepted(&mut self, conns: Vec<Box<Connection>>) -> io::Result<()> {
         for conn in conns {
             let token = self.next_token();
-            try!(self.on_connection_created(None, conn, token));
+            try!(self.create_and_add_pipe(None, conn, token));
         }
         Ok(())
     }
