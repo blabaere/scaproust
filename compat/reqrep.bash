@@ -8,8 +8,8 @@ source "$COMPAT_PATH/test_helper.bash"
 # Arguments : URL
 function testcase_reqrep1 {
     URL=$1
-    $EXAMPLE_PATH/td-request-reply node0 $URL > /tmp/reqrep_tc1_node0.log & node0=$!
-    nanocat --req --connect $URL --data "DATE" --ascii > /tmp/reqrep_tc1_nanocat.log -i2 & ncat=$!
+    $EXAMPLE_PATH/reqrep node0 $URL > /tmp/reqrep_tc1_node0.log & node0=$!
+    nanocat --req --connect $URL --data "DATE" --ascii > /tmp/reqrep_tc1_nanocat.log & ncat=$!
     sleep 0.5 && kill $ncat && kill $node0
     result_node0=`cat /tmp/reqrep_tc1_node0.log`
     expected_node0=`cat $COMPAT_PATH/reqrep_tc1_node0_expected.log`
@@ -29,7 +29,7 @@ function testcase_reqrep2 {
     URL=$1
     msg="pulvonium"
     nanocat --rep --bind $URL --ascii --data $msg > /tmp/reqrep_tc2_nanocat.log & ncat=$!
-    ./target/debug/examples/td-request-reply node1 $URL > /tmp/reqrep_tc2_node1.log & node1=$!
+    ./target/debug/examples/reqrep node1 $URL > /tmp/reqrep_tc2_node1.log & node1=$!
     sleep 0.5 && kill $ncat && kill $node1
     result_node1=`cat /tmp/reqrep_tc2_node1.log`
     expected_node1=`cat $COMPAT_PATH/reqrep_tc2_node1_expected.log`

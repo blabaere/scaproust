@@ -8,7 +8,7 @@ source "$COMPAT_PATH/test_helper.bash"
 # Arguments : URL
 function testcase_pubsub1 {
     URL=$1
-    $EXAMPLE_PATH/td-pubsub server $URL > /tmp/pubsub_tc1_server.log & server=$!
+    $EXAMPLE_PATH/pubsub server $URL > /tmp/pubsub_tc1_server.log & server=$!
     nanocat --sub --connect $URL --ascii > /tmp/pubsub_tc1_nanocat1.log & ncat1=$!
     nanocat --sub --connect $URL --ascii > /tmp/pubsub_tc1_nanocat2.log & ncat2=$!
     sleep 3.5 && kill $ncat1 && kill $ncat2 && kill $server
@@ -32,8 +32,8 @@ function testcase_pubsub1 {
 function testcase_pubsub2 {
     URL=$1
     nanocat --pub --bind $URL --data "retrolaser" -d 1 -i 1 > /dev/null & ncat=$!
-    $EXAMPLE_PATH/td-pubsub client $URL "raoul" > /tmp/pubsub_tc2_client1.log & client1=$!
-    $EXAMPLE_PATH/td-pubsub client $URL "simone" > /tmp/pubsub_tc2_client2.log & client2=$!
+    $EXAMPLE_PATH/pubsub client $URL "raoul" > /tmp/pubsub_tc2_client1.log & client1=$!
+    $EXAMPLE_PATH/pubsub client $URL "simone" > /tmp/pubsub_tc2_client2.log & client2=$!
     sleep 3.5 && kill $client1 && kill $client2 && kill $ncat
 
     result_client1=`cat /tmp/pubsub_tc2_client1.log`

@@ -1,3 +1,13 @@
+// Copyright 2016 Benoît Labaere (benoit.labaere@gmail.com)
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0>
+// or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
+// This file may not be copied, modified, or distributed except according to those terms.
+//
+// This file was adapted from the nanomsg C example written by Tim Dysinger.
+// See http://tim.dysinger.net/posts/2013-09-16-getting-started-with-nanomsg.html
+// and https://github.com/dysinger/nanomsg-examples.
+
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate scaproust;
@@ -24,7 +34,7 @@ fn server(url: &str) {
     println!("SERVER: SENDING DATE SURVEY REQUEST");
     socket.bind(url).expect("Failed to bind socket !");
     sleep_ms(1000);
-    
+
     socket.send(buffer).expect("Send failed !");
 
     loop {

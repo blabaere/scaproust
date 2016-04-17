@@ -8,8 +8,8 @@ source "$COMPAT_PATH/test_helper.bash"
 # Arguments : URL
 function testcase_pair1 {
     URL=$1
-    $EXAMPLE_PATH/td-pair node0 $URL > /tmp/pair_tc_1_node0.log & node0=$!
-    $EXAMPLE_PATH/td-pair node1 $URL > /tmp/pair_tc_1_node1.log & node1=$!
+    $EXAMPLE_PATH/pair node0 $URL > /tmp/pair_tc_1_node0.log & node0=$!
+    $EXAMPLE_PATH/pair node1 $URL > /tmp/pair_tc_1_node1.log & node1=$!
     sleep 3.5 && kill $node1 && kill $node0
     result_node0=`cat /tmp/pair_tc_1_node0.log`
     expected_node0=`cat $COMPAT_PATH/pair_tc_1_node0_expected.log`
