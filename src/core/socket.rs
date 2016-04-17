@@ -288,14 +288,16 @@ impl Socket {
         debug!("[{:?}] pipe [{:?}] schedule_reconnect: '{}'", self.id, tok.as_usize(), addr);
         let timespan = time::Duration::from_millis(500);
         let _ = event_loop.
-            timeout(EventLoopTimeout::Reconnect(self.id, tok, addr), timespan).
+            //timeout(EventLoopTimeout::Reconnect(self.id, tok, addr), timespan).
+            timeout_ms(EventLoopTimeout::Reconnect(self.id, tok, addr), 500).
             map_err(|err| error!("[{:?}] pipe [{:?}] reconnect timeout failed: '{:?}'", self.id, tok.as_usize(), err));
     }
 
     fn schedule_rebind(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
-        let timespan = time::Duration::from_millis(500);
+        //let timespan = time::Duration::from_millis(500);
         let _ = event_loop.
-            timeout(EventLoopTimeout::Rebind(self.id, tok, addr), timespan).
+            //timeout(EventLoopTimeout::Rebind(self.id, tok, addr), timespan).
+            timeout_ms(EventLoopTimeout::Rebind(self.id, tok, addr), 500).
             map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok.as_usize(), err));
     }
 
@@ -314,9 +316,10 @@ impl Socket {
             acceptor.
                 close(event_loop).
                 unwrap_or_else(|err| debug!("[{:?}] acceptor [{:?}] error while closing: '{:?}'", self.id, tok, err));
-            let timespan = time::Duration::from_millis(500);
+            //let timespan = time::Duration::from_millis(500);
             let _ = event_loop.
-                timeout(EventLoopTimeout::Rebind(self.id, tok, acceptor.addr()), timespan).
+                //timeout(EventLoopTimeout::Rebind(self.id, tok, acceptor.addr()), timespan).
+                timeout_ms(EventLoopTimeout::Rebind(self.id, tok, acceptor.addr()), 500).
                 map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok, err));
 
         }
@@ -327,7 +330,8 @@ impl Socket {
 
         if let Some(timeout) = self.options.send_timeout_ms {
             event_loop.
-                timeout(EventLoopTimeout::CancelSend(self.id), time::Duration::from_millis(timeout)).
+                //timeout(EventLoopTimeout::CancelSend(self.id), time::Duration::from_millis(timeout)).
+                timeout_ms(EventLoopTimeout::CancelSend(self.id), timeout).
                 map(|handle| self.protocol.send(event_loop, msg, Some(handle))).
                 unwrap_or_else(|err| error!("[{:?}] failed to set timeout on send: '{:?}'", self.id, err));
         } else {
@@ -345,7 +349,8 @@ impl Socket {
 
         if let Some(timeout) = self.options.recv_timeout_ms {
             event_loop.
-                timeout(EventLoopTimeout::CancelRecv(self.id), time::Duration::from_millis(timeout)).
+                //timeout(EventLoopTimeout::CancelRecv(self.id), time::Duration::from_millis(timeout)).
+                timeout_ms(EventLoopTimeout::CancelRecv(self.id), timeout).
                 map(|handle| self.protocol.recv(event_loop, Some(handle))).
                 unwrap_or_else(|err| error!("[{:?}] failed to set timeout on recv: '{:?}'", self.id, err));
         } else {

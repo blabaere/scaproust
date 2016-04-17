@@ -21,9 +21,10 @@ log = "0.3.6"
 byteorder = "0.5.1"
 time = "0.1.35"
 clippy = "0.0.63"
+mio = "0.5.0"
 
-[dependencies.mio]
-git = "https://github.com/carllerche/mio"
+#[dependencies.mio]
+#git = "https://github.com/carllerche/mio"
 
 [dev-dependencies]
 env_logger = "0.3.2"

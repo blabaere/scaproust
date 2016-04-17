@@ -1,3 +1,7 @@
+### define a struct wrapping the event loop reference and the notification token
+There is too much coupling between the protocol and the event loop.
+Stuff like registration and timeout should be exposed by that struct.
+
 ### Define a default max size for messages, and let the user change it
 
 ### increase reconnect ivl up to reconnect ivl max

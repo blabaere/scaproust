@@ -359,7 +359,8 @@ impl Body {
             let ivl_ms = self.resend_interval;
             let ivl = Duration::from_millis(ivl_ms);
 
-            event_loop.timeout(cmd, ivl).map(Some).unwrap_or_else(|_| None)
+            //event_loop.timeout(cmd, ivl).map(Some).unwrap_or_else(|_| None)
+            event_loop.timeout_ms(cmd, ivl_ms).map(Some).unwrap_or_else(|_| None)
         } else {
             None
         }
