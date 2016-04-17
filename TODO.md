@@ -1,3 +1,5 @@
+### change copyright header to mention 'authors' and the AUTHORS file
+
 ### Define a default max size for messages, and let the user change it
 
 ### REQ resend cannot be implemented with the current design
