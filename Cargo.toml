@@ -1,6 +1,6 @@
 [package]
 name          = "scaproust"
-version       = "0.1.0"
+version       = "0.0.1"
 authors       = ["blabaere <benoit.labaere@gmail.com>"]
 description   = "Nanomsg scalability protocols implementation in rust"
 readme        = "README.md"
@@ -17,10 +17,10 @@ exclude       = [
 ]
 
 [dependencies]
-log = "0.3.3"
-byteorder = "0.4.2"
-time = "0.1.34"
-#clippy = "0.0.56"
+log = "0.3.6"
+byteorder = "0.5.1"
+time = "0.1.35"
+clippy = "0.0.63"
 
 [dependencies.mio]
 git = "https://github.com/carllerche/mio"

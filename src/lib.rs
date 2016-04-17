@@ -51,11 +51,11 @@
 #![doc(html_root_url = "https://blabaere.github.io/scaproust/")]
 
 #![feature(box_syntax)]
-//#![feature(plugin)]
-//#![plugin(clippy)]
-//#![allow(boxed_local)]
-//#![allow(bool_comparison)]
-//#![allow(explicit_iter_loop)]
+#![feature(plugin)]
+#![plugin(clippy)]
+#![allow(boxed_local)]
+#![allow(bool_comparison)]
+#![allow(explicit_iter_loop)]
 
 #[macro_use]
 extern crate log;

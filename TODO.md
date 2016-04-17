@@ -1,11 +1,10 @@
-### change copyright header to mention 'authors' and the AUTHORS file
-
 ### Define a default max size for messages, and let the user change it
 
-### REQ resend cannot be implemented with the current design
-There can be only one operation in progress for a given socket but resend occurs in background.
+### increase reconnect ivl up to reconnect ivl max
+
+### REQ resend 
 Resend must be scheduled when a regular send succeeds, and cancelled when the matching recv occurs.
-What if a user command is received is when a resend is in progress (some bytes sent, but not all).
+What if a user command is received is when a resend is in progress (some bytes sent, but not all) ?
 
 BONUS: if the pipe that the request was sent to is removed, the request could be resent right away ...
 
@@ -21,16 +20,14 @@ This could be done with nanocat, the Tim Dysinger examples and some scripts chec
 
 Test reconnect feature
 
-### Misc:
-- Rename session into something less oriented ? (context, environment ...)
-- Add create_xxx_socket helper functions on session ?
-
 ### Features:
 - Implement nanocat
 - STAR protocol
 
 ### Performance
 - Use a pool for payloads and buffers (if any)
+
+### change copyright header to mention 'authors' and the AUTHORS file
 
 ### Stuff to look at:
 **mioco now has a timeout feature !**  

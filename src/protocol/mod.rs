@@ -88,7 +88,7 @@ pub trait Protocol {
             PipeEvtSignal::RecvBlocked   => self.on_recv_blocked(event_loop, tok),
             PipeEvtSignal::SendDone      => self.on_send_done(event_loop, tok),
             PipeEvtSignal::SendBlocked   => self.on_send_blocked(event_loop, tok),
-            PipeEvtSignal::Error         => {},
+            PipeEvtSignal::Error         |
             PipeEvtSignal::Closed        => {}
         }
     }

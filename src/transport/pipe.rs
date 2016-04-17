@@ -225,8 +225,12 @@ trait PipeState {
 trait LivePipeState {
     fn body(&self) -> &PipeBody;
 
+    fn token(&self) -> mio::Token {
+        self.body().token()
+    }
+
     fn debug(&self, log: &str) {
-        debug!("[{:?}] {}", self.body().token().as_usize(), log)
+        debug!("[{:?}] {}", self.token().as_usize(), log)
     }
 
     fn send_sig(&self, sig: PipeEvtSignal) -> io::Result<()> {

@@ -318,6 +318,12 @@ struct IpcRecvOperation {
     step: Option<RecvOperationStep>
 }
 
+impl Default for IpcRecvOperation {
+    fn default() -> Self {
+        IpcRecvOperation::new()
+    }
+}
+
 impl IpcRecvOperation {
     fn new() -> IpcRecvOperation {
         IpcRecvOperation {

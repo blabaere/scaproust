@@ -362,6 +362,12 @@ struct TcpRecvOperation {
     step: Option<RecvOperationStep>
 }
 
+impl Default for TcpRecvOperation {
+    fn default() -> Self {
+        TcpRecvOperation::new()
+    }
+}
+
 impl TcpRecvOperation {
     fn new() -> TcpRecvOperation {
         TcpRecvOperation {

@@ -132,6 +132,13 @@ struct TestTryWrite {
 }
 
 #[cfg(test)]
+impl Default for TestTryWrite {
+    fn default() -> Self {
+        TestTryWrite::new()
+    }
+}
+
+#[cfg(test)]
 impl TestTryWrite {
     fn new() -> TestTryWrite {
         TestTryWrite {
@@ -139,7 +146,7 @@ impl TestTryWrite {
         }
     }
 
-    fn get_bytes<'a>(&'a self) -> &'a [u8] {
+    fn get_bytes(&self) -> &[u8] {
         &self.buffer
     }
 }

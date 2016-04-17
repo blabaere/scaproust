@@ -62,8 +62,8 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
   - [ ] IPV4 only
   - [ ] Socket name
 
-- [ ] Protocol options
-  - [ ] REQ resend interval
+- [x] Protocol options
+  - [x] REQ resend interval
   - [x] SURVEYOR deadline
   - [x] SUB subscribe
   - [x] SUB unsubscribe
