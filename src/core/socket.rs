@@ -18,7 +18,7 @@ use event_loop_msg::*;
 use protocol::Protocol;
 use transport::pipe::Pipe;
 use core::acceptor::Acceptor;
-use transport::{create_transport, Connection, Listener};
+use transport::{create_transport, Connection, Listener, Transport};
 
 use EventLoop;
 use Message;
@@ -80,8 +80,8 @@ impl Socket {
         debug!("[{:?}] handle_cmd {}", self.id, cmd.name());
 
         match cmd {
-            SocketCmdSignal::Connect(addr)  => self.connect(addr),
-            SocketCmdSignal::Bind(addr)     => self.bind(addr),
+            SocketCmdSignal::Connect(addr)  => self.connect(event_loop, addr),
+            SocketCmdSignal::Bind(addr)     => self.bind(event_loop, addr),
             SocketCmdSignal::Shutdown(tok)  => self.shutdown(event_loop, tok),
             SocketCmdSignal::SendMsg(msg)   => self.send(event_loop, msg),
             SocketCmdSignal::RecvMsg        => self.recv(event_loop),
@@ -118,13 +118,37 @@ impl Socket {
         }
     }
 
-    fn connect(&mut self, addr: String) {
+    fn connect(&mut self, event_loop: &mut EventLoop, addr: String) {
         debug!("[{:?}] connect: '{}'", self.id, addr);
 
-        self.create_connection(&addr).
-            and_then(|conn| self.on_connection_created(Some(addr), conn, None)).
-            map(|t| self.send_notify(SocketNotify::Connected(t))).
-            unwrap_or_else(|err| self.send_notify(SocketNotify::NotConnected(err)));
+        let conn_addr = addr.clone();
+        let reconn_addr = addr.clone();
+        let addr_parts: Vec<&str> = addr.split("://").collect();
+        let scheme = addr_parts[0];
+        let specific_addr = addr_parts[1];
+
+        let transport = match create_transport(scheme) {
+            Ok(mut transport) => {
+                transport.set_nodelay(self.options.tcp_nodelay);
+                transport
+            },
+            Err(e) => {
+                self.send_notify(SocketNotify::NotConnected(e));
+                return;
+            }
+        };
+
+        let token = self.next_token();
+        transport.connect(specific_addr).
+            map(|conn|{
+                self.on_connection_created(Some(conn_addr), conn, token).
+                    map(|_| self.send_notify(SocketNotify::Connected(token))).
+                    unwrap_or_else(|e| self.send_notify(SocketNotify::NotConnected(e)));
+            }).
+            unwrap_or_else(|_| {
+                self.schedule_reconnect(event_loop, token, reconn_addr);
+                self.send_notify(SocketNotify::Connected(token));
+            })
     }
 
     pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
@@ -133,7 +157,7 @@ impl Socket {
         let conn_addr = addr.clone();
         let reconn_addr = addr.clone();
         let _ = self.create_connection(&addr).
-            and_then(|conn| self.on_connection_created(Some(conn_addr), conn, Some(tok))).
+            and_then(|conn| self.on_connection_created(Some(conn_addr), conn, tok)).
             map_err(|_| self.schedule_reconnect(event_loop, tok, reconn_addr));
     }
 
@@ -149,20 +173,17 @@ impl Socket {
         transport.connect(specific_addr)
     }
 
-    fn on_connection_created(&mut self, addr: Option<String>, conn: Box<Connection>, token: Option<mio::Token>) -> io::Result<mio::Token> {
+    fn on_connection_created(&mut self, addr: Option<String>, conn: Box<Connection>, tok: mio::Token) -> io::Result<()> {
         debug!("[{:?}] on_connection_created: '{:?}'", self.id, addr);
-        let token = token.unwrap_or_else(|| self.next_token());
         let socket_type = self.protocol.get_type();
         let priorities = self.options.priorities();
         let sig_sender = self.sig_sender.clone();
-        let pipe = Pipe::new(token, addr, socket_type, priorities, conn, sig_sender);
+        let pipe = Pipe::new(tok, addr, socket_type, priorities, conn, sig_sender);
 
-        self.protocol.add_pipe(token, pipe).
-            map(|_|self.send_event(SocketEvtSignal::PipeAdded(token))).
-            map(|()| token)
+        self.protocol.add_pipe(tok, pipe).map(|_|self.send_event(SocketEvtSignal::PipeAdded(tok)))
     }
 
-    pub fn bind(&mut self, addr: String) {
+    pub fn bind(&mut self, event_loop: &mut EventLoop, addr: String) {
         debug!("[{:?}] bind: '{}'", self.id, addr);
 
         self.create_listener(&addr).
@@ -280,7 +301,8 @@ impl Socket {
 
     fn on_connections_accepted(&mut self, conns: Vec<Box<Connection>>) -> io::Result<()> {
         for conn in conns {
-            try!(self.on_connection_created(None, conn, None));
+            let token = self.next_token();
+            try!(self.on_connection_created(None, conn, token));
         }
         Ok(())
     }

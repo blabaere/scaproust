@@ -898,3 +898,22 @@ fn can_recover_from_timeout() {
     push.send(vec![65, 66, 88]).expect("Push should have sent a small msg");
     pull.recv().expect("Pull should have received the small msg");
 }
+
+fn can_recover_from_connect_before_bind(url: &str) {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut push = session.create_socket(SocketType::Push).unwrap();
+
+    push.connect(url).expect("connect failed");
+}
+
+#[test]
+fn can_recover_from_connect_before_bind_tcp() {
+    can_recover_from_connect_before_bind("tcp://127.0.0.1:5490");
+}
+
+#[cfg(not(windows))]
+#[test]
+fn can_recover_from_connect_before_bind_ipc() {
+    can_recover_from_connect_before_bind("ipc:///tmp/lol_i_dont_exist.ipc");
+}
