@@ -118,38 +118,36 @@ impl Socket {
         }
     }
 
-    fn connect(&mut self, event_loop: &mut EventLoop, addr: String) {
-        debug!("[{:?}] connect: '{}'", self.id, addr);
+    fn connect(&mut self, event_loop: &mut EventLoop, url: String) {
+        debug!("[{:?}] connect: '{}'", self.id, url);
 
-        let conn_addr = addr.clone();
-        let reconn_addr = addr.clone();
-        let addr_parts: Vec<&str> = addr.split("://").collect();
-        let scheme = addr_parts[0];
-        let specific_addr = addr_parts[1];
+        let conn_addr = url.clone();
+        let reconn_addr = url.clone();
 
-        let transport = match create_transport(scheme) {
-            Ok(mut transport) => {
-                transport.set_nodelay(self.options.tcp_nodelay);
-                transport
-            },
-            Err(e) => {
-                self.send_notify(SocketNotify::NotConnected(e));
-                return;
-            }
-        };
-
-        let token = self.next_token();
-        transport.connect(specific_addr).
-            map(|conn|{
-                self.create_and_add_pipe(Some(conn_addr), conn, token).
-                    map(|_| self.send_notify(SocketNotify::Connected(token))).
-                    unwrap_or_else(|e| self.send_notify(SocketNotify::NotConnected(e)));
-            }).
-            unwrap_or_else(|_| {
-                self.schedule_reconnect(event_loop, token, reconn_addr);
-                self.send_notify(SocketNotify::Connected(token));
-            })
+        self.parse_url(url.as_ref()).map(|(transport, addr)| {
+            let token = self.next_token();
+            transport.connect(addr).
+                map(|conn|{
+                    self.create_and_add_pipe(Some(conn_addr), conn, token).
+                        map(|_| self.send_notify(SocketNotify::Connected(token))).
+                        unwrap_or_else(|e| self.send_notify(SocketNotify::NotConnected(e)));
+                }).
+                unwrap_or_else(|_| {
+                    self.schedule_reconnect(event_loop, token, reconn_addr);
+                    self.send_notify(SocketNotify::Connected(token));
+                })
+        }).unwrap_or_else(|e| {
+            self.send_notify(SocketNotify::NotConnected(e));
+        })
     }
+
+    fn parse_url<'a>(&self, url: &'a str) -> io::Result<(Box<Transport>, &'a str)> {
+        let parts: Vec<&str> = url.split("://").collect();
+        let scheme = parts[0];
+        let addr = parts[1];
+
+        create_transport(scheme).map(|transport| (transport, addr))
+     }
 
     pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
         debug!("[{:?}] pipe [{:?}] reconnect: '{}'", self.id, tok.as_usize(), addr);
@@ -183,36 +181,21 @@ impl Socket {
         self.protocol.add_pipe(tok, pipe).map(|_|self.send_event(SocketEvtSignal::PipeAdded(tok)))
     }
 
-    pub fn bind(&mut self, event_loop: &mut EventLoop, addr: String) {
-        debug!("[{:?}] bind: '{}'", self.id, addr);
+    pub fn bind(&mut self, event_loop: &mut EventLoop, url: String) {
+        debug!("[{:?}] bind: '{}'", self.id, url);
 
-        let bind_addr = addr.clone();
-        let rebind_addr = addr.clone();
-        let addr_parts: Vec<&str> = addr.split("://").collect();
-        let scheme = addr_parts[0];
-        let specific_addr = addr_parts[1];
+        let bind_addr = url.clone();
+        let rebind_addr = url.clone();
 
-        let transport = match create_transport(scheme) {
-            Ok(mut transport) => {
-                transport.set_nodelay(self.options.tcp_nodelay);
-                transport
-            },
-            Err(e) => {
-                self.send_notify(SocketNotify::NotBound(e));
-                return;
-            }
-        };
-
-        let token = self.next_token();
-        transport.bind(specific_addr).
-            map(|listener|{
-                self.create_and_add_acceptor(bind_addr, listener, token);
-                self.send_notify(SocketNotify::Bound(token));
-            }).
-            unwrap_or_else(|_| {
-                self.schedule_rebind(event_loop, token, rebind_addr);
-                self.send_notify(SocketNotify::Bound(token));
-            })
+        self.parse_url(url.as_ref()).map(|(transport, addr)| {
+            let token = self.next_token();
+            transport.bind(addr).
+                map(|listener| self.create_and_add_acceptor(bind_addr, listener, token)).
+                unwrap_or_else(|_| self.schedule_rebind(event_loop, token, rebind_addr));
+            self.send_notify(SocketNotify::Bound(token));
+        }).unwrap_or_else(|e| {
+            self.send_notify(SocketNotify::NotBound(e));
+        })
     }
 
     pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
