@@ -118,6 +118,17 @@ impl Socket {
         }
     }
 
+    fn parse_url<'a>(&self, url: &'a str) -> io::Result<(Box<Transport>, &'a str)> {
+        let parts: Vec<&str> = url.split("://").collect();
+        let scheme = parts[0];
+        let addr = parts[1];
+
+        create_transport(scheme).map(|mut transport| {
+            transport.set_nodelay(self.options.tcp_nodelay);
+            (transport, addr)
+        })
+     }
+
     fn connect(&mut self, event_loop: &mut EventLoop, url: String) {
         debug!("[{:?}] connect: '{}'", self.id, url);
 
@@ -140,17 +151,6 @@ impl Socket {
             self.send_notify(SocketNotify::NotConnected(e));
         })
     }
-
-    fn parse_url<'a>(&self, url: &'a str) -> io::Result<(Box<Transport>, &'a str)> {
-        let parts: Vec<&str> = url.split("://").collect();
-        let scheme = parts[0];
-        let addr = parts[1];
-
-        create_transport(scheme).map(|mut transport| {
-            transport.set_nodelay(self.options.tcp_nodelay);
-            (transport, addr)
-        })
-     }
 
     pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
         debug!("[{:?}] pipe [{:?}] reconnect: '{}'", self.id, tok.as_usize(), addr);

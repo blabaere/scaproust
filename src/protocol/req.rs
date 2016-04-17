@@ -20,7 +20,7 @@ use protocol::Protocol;
 use protocol::policy::*;
 use transport::pipe::Pipe;
 use global::*;
-use event_loop_msg::{ SocketNotify, EventLoopTimeout };
+use event_loop_msg::{ SocketNotify, EventLoopTimeout, SocketOption };
 use EventLoop;
 use Message;
 
@@ -170,6 +170,13 @@ impl Protocol for Req {
         self.apply(|s, body| s.resend(body, event_loop));
     }
 
+    fn set_option(&mut self, _: &mut EventLoop, option: SocketOption) -> io::Result<()> {
+        match option {
+            SocketOption::ResendInterval(ivl) => Ok(self.body.set_resend_interval(ivl)),
+            _ => Err(invalid_data_io_error("option not supported by protocol"))
+        }
+    }
+
     fn destroy(&mut self, event_loop: &mut EventLoop) {
         self.body.destroy_pipes(event_loop);
     }
@@ -271,8 +278,6 @@ impl State {
 
             State::WaitingReply(pending_request)
         } else {
-            // can't send the request again while receiving because 
-            // a pipe has one state and cannot both recv and send a the same time
             self
         }
     }
@@ -343,6 +348,10 @@ fn try_recv(body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Ti
 }
 
 impl Body {
+
+    fn set_resend_interval(&mut self, ivl: Duration) {
+        self.resend_interval = ivl.to_millis();
+    }
 
     fn schedule_resend(&mut self, event_loop: &mut EventLoop) -> Timeout {
         if self.resend_interval > 0u64 {
