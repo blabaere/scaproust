@@ -146,7 +146,10 @@ impl Socket {
         let scheme = parts[0];
         let addr = parts[1];
 
-        create_transport(scheme).map(|transport| (transport, addr))
+        create_transport(scheme).map(|mut transport| {
+            transport.set_nodelay(self.options.tcp_nodelay);
+            (transport, addr)
+        })
      }
 
     pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
@@ -159,16 +162,13 @@ impl Socket {
             map_err(|_| self.schedule_reconnect(event_loop, tok, reconn_addr));
     }
 
-    fn create_connection(&self, addr: &str) -> io::Result<Box<Connection>> {
-        debug!("[{:?}] create_connection: '{}'", self.id, addr);
+    fn create_connection(&self, url: &str) -> io::Result<Box<Connection>> {
+        debug!("[{:?}] create_connection: '{}'", self.id, url);
 
-        let addr_parts: Vec<&str> = addr.split("://").collect();
-        let scheme = addr_parts[0];
-        let specific_addr = addr_parts[1];
-        let mut transport = try!(create_transport(scheme));
-
-        transport.set_nodelay(self.options.tcp_nodelay);
-        transport.connect(specific_addr)
+        match self.parse_url(url) {
+            Ok((transport, addr)) => transport.connect(addr),
+            Err(e) => Err(e)
+        }
     }
 
     fn create_and_add_pipe(&mut self, addr: Option<String>, conn: Box<Connection>, tok: mio::Token) -> io::Result<()> {
@@ -206,14 +206,11 @@ impl Socket {
             map_err(|_| self.schedule_rebind(event_loop, tok, addr.clone()));
     }
 
-    fn create_listener(&self, addr: &str) -> io::Result<Box<Listener>> {
-        let addr_parts: Vec<&str> = addr.split("://").collect();
-        let scheme = addr_parts[0];
-        let specific_addr = addr_parts[1];
-        let mut transport = try!(create_transport(scheme));
-        
-        transport.set_nodelay(self.options.tcp_nodelay);
-        transport.bind(specific_addr)
+    fn create_listener(&self, url: &str) -> io::Result<Box<Listener>> {
+        match self.parse_url(url) {
+            Ok((transport, addr)) => transport.bind(addr),
+            Err(e) => Err(e)
+        }
     }
 
     fn create_and_add_acceptor(&mut self, addr: String, listener: Box<Listener>, tok: mio::Token) {
