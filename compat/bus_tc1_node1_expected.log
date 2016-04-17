@@ -1,0 +1,4 @@
+node1: SENDING 'node1' ONTO BUS
+node1: RECEIVED 'node0' FROM BUS
+node1: RECEIVED 'node2' FROM BUS
+node1: RECEIVED 'node3' FROM BUS

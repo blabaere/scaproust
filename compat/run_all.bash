@@ -7,3 +7,4 @@ $COMPAT_PATH/pipeline.bash
 $COMPAT_PATH/pubsub.bash
 $COMPAT_PATH/reqrep.bash
 $COMPAT_PATH/survey.bash
+$COMPAT_PATH/bus.bash
