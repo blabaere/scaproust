@@ -35,7 +35,7 @@ pub type Timeout = Option<mio::Timeout>;
 
 pub fn clear_timeout(event_loop: &mut EventLoop, handle: Option<mio::Timeout>) {
     if let Some(timeout) = handle {
-        event_loop.clear_timeout(timeout);
+        event_loop.clear_timeout(&timeout);
     }
 }
 
