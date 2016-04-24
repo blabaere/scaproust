@@ -55,8 +55,8 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
   - [ ] Recv buffer size
   - [x] Send timeout
   - [x] Recv timeout
-  - [ ] Reconnect interval
-  - [ ] Reconnect interval max
+  - [x] Reconnect interval
+  - [x] Reconnect interval max
   - [x] Send priority
   - [x] Recv priority
   - [ ] IPV4 only

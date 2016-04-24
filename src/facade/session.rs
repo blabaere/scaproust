@@ -132,5 +132,6 @@ impl Session {
 impl Drop for Session {
     fn drop(&mut self) {
         let _ = self.send_cmd(SessionCmdSignal::Shutdown);
+        let _ = self.evt_receiver.recv();
     }
 }

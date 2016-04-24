@@ -102,7 +102,7 @@ impl Socket {
         debug!("[{:?}] on_pipe_evt [{:?}]: {}", self.id, tok.as_usize(), evt.name());
 
         match evt {
-            PipeEvtSignal::Error => self.remove_pipe_and_schedule_reconnect(event_loop, tok),
+            PipeEvtSignal::Error(x) => self.remove_pipe_and_schedule_reconnect(event_loop, tok, x),
             other => self.protocol.on_pipe_evt(event_loop, tok, other)
         }
     }
@@ -139,12 +139,12 @@ impl Socket {
             let token = self.next_token();
             transport.connect(addr).
                 map(|conn|{
-                    self.create_and_add_pipe(Some(conn_addr), conn, token).
+                    self.create_and_add_pipe(Some(conn_addr), conn, token, 0).
                         map(|_| self.send_notify(SocketNotify::Connected(token))).
                         unwrap_or_else(|e| self.send_notify(SocketNotify::NotConnected(e)));
                 }).
                 unwrap_or_else(|_| {
-                    self.schedule_reconnect(event_loop, token, reconn_addr);
+                    self.schedule_reconnect(event_loop, token, reconn_addr, 0);
                     self.send_notify(SocketNotify::Connected(token));
                 })
         }).unwrap_or_else(|e| {
@@ -152,14 +152,14 @@ impl Socket {
         })
     }
 
-    pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
+    pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token, count: u32) {
         debug!("[{:?}] pipe [{:?}] reconnect: '{}'", self.id, tok.as_usize(), addr);
 
         let conn_addr = addr.clone();
         let reconn_addr = addr.clone();
         let _ = self.create_connection(&addr).
-            and_then(|conn| self.create_and_add_pipe(Some(conn_addr), conn, tok)).
-            map_err(|_| self.schedule_reconnect(event_loop, tok, reconn_addr));
+            and_then(|conn| self.create_and_add_pipe(Some(conn_addr), conn, tok, count)).
+            map_err(|_| self.schedule_reconnect(event_loop, tok, reconn_addr, count+1));
     }
 
     fn create_connection(&self, url: &str) -> io::Result<Box<Connection>> {
@@ -171,12 +171,12 @@ impl Socket {
         }
     }
 
-    fn create_and_add_pipe(&mut self, addr: Option<String>, conn: Box<Connection>, tok: mio::Token) -> io::Result<()> {
+    fn create_and_add_pipe(&mut self, addr: Option<String>, conn: Box<Connection>, tok: mio::Token, error_count: u32) -> io::Result<()> {
         debug!("[{:?}] create_and_add_pipe: '{:?}'", self.id, addr);
         let socket_type = self.protocol.get_type();
         let priorities = self.options.priorities();
         let sig_sender = self.sig_sender.clone();
-        let pipe = Pipe::new(tok, addr, socket_type, priorities, conn, sig_sender);
+        let pipe = Pipe::new(tok, addr, socket_type, priorities, conn, sig_sender, error_count);
 
         self.protocol.add_pipe(tok, pipe).map(|_|self.send_event(SocketEvtSignal::PipeAdded(tok)))
     }
@@ -191,19 +191,19 @@ impl Socket {
             let token = self.next_token();
             transport.bind(addr).
                 map(|listener| self.create_and_add_acceptor(bind_addr, listener, token)).
-                unwrap_or_else(|_| self.schedule_rebind(event_loop, token, rebind_addr));
+                unwrap_or_else(|_| self.schedule_rebind(event_loop, token, rebind_addr, 0));
             self.send_notify(SocketNotify::Bound(token));
         }).unwrap_or_else(|e| {
             self.send_notify(SocketNotify::NotBound(e));
         })
     }
 
-    pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token) {
+    pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token, count: u32) {
         debug!("[{:?}] acceptor [{:?}] rebind: '{}'", self.id, tok.as_usize(), addr);
 
         let _ = self.create_listener(&addr).
             map(|lst| self.create_and_add_acceptor(addr.clone(), lst, tok)).
-            map_err(|_| self.schedule_rebind(event_loop, tok, addr.clone()));
+            map_err(|_| self.schedule_rebind(event_loop, tok, addr.clone(), count+1));
     }
 
     fn create_listener(&self, url: &str) -> io::Result<Box<Listener>> {
@@ -269,40 +269,36 @@ impl Socket {
         if self.options.is_device_item && self.protocol.can_recv() {
             self.send_event(SocketEvtSignal::Readable);
         }
-
-        if events.is_hup() | events.is_error() {
-            self.remove_pipe_and_schedule_reconnect(event_loop, tok);
-        }
     }
 
-    fn remove_pipe_and_schedule_reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
+    fn remove_pipe_and_schedule_reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token, count: u32) {
         if let Some(mut pipe) = self.protocol.remove_pipe(tok) {
             pipe.close(event_loop);
             if let Some(addr) = pipe.addr() {
-                self.schedule_reconnect(event_loop, tok, addr);
+                self.schedule_reconnect(event_loop, tok, addr, count);
             }
         }
     }
 
-    fn schedule_reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
+    fn schedule_reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String, times: u32) {
         debug!("[{:?}] pipe [{:?}] schedule_reconnect: '{}'", self.id, tok.as_usize(), addr);
-        let timespan = time::Duration::from_millis(500);
+        let timespan = self.options.get_retry_ivl(times);
         let _ = event_loop.
-            timeout(EventLoopTimeout::Reconnect(self.id, tok, addr), timespan).
+            timeout(EventLoopTimeout::Reconnect(self.id, tok, addr, times), timespan).
             map_err(|err| error!("[{:?}] pipe [{:?}] reconnect timeout failed: '{:?}'", self.id, tok.as_usize(), err));
     }
 
-    fn schedule_rebind(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String) {
-        let timespan = time::Duration::from_millis(500);
+    fn schedule_rebind(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String, times: u32) {
+        let timespan = self.options.get_retry_ivl(times);
         let _ = event_loop.
-            timeout(EventLoopTimeout::Rebind(self.id, tok, addr), timespan).
+            timeout(EventLoopTimeout::Rebind(self.id, tok, addr, times), timespan).
             map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok.as_usize(), err));
     }
 
     fn on_connections_accepted(&mut self, conns: Vec<Box<Connection>>) -> io::Result<()> {
         for conn in conns {
             let token = self.next_token();
-            try!(self.create_and_add_pipe(None, conn, token));
+            try!(self.create_and_add_pipe(None, conn, token, 0));
         }
         Ok(())
     }
@@ -316,9 +312,8 @@ impl Socket {
                 unwrap_or_else(|err| debug!("[{:?}] acceptor [{:?}] error while closing: '{:?}'", self.id, tok, err));
             let timespan = time::Duration::from_millis(500);
             let _ = event_loop.
-                timeout(EventLoopTimeout::Rebind(self.id, tok, acceptor.addr()), timespan).
+                timeout(EventLoopTimeout::Rebind(self.id, tok, acceptor.addr(), 0), timespan).
                 map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok, err));
-
         }
     }
 
@@ -360,13 +355,15 @@ impl Socket {
 
     pub fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) {
         let set_res = match option {
-            SocketOption::SendTimeout(timeout)   => self.options.set_send_timeout(timeout),
-            SocketOption::RecvTimeout(timeout)   => self.options.set_recv_timeout(timeout),
-            SocketOption::SendPriority(priority) => self.options.set_send_priority(priority),
-            SocketOption::RecvPriority(priority) => self.options.set_recv_priority(priority),
-            SocketOption::TcpNoDelay(flag)       => self.options.set_tcp_nodelay(flag),
-            SocketOption::DeviceItem(value)      => self.set_device_item(value),
-            option                               => self.protocol.set_option(event_loop, option)
+            SocketOption::SendTimeout(timeout)      => self.options.set_send_timeout(timeout),
+            SocketOption::RecvTimeout(timeout)      => self.options.set_recv_timeout(timeout),
+            SocketOption::SendPriority(priority)    => self.options.set_send_priority(priority),
+            SocketOption::RecvPriority(priority)    => self.options.set_recv_priority(priority),
+            SocketOption::ReconnectInterval(ivl)    => self.options.set_reconnect_ivl(ivl),
+            SocketOption::ReconnectIntervalMax(ivl) => self.options.set_reconnect_ivl_max(ivl),
+            SocketOption::TcpNoDelay(flag)          => self.options.set_tcp_nodelay(flag),
+            SocketOption::DeviceItem(value)         => self.set_device_item(value),
+            option                                  => self.protocol.set_option(event_loop, option)
         };
         let evt = match set_res {
             Ok(_)  => SocketNotify::OptionSet,
@@ -400,6 +397,8 @@ struct SocketImplOptions {
     pub recv_timeout_ms: Option<u64>,
     pub send_priority: u8,
     pub recv_priority: u8,
+    pub reconnect_ivl_ms: u64,
+    pub reconnect_ivl_max_ms: u64,
     pub tcp_nodelay: bool,
     pub is_device_item: bool
 }
@@ -411,6 +410,8 @@ impl SocketImplOptions {
             recv_timeout_ms: None,
             send_priority: 8,
             recv_priority: 8,
+            reconnect_ivl_ms: 100,
+            reconnect_ivl_max_ms: 0,
             tcp_nodelay: false,
             is_device_item: false
         }
@@ -448,6 +449,36 @@ impl SocketImplOptions {
         } else {
             Err(invalid_data_io_error("Invalid priority"))
         }
+    }
+
+    fn set_reconnect_ivl(&mut self, ivl: time::Duration) -> io::Result<()> {
+        let ivl_ms = duration_to_millis(ivl);
+
+        if ivl_ms == 0 {
+            Err(invalid_input_io_error("Reconnect interval must be > 0"))
+        } else {
+            self.reconnect_ivl_ms = ivl_ms;
+
+            Ok(())
+        }
+    }
+
+    fn set_reconnect_ivl_max(&mut self, ivl: time::Duration) -> io::Result<()> {
+        self.reconnect_ivl_max_ms = duration_to_millis(ivl);
+
+        Ok(())
+    }
+
+    fn get_retry_ivl(&self, mut count: u32) -> time::Duration {
+        let mut ivl = self.reconnect_ivl_ms;
+        loop {
+            if ivl > self.reconnect_ivl_max_ms || count == 0 {
+                break;
+            }
+            ivl = ivl * 2;
+            count = count - 1;
+        }
+        time::Duration::from_millis(ivl)
     }
 
     fn set_tcp_nodelay(&mut self, value: bool) -> io::Result<()> {

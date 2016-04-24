@@ -104,8 +104,28 @@ pub enum SocketOption {
 
     /// See [Socket::set_recv_priority](struct.Socket.html#method.set_recv_priority).
     RecvPriority(u8),
+
+    /// For connection-based transports such as TCP, this option specifies how long to wait, 
+    /// when connection is broken before trying to re-establish it. 
+    /// Note that actual reconnect interval may be randomised to some extent 
+    /// to prevent severe reconnection storms. Default value is 0.1 second.
+    ReconnectInterval(time::Duration),
+
+    /// This option is to be used only in addition to ReconnectInterval option.
+    /// It specifies maximum reconnection interval. On each reconnect attempt,
+    /// the previous interval is doubled until ReconnectIntervalMax is reached.
+    /// Value of 0 means that no exponential backoff is performed and reconnect interval is based only on ReconnectInterval.
+    /// If ReconnectIntervalMax is less than ReconnectInterval, it is ignored. 
+    /// Default value is 0.
+    ReconnectIntervalMax(time::Duration),
+
+    /// Defined on `Sub` socket. Subscribes for a particular topic.
+    /// A single `Sub` socket can handle multiple subscriptions.
     Subscribe(String),
+
+    /// Defined on Sub` socket. Unsubscribes from a particular topic.
     Unsubscribe(String),
+
     SurveyDeadline(time::Duration),
     ResendInterval(time::Duration),
 
@@ -162,7 +182,7 @@ impl SocketEvtSignal {
 pub enum PipeEvtSignal {
     Opened,
     Closed,
-    Error,
+    Error(u32),
     RecvDone(Message),
     RecvBlocked,
     SendDone,
@@ -174,7 +194,7 @@ impl PipeEvtSignal {
         match *self {
             PipeEvtSignal::Opened => "Opened",
             PipeEvtSignal::Closed => "Closed",
-            PipeEvtSignal::Error => "Error",
+            PipeEvtSignal::Error(_) => "Error",
             PipeEvtSignal::RecvDone(_) => "RecvDone",
             PipeEvtSignal::RecvBlocked => "RecvBlocked",
             PipeEvtSignal::SendDone => "SendDone",
@@ -185,8 +205,8 @@ impl PipeEvtSignal {
 
 /// Events raised by a timer
 pub enum EventLoopTimeout {
-    Reconnect(SocketId, mio::Token, String),
-    Rebind(SocketId, mio::Token, String),
+    Reconnect(SocketId, mio::Token, String, u32),
+    Rebind(SocketId, mio::Token, String, u32),
     CancelSend(SocketId),
     CancelRecv(SocketId),
     CancelSurvey(SocketId),
@@ -197,7 +217,8 @@ pub enum EventLoopTimeout {
 pub enum SessionNotify {
     SocketCreated(SocketId, mpsc::Receiver<SocketNotify>),
     ProbeCreated(ProbeId, mpsc::Receiver<ProbeNotify>),
-    ProbeNotCreated(io::Error)
+    ProbeNotCreated(io::Error),
+    Shutdown
 }
 
 /// Notifications sent by the *backend* socket as reply to the commands sent by the facade socket.

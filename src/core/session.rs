@@ -57,11 +57,7 @@ impl Session {
             SessionCmdSignal::DestroySocket(id) => self.destroy_socket(event_loop, id),
             SessionCmdSignal::CreateProbe(l,r)  => self.create_probe(event_loop, l, r),
             SessionCmdSignal::DestroyProbe(id)  => self.destroy_probe(event_loop, id),
-            SessionCmdSignal::Shutdown          => {
-                self.socket_ids.clear();
-                self.sockets.clear();
-                event_loop.shutdown();
-            },
+            SessionCmdSignal::Shutdown          => self.shutdown(event_loop)
         }
     }
 
@@ -182,12 +178,12 @@ impl Session {
         }
     }
 
-    fn reconnect(&mut self, event_loop: &mut EventLoop, id: SocketId, tok: mio::Token, addr: String) {
-        self.on_socket_by_id(&id, |s| s.reconnect(addr, event_loop, tok));
+    fn reconnect(&mut self, event_loop: &mut EventLoop, id: SocketId, tok: mio::Token, addr: String, times: u32) {
+        self.on_socket_by_id(&id, |s| s.reconnect(addr, event_loop, tok, times));
     }
 
-    fn rebind(&mut self, event_loop: &mut EventLoop, id: SocketId, tok: mio::Token, addr: String) {
-        self.on_socket_by_id(&id, |s| s.rebind(addr, event_loop, tok));
+    fn rebind(&mut self, event_loop: &mut EventLoop, id: SocketId, tok: mio::Token, addr: String, times: u32) {
+        self.on_socket_by_id(&id, |s| s.rebind(addr, event_loop, tok, times));
     }
 
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop, id: SocketId) {
@@ -204,6 +200,17 @@ impl Session {
 
     fn resend(&mut self, event_loop: &mut EventLoop, id: SocketId) {
         self.on_socket_by_id(&id, |socket| socket.resend(event_loop));
+    }
+
+    fn shutdown(&mut self, event_loop: &mut EventLoop) {
+        for (_, mut socket) in self.sockets.drain() {
+            socket.destroy(event_loop);
+        }
+
+        self.socket_ids.clear();
+        self.send_evt(SessionNotify::Shutdown);
+
+        event_loop.shutdown();
     }
 }
 
@@ -228,12 +235,12 @@ impl mio::Handler for Session {
 
     fn timeout(&mut self, event_loop: &mut EventLoop, timeout: Self::Timeout) {
         match timeout {
-            EventLoopTimeout::Reconnect(socket_id, tok, addr) => self.reconnect(event_loop, socket_id, tok, addr),
-            EventLoopTimeout::Rebind(socket_id, tok, addr)    => self.rebind(event_loop, socket_id, tok, addr),
-            EventLoopTimeout::CancelSend(socket_id)           => self.on_send_timeout(event_loop, socket_id),
-            EventLoopTimeout::CancelRecv(socket_id)           => self.on_recv_timeout(event_loop, socket_id),
-            EventLoopTimeout::CancelSurvey(socket_id)         => self.on_survey_timeout(event_loop, socket_id),
-            EventLoopTimeout::Resend(socket_id)               => self.resend(event_loop, socket_id)
+            EventLoopTimeout::Reconnect(id, tok, addr, times) => self.reconnect(event_loop, id, tok, addr, times),
+            EventLoopTimeout::Rebind(id, tok, addr, times)    => self.rebind(event_loop, id, tok, addr, times),
+            EventLoopTimeout::CancelSend(id)                  => self.on_send_timeout(event_loop, id),
+            EventLoopTimeout::CancelRecv(id)                  => self.on_recv_timeout(event_loop, id),
+            EventLoopTimeout::CancelSurvey(id)                => self.on_survey_timeout(event_loop, id),
+            EventLoopTimeout::Resend(id)                      => self.resend(event_loop, id)
         }
     }
 

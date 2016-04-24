@@ -196,6 +196,14 @@ impl Socket {
         self.set_option(SocketOption::RecvPriority(priority))
     }
 
+    pub fn set_reconnect_ivl(&mut self, ivl: time::Duration) -> io::Result<()> {
+        self.set_option(SocketOption::ReconnectInterval(ivl))
+    }
+
+    pub fn set_reconnect_ivl_max(&mut self, ivl: time::Duration) -> io::Result<()> {
+        self.set_option(SocketOption::ReconnectIntervalMax(ivl))
+    }
+
     #[doc(hidden)]
     pub fn matches(&self, other: &Socket) -> bool {
         self.socket_type.matches(other.socket_type)

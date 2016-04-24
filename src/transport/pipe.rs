@@ -35,7 +35,8 @@ impl Pipe {
         socket_type: SocketType,
         priorities: (u8, u8),
         conn: Box<Connection>,
-        sig_tx: mio::Sender<EventLoopSignal>) -> Pipe {
+        sig_tx: mio::Sender<EventLoopSignal>,
+        error_count: u32) -> Pipe {
 
         let (send_prio, recv_prio) = priorities;
         let state = Initial {
@@ -44,7 +45,8 @@ impl Pipe {
                 connection: conn,
                 sig_sender: sig_tx
             },
-            socket_type: socket_type
+            socket_type: socket_type,
+            error_count: error_count
         };
 
         Pipe {
@@ -222,7 +224,7 @@ trait PipeState {
     }
 }
 
-trait LivePipeState {
+trait LivePipeState : PipeState {
     fn body(&self) -> &PipeBody;
 
     fn token(&self) -> mio::Token {
@@ -250,9 +252,16 @@ trait LivePipeState {
         box Dead
     }
 
-    fn on_error(&self, _: &mut EventLoop, _: io::Error) -> Box<PipeState> {
-        let _ = self.send_sig(PipeEvtSignal::Error);
+    fn on_error(&self, _: &mut EventLoop, err: io::Error) -> Box<PipeState> {
+        debug!("Live State '{}' failed: {:?}", self.name(), err);
+        let count = self.get_error_count();
+        let signal = PipeEvtSignal::Error(count);
+        let _ = self.send_sig(signal);
         box Dead
+    }
+
+    fn get_error_count(&self) -> u32 {
+        0
     }
 }
 
@@ -288,7 +297,8 @@ fn no_transition_if_ok<F : PipeState + 'static>(f: Box<F>, res: io::Result<()>, 
 /*****************************************************************************/
 struct Initial {
     body: PipeBody, 
-    socket_type: SocketType
+    socket_type: SocketType,
+    error_count: u32
 }
 
 impl PipeState for Initial {
@@ -315,6 +325,10 @@ impl LivePipeState for Initial {
     fn body(&self) -> &PipeBody {
         &self.body
     }
+
+    fn get_error_count(&self) -> u32 {
+        self.error_count + 1
+    }
 }
 
 /*****************************************************************************/
@@ -324,14 +338,16 @@ impl LivePipeState for Initial {
 /*****************************************************************************/
 struct HandshakeTx {
     body: PipeBody, 
-    socket_type: SocketType
+    socket_type: SocketType,
+    error_count: u32
 }
 
 impl From<Initial> for HandshakeTx {
     fn from(state: Initial) -> HandshakeTx {
         HandshakeTx {
             body: state.body,
-            socket_type: state.socket_type
+            socket_type: state.socket_type,
+            error_count: state.error_count
         }
     }
 }
@@ -382,6 +398,10 @@ impl PipeState for HandshakeTx {
 impl LivePipeState for HandshakeTx {
     fn body(&self) -> &PipeBody {
         &self.body
+    }
+
+    fn get_error_count(&self) -> u32 {
+        self.error_count + 1
     }
 }
 
@@ -593,11 +613,16 @@ impl PipeState for Active {
     }
 
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
-        let res = 
-            self.readable_changed(events.is_readable()).and_then(|_|
-            self.writable_changed(events.is_writable()));
+        if events.is_hup() || events.is_error() {
+            let _ = self.send_sig(PipeEvtSignal::Closed);
+            self
+        } else {
+            let res = 
+                self.readable_changed(events.is_readable()).and_then(|_|
+                self.writable_changed(events.is_writable()));
 
-        no_transition_if_ok(self, res, event_loop)
+            no_transition_if_ok(self, res, event_loop)
+        }
     }
 
     fn recv(mut self: Box<Self>, event_loop: &mut EventLoop) -> Box<PipeState> {
