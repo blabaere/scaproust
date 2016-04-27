@@ -1,2 +1,16 @@
+max_width = 160
+ideal_width = 120
 format_strings = false
 reorder_imports = true
+enum_trailing_comma = false
+struct_trailing_comma = "Never"
+struct_lit_trailing_comma = "Never"
+
+fn_args_density = "Compressed"
+fn_args_layout = "Visual"
+fn_arg_indent = "Tabbed"
+fn_call_width = 120
+
+where_density = "Compressed"
+where_indent = "Inherit"
+where_pred_indent = "Inherit"

@@ -882,8 +882,9 @@ fn can_recover_from_timeout() {
     let mut pull = session.create_socket(SocketType::Pull).unwrap();
     let mut push = session.create_socket(SocketType::Push).unwrap();
 
-    pull.bind("tcp://127.0.0.1:5489").unwrap();
+    pull.set_option(SocketOption::RecvMaxSize(3 * 1024 * 1024)).unwrap();
     pull.set_recv_timeout(time::Duration::from_millis(1000)).unwrap();
+    pull.bind("tcp://127.0.0.1:5489").unwrap();
     push.connect("tcp://127.0.0.1:5489").unwrap();
     push.set_send_timeout(time::Duration::from_millis(10)).unwrap();
     sleep_enough_for_connections_to_establish();
@@ -928,4 +929,31 @@ fn can_recover_from_bind_failure() {
     pull1.bind("tcp://127.0.0.1:5491").unwrap();
     sleep_enough_for_connections_to_establish();
     pull2.bind("tcp://127.0.0.1:5491").unwrap();
+}
+
+#[test]
+fn can_recover_from_msg_too_long() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let mut pull = session.create_socket(SocketType::Pull).unwrap();
+    let mut push = session.create_socket(SocketType::Push).unwrap();
+
+    pull.set_option(SocketOption::RecvMaxSize(1024)).unwrap();
+    pull.set_recv_timeout(time::Duration::from_millis(250)).unwrap();
+    pull.bind("tcp://127.0.0.1:5492").unwrap();
+    push.connect("tcp://127.0.0.1:5492").unwrap();
+    push.set_send_timeout(time::Duration::from_millis(250)).unwrap();
+    sleep_enough_for_connections_to_establish();
+
+    let big_msg = vec![65; 2 * 1024];
+    push.send(big_msg).expect("Push should have sent a big msg");
+
+    let not_received = pull.recv().unwrap_err();
+    assert_eq!(io::ErrorKind::TimedOut, not_received.kind());
+
+    sleep_enough_for_connections_to_establish();
+    sleep_enough_for_connections_to_establish();
+
+    push.send(vec![65, 66, 88]).expect("Push should have sent a small msg");
+    pull.recv().expect("Pull should have received the small msg");
 }

@@ -105,6 +105,11 @@ pub enum SocketOption {
     /// See [Socket::set_recv_priority](struct.Socket.html#method.set_recv_priority).
     RecvPriority(u8),
 
+    /// Maximum message size that can be received, in bytes. 
+    /// Zero value means that the received size is limited only by available addressable memory. 
+    /// Default is 1024kB.
+    RecvMaxSize(u64),
+
     /// For connection-based transports such as TCP, this option specifies how long to wait, 
     /// when connection is broken before trying to re-establish it. 
     /// Note that actual reconnect interval may be randomised to some extent 

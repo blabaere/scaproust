@@ -25,14 +25,31 @@ use transport::{
     TryWriteBuffer,
     TryReadBuffer,
     send_and_check_handshake,
-    recv_and_check_handshake
+    recv_and_check_handshake,
+    DEFAULT_RECV_MAX_SIZE
 };
 
 use Message;
 use SocketType;
 use global;
 
-pub struct Ipc;
+pub struct Ipc {
+    recv_max_size: u64
+}
+
+impl Ipc {
+    pub fn new() -> Ipc {
+        Ipc { 
+            recv_max_size: DEFAULT_RECV_MAX_SIZE
+        }
+    }
+}
+
+impl Default for Ipc {
+    fn default() -> Ipc {
+        Ipc::new()
+    }
+}
 
 impl Transport for Ipc {
 
@@ -44,13 +61,16 @@ impl Transport for Ipc {
         self.bind(path::Path::new(addr))
     }
 
+    fn set_recv_max_size(&mut self, value: u64) {
+        self.recv_max_size = value;
+    }
 }
 
 impl Ipc {
 
     fn connect(&self, addr: &path::Path) -> Result<Box<Connection>, io::Error> {
         let stream = try!(unix::UnixStream::connect(&addr));
-        let connection = IpcConnection::new(stream);
+        let connection = IpcConnection::new(stream, self.recv_max_size);
 
         Ok(Box::new(connection))
     }
@@ -61,15 +81,22 @@ impl Ipc {
         }
 
         let ipc_listener = try!(unix::UnixListener::bind(path));
-        let listener = IpcListener { listener: ipc_listener };
+        let listener = IpcListener { listener: ipc_listener, recv_max_size: self.recv_max_size };
 
         Ok(Box::new(listener))
     }
     
 }
 
+/*****************************************************************************/
+/*                                                                           */
+/* LISTENER                                                                  */
+/*                                                                           */
+/*****************************************************************************/
+
 struct IpcListener {
-    listener: unix::UnixListener
+    listener: unix::UnixListener,
+    recv_max_size: u64
 }
 
 impl AsEvented for IpcListener {
@@ -83,7 +110,7 @@ impl Listener for IpcListener {
         let mut conns: Vec<Box<Connection>> = Vec::new();
 
         while let Some(stream) = try!(self.listener.accept()) {
-            conns.push(box IpcConnection::new(stream));
+            conns.push(box IpcConnection::new(stream, self.recv_max_size));
         }
 
         Ok(conns)
@@ -98,14 +125,16 @@ impl Listener for IpcListener {
 
 struct IpcConnection {
     stream: unix::UnixStream,
+    recv_max_size: u64,
     send_operation: Option<IpcSendOperation>,
     recv_operation: Option<IpcRecvOperation>
 }
 
 impl IpcConnection {
-    fn new(stream: unix::UnixStream) -> IpcConnection {
+    fn new(stream: unix::UnixStream, recv_max_size: u64) -> IpcConnection {
         IpcConnection {
             stream: stream,
+            recv_max_size: recv_max_size,
             send_operation: None,
             recv_operation: None
         }
@@ -296,7 +325,7 @@ fn try_write_buffer<T:TryWrite>(stream: &mut T, buffer: &[u8], written: &mut usi
 
 impl Receiver for IpcConnection {
     fn start_recv(&mut self) -> io::Result<Option<Message>> {
-        let recv_operation = IpcRecvOperation::new();
+        let recv_operation = IpcRecvOperation::new(self.recv_max_size);
 
         self.run_recv_operation(recv_operation)
     }
@@ -318,16 +347,10 @@ struct IpcRecvOperation {
     step: Option<RecvOperationStep>
 }
 
-impl Default for IpcRecvOperation {
-    fn default() -> Self {
-        IpcRecvOperation::new()
-    }
-}
-
 impl IpcRecvOperation {
-    fn new() -> IpcRecvOperation {
+    fn new(max_size: u64) -> IpcRecvOperation {
         IpcRecvOperation {
-            step: Some(RecvOperationStep::Header([0; 9], 0))
+            step: Some(RecvOperationStep::Header([0; 9], 0, max_size))
         }
     }
 
@@ -359,7 +382,7 @@ impl IpcRecvOperation {
 }
 
 enum RecvOperationStep {
-    Header([u8; 9], usize),
+    Header([u8; 9], usize, u64),
     Payload(Vec<u8>, usize),
     Terminal(Message)
 }
@@ -367,23 +390,25 @@ enum RecvOperationStep {
 impl RecvOperationStep {
     fn advance<T:TryRead>(self, stream: &mut T) -> io::Result<(bool, RecvOperationStep)> {
         match self {
-            RecvOperationStep::Header(buffer, read) => read_header(stream, buffer, read),
+            RecvOperationStep::Header(buffer, read, max_size) => read_header(stream, buffer, read, max_size),
             RecvOperationStep::Payload(buffer, read) => read_payload(stream, buffer, read),
             RecvOperationStep::Terminal(_) => Err(global::other_io_error("Cannot advance terminal step of recv operation"))
         }
     }
 }
 
-fn read_header<T:TryRead>(stream: &mut T, mut buffer: [u8; 9], mut read: usize) -> io::Result<(bool, RecvOperationStep)> {
+fn read_header<T:TryRead>(stream: &mut T, mut buffer: [u8; 9], mut read: usize, max_size: u64) -> io::Result<(bool, RecvOperationStep)> {
     read += try!(stream.try_read_buffer(&mut buffer[read..]));
 
     if read == 9 {
         let msg_len = BigEndian::read_u64(&buffer[1..]);
-        let payload = vec![0u8; msg_len as usize];
-
-        Ok((true, RecvOperationStep::Payload(payload, 0)))
+        if msg_len > max_size {
+            Err(global::invalid_data_io_error("message is too long"))
+        } else {
+            Ok((true, RecvOperationStep::Payload(vec![0u8; msg_len as usize], 0)))
+        }
     } else {
-        Ok((false, RecvOperationStep::Header(buffer, read)))
+        Ok((false, RecvOperationStep::Header(buffer, read, max_size)))
     }
 }
 
@@ -430,12 +455,25 @@ mod tests {
     fn recv_in_one_run() {
         let buffer = vec![1, 0, 0, 0, 0, 0, 0, 0, 8, 1, 4, 3, 2, 65, 66, 67, 69];
         let mut stream = io::Cursor::new(buffer);
-        let mut operation = IpcRecvOperation::new();
+        let mut operation = IpcRecvOperation::new(1024);
         let msg = operation.run(&mut stream).
             expect("recv should have succeeded").
             expect("recv should be done");
         let expected_bytes = [1, 4, 3, 2, 65, 66, 67, 69];
 
         assert_eq!(&expected_bytes, msg.get_body());
+    }
+
+    #[test]
+    fn recv_too_long_msg() {
+        let buffer = vec![1, 0, 0, 0, 0, 0, 0, 0, 8, 1, 4, 3, 2, 65, 66, 67, 69];
+        let mut stream = io::Cursor::new(buffer);
+        let mut operation = IpcRecvOperation::new(4);
+        let err = operation.run(&mut stream).err();
+
+        match err {
+            Some(e) => assert_eq!(io::ErrorKind::InvalidData, e.kind()),
+            None    => panic!("Recv operation should have failed")
+        }
     }
 }

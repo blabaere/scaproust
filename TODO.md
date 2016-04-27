@@ -2,10 +2,6 @@
 There is too much coupling between the protocol and the event loop.
 Stuff like registration and timeout should be exposed by that struct.
 
-### Define a default max size for messages, and let the user change it
-
-### increase reconnect ivl up to reconnect ivl max
-
 ### REQ resend 
 Resend must be scheduled when a regular send succeeds, and cancelled when the matching recv occurs.
 What if a user command is received is when a resend is in progress (some bytes sent, but not all) ?
@@ -19,14 +15,12 @@ When a protocol receives a "malformed" message, the message is dropped, but the 
 - Handle accept error
 
 ### AUTOMATE ALL THE THINGS !!!
-Create some scaproust/nanomsg compatibility tests.
-This could be done with nanocat, the Tim Dysinger examples and some scripts checking the output of each process.
 
 Test reconnect feature
 
 ### Features:
 - Implement nanocat
-- STAR protocol
+- STAR protocol ?
 
 ### Performance
 - Use a pool for payloads and buffers (if any)

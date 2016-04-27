@@ -614,7 +614,7 @@ impl PipeState for Active {
 
     fn ready(mut self: Box<Self>, event_loop: &mut EventLoop, events: mio::EventSet) -> Box<PipeState> {
         if events.is_hup() || events.is_error() {
-            let _ = self.send_sig(PipeEvtSignal::Closed);
+            let _ = self.send_sig(PipeEvtSignal::Error(0));
             self
         } else {
             let res = 

@@ -17,6 +17,7 @@ use event_loop_msg::*;
 
 use protocol::Protocol;
 use transport::pipe::Pipe;
+use transport::DEFAULT_RECV_MAX_SIZE;
 use core::acceptor::Acceptor;
 use transport::{create_transport, Connection, Listener, Transport};
 
@@ -125,6 +126,7 @@ impl Socket {
 
         create_transport(scheme).map(|mut transport| {
             transport.set_nodelay(self.options.tcp_nodelay);
+            transport.set_recv_max_size(self.options.recv_max_size);
             (transport, addr)
         })
      }
@@ -362,6 +364,7 @@ impl Socket {
             SocketOption::ReconnectInterval(ivl)    => self.options.set_reconnect_ivl(ivl),
             SocketOption::ReconnectIntervalMax(ivl) => self.options.set_reconnect_ivl_max(ivl),
             SocketOption::TcpNoDelay(flag)          => self.options.set_tcp_nodelay(flag),
+            SocketOption::RecvMaxSize(value)        => self.options.set_recv_max_size(value),
             SocketOption::DeviceItem(value)         => self.set_device_item(value),
             option                                  => self.protocol.set_option(event_loop, option)
         };
@@ -400,6 +403,7 @@ struct SocketImplOptions {
     pub reconnect_ivl_ms: u64,
     pub reconnect_ivl_max_ms: u64,
     pub tcp_nodelay: bool,
+    pub recv_max_size: u64,
     pub is_device_item: bool
 }
 
@@ -413,6 +417,7 @@ impl SocketImplOptions {
             reconnect_ivl_ms: 100,
             reconnect_ivl_max_ms: 0,
             tcp_nodelay: false,
+            recv_max_size: DEFAULT_RECV_MAX_SIZE,
             is_device_item: false
         }
     }
@@ -483,6 +488,11 @@ impl SocketImplOptions {
 
     fn set_tcp_nodelay(&mut self, value: bool) -> io::Result<()> {
         self.tcp_nodelay = value;
+        Ok(())
+    }
+
+    fn set_recv_max_size(&mut self, value: u64) -> io::Result<()> {
+        self.recv_max_size = value;
         Ok(())
     }
 

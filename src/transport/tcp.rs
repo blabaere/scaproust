@@ -25,7 +25,8 @@ use transport::{
     TryWriteBuffer,
     TryReadBuffer,
     send_and_check_handshake,
-    recv_and_check_handshake
+    recv_and_check_handshake,
+    DEFAULT_RECV_MAX_SIZE
 };
 
 use Message;
@@ -39,12 +40,16 @@ use global;
 /*****************************************************************************/
 
 pub struct Tcp {
-    no_delay: bool
+    no_delay: bool,
+    recv_max_size: u64
 }
 
 impl Tcp {
     pub fn new() -> Tcp {
-        Tcp { no_delay: false }
+        Tcp { 
+            no_delay: false,
+            recv_max_size: DEFAULT_RECV_MAX_SIZE
+        }
     }
 }
 
@@ -73,6 +78,10 @@ impl Transport for Tcp {
     fn set_nodelay(&mut self, value: bool) {
         self.no_delay = value;
     }
+
+    fn set_recv_max_size(&mut self, value: u64) {
+        self.recv_max_size = value;
+    }
 }
 
 impl Tcp {
@@ -81,7 +90,7 @@ impl Tcp {
         let tcp_stream = try!(tcp::TcpStream::connect(&addr));
         try!(tcp_stream.set_nodelay(self.no_delay));
 
-        let connection = TcpConnection::new(tcp_stream);
+        let connection = TcpConnection::new(tcp_stream, self.recv_max_size);
 
         Ok(box connection)
     }
@@ -90,7 +99,8 @@ impl Tcp {
         let tcp_listener = try!(tcp::TcpListener::bind(&addr));
         let listener = TcpListener { 
             listener: tcp_listener,
-            no_delay: self.no_delay
+            no_delay: self.no_delay,
+            recv_max_size: self.recv_max_size
         };
 
         Ok(box listener)
@@ -106,7 +116,8 @@ impl Tcp {
 
 struct TcpListener {
     listener: tcp::TcpListener,
-    no_delay: bool
+    no_delay: bool,
+    recv_max_size: u64
 }
 
 impl AsEvented for TcpListener {
@@ -121,7 +132,7 @@ impl Listener for TcpListener {
 
         while let Some((stream, _)) = try!(self.listener.accept()) {
             try!(stream.set_nodelay(self.no_delay));
-            conns.push(box TcpConnection::new(stream));
+            conns.push(box TcpConnection::new(stream, self.recv_max_size));
         }
 
         Ok(conns)
@@ -136,6 +147,7 @@ impl Listener for TcpListener {
 
 struct TcpConnection {
     stream: tcp::TcpStream,
+    recv_max_size: u64,
     send_operation: Option<TcpSendOperation>,
     recv_operation: Option<TcpRecvOperation>
 }
@@ -147,9 +159,10 @@ impl Drop for TcpConnection {
 }
 
 impl TcpConnection {
-    fn new(stream: tcp::TcpStream) -> TcpConnection {
+    fn new(stream: tcp::TcpStream, recv_max_size: u64) -> TcpConnection {
         TcpConnection {
             stream: stream,
+            recv_max_size: recv_max_size,
             send_operation: None,
             recv_operation: None
         }
@@ -340,7 +353,7 @@ fn try_write_buffer<T:TryWrite>(stream: &mut T, buffer: &[u8], written: &mut usi
 
 impl Receiver for TcpConnection {
     fn start_recv(&mut self) -> io::Result<Option<Message>> {
-        let recv_operation = TcpRecvOperation::new();
+        let recv_operation = TcpRecvOperation::new(self.recv_max_size);
 
         self.run_recv_operation(recv_operation)
     }
@@ -362,16 +375,10 @@ struct TcpRecvOperation {
     step: Option<RecvOperationStep>
 }
 
-impl Default for TcpRecvOperation {
-    fn default() -> Self {
-        TcpRecvOperation::new()
-    }
-}
-
 impl TcpRecvOperation {
-    fn new() -> TcpRecvOperation {
+    fn new(recv_max_size: u64) -> TcpRecvOperation {
         TcpRecvOperation {
-            step: Some(RecvOperationStep::Header([0; 8], 0))
+            step: Some(RecvOperationStep::Header([0; 8], 0, recv_max_size))
         }
     }
 
@@ -403,7 +410,7 @@ impl TcpRecvOperation {
 }
 
 enum RecvOperationStep {
-    Header([u8; 8], usize),
+    Header([u8; 8], usize, u64),
     Payload(Vec<u8>, usize),
     Terminal(Message)
 }
@@ -411,23 +418,27 @@ enum RecvOperationStep {
 impl RecvOperationStep {
     fn advance<T:TryRead>(self, stream: &mut T) -> io::Result<(bool, RecvOperationStep)> {
         match self {
-            RecvOperationStep::Header(buffer, read) => read_header(stream, buffer, read),
+            RecvOperationStep::Header(buffer, read, max_size) => read_header(stream, buffer, read, max_size),
             RecvOperationStep::Payload(buffer, read) => read_payload(stream, buffer, read),
             RecvOperationStep::Terminal(_) => Err(global::other_io_error("Cannot advance terminal step of recv operation"))
         }
     }
 }
 
-fn read_header<T:TryRead>(stream: &mut T, mut buffer: [u8; 8], mut read: usize) -> io::Result<(bool, RecvOperationStep)> {
+fn read_header<T:TryRead>(stream: &mut T, mut buffer: [u8; 8], mut read: usize, max_size: u64) -> io::Result<(bool, RecvOperationStep)> {
     read += try!(stream.try_read_buffer(&mut buffer[read..]));
 
     if read == 8 {
         let msg_len = BigEndian::read_u64(&buffer);
-        let payload = vec![0u8; msg_len as usize];
+        if msg_len > max_size {
+            Err(global::invalid_data_io_error("message is too long"))
+        } else {
+            let payload = vec![0u8; msg_len as usize];
 
-        Ok((true, RecvOperationStep::Payload(payload, 0)))
+            Ok((true, RecvOperationStep::Payload(payload, 0)))
+        }
     } else {
-        Ok((false, RecvOperationStep::Header(buffer, read)))
+        Ok((false, RecvOperationStep::Header(buffer, read, max_size)))
     }
 }
 
@@ -474,12 +485,25 @@ mod tests {
     fn recv_in_one_run() {
         let buffer = vec![0, 0, 0, 0, 0, 0, 0, 8, 1, 4, 3, 2, 65, 66, 67, 69];
         let mut stream = io::Cursor::new(buffer);
-        let mut operation = TcpRecvOperation::new();
+        let mut operation = TcpRecvOperation::new(1024);
         let msg = operation.run(&mut stream).
             expect("recv should have succeeded").
             expect("recv should be done");
         let expected_bytes = [1, 4, 3, 2, 65, 66, 67, 69];
 
         assert_eq!(&expected_bytes, msg.get_body());
+    }
+
+    #[test]
+    fn recv_too_long_msg() {
+        let buffer = vec![1, 0, 0, 0, 0, 0, 0, 0, 8, 1, 4, 3, 2, 65, 66, 67, 69];
+        let mut stream = io::Cursor::new(buffer);
+        let mut operation = TcpRecvOperation::new(4);
+        let err = operation.run(&mut stream).err();
+
+        match err {
+            Some(e) => assert_eq!(io::ErrorKind::InvalidData, e.kind()),
+            None    => panic!("Recv operation should have failed")
+        }
     }
 }

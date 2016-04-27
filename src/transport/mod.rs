@@ -21,11 +21,13 @@ pub mod ipc;
 
 pub mod pipe;
 
+pub const DEFAULT_RECV_MAX_SIZE: u64 = 1024 * 1024;
+
 pub fn create_transport(name: &str) -> io::Result<Box<Transport>> {
     match name {
         "tcp" => Ok(box tcp::Tcp::new()),
         #[cfg(not(windows))]
-        "ipc" => Ok(box ipc::Ipc),
+        "ipc" => Ok(box ipc::Ipc::new()),
         _     => Err(io::Error::new(io::ErrorKind::InvalidData, format!("'{}' is not a supported protocol (tcp or ipc)", name)))
     }
     
@@ -39,6 +41,7 @@ pub trait Transport {
     fn bind(&self, addr: &str) -> io::Result<Box<Listener>>;
     fn connect(&self, addr: &str) -> io::Result<Box<Connection>>;
     fn set_nodelay(&mut self, _: bool) {}
+    fn set_recv_max_size(&mut self, value: u64);
 }
 
 pub trait Listener : AsEvented {

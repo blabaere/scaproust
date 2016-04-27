@@ -15,10 +15,10 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 * Support for TCP and IPC transports.
 * Idiomatic rust API first, mimic the original C API second.
 
-## Maybe
+## Maybe, later
 * Nonblocking operations.
 * Polling, on several sockets.
-* Other transports (Inproc, TLS, WebSockets).
+* Other transports (TLS, WebSockets).
 
 ## Non goals
 * Ability to use a socket as a raw file descriptor with system level functions.
@@ -51,8 +51,7 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 
 - [ ] Socket options
   - [ ] Linger
-  - [ ] Send buffer size
-  - [ ] Recv buffer size
+  - [x] Recv buffer size max
   - [x] Send timeout
   - [x] Recv timeout
   - [x] Reconnect interval
