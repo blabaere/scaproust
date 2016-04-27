@@ -28,6 +28,11 @@ Test reconnect feature
 ### change copyright header to mention 'authors' and the AUTHORS file
 
 ### Stuff to look at:
+
+https://github.com/frankmcsherry/recycler
+https://github.com/zslayton/lifeguard
+http://carllerche.github.io/pool/pool/
+
 **mioco now has a timeout feature !**  
 https://github.com/dpc/mioco  
 https://github.com/dpc/mioco/blob/master/examples%2Fechoplus.rs  
