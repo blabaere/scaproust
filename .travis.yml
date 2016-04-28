@@ -1,11 +1,11 @@
 language: rust
-sudo: required
 rust: nightly
+cache: cargo
+sudo: required
 os:
 - linux
-script:
-- cargo build
-- cargo test --verbose
+
+
 after_success: ! '[ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]
   && cargo doc && echo "<meta http-equiv=refresh content=0;url=`echo $TRAVIS_REPO_SLUG
   | cut -d ''/''  -f 2`/index.html>" > target/doc/index.html && sudo pip install ghp-import
