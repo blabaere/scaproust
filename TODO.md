@@ -1,3 +1,5 @@
+### use macros for factorizing common protocol code ?
+
 ### define a struct wrapping the event loop reference and the notification token
 There is too much coupling between the protocol and the event loop.
 Stuff like registration and timeout should be exposed by that struct.
@@ -12,6 +14,7 @@ BONUS: if the pipe that the request was sent to is removed, the request could be
 When a protocol receives a "malformed" message, the message is dropped, but the facade is not notified of anything and no pipe is asked to recv again
 
 ### Next tasks
+- LINGER !!!
 - Handle accept error
 
 ### AUTOMATE ALL THE THINGS !!!
