@@ -101,7 +101,7 @@ pub trait WithBacktrace {
     fn get_backtrace_mut(&mut self) -> &mut Vec<u8>;
 
     fn backtrace(&self) -> &[u8] {
-        &self.get_backtrace()
+        self.get_backtrace()
     }
 
     fn set_backtrace(&mut self, backtrace: &[u8]) {

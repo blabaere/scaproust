@@ -50,3 +50,4 @@ fi
 
 test_pipeline "tcp://127.0.0.1:5454"
 test_pipeline "ipc:///tmp/pipeline_test.ipc"
+

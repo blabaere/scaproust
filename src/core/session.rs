@@ -203,6 +203,8 @@ impl Session {
     }
 
     fn shutdown(&mut self, event_loop: &mut EventLoop) {
+        // TODO take care of linger option:
+        // if some send operations are in progress, wait for completion, but no more than timeout
         for (_, mut socket) in self.sockets.drain() {
             socket.destroy(event_loop);
         }

@@ -480,8 +480,8 @@ impl SocketImplOptions {
             if ivl > self.reconnect_ivl_max_ms || count == 0 {
                 break;
             }
-            ivl = ivl * 2;
-            count = count - 1;
+            ivl *= 2;
+            count -= 1;
         }
         time::Duration::from_millis(ivl)
     }

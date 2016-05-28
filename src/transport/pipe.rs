@@ -12,7 +12,7 @@ use mio;
 use SocketType;
 use EventLoop;
 use Message;
-use transport::{ Connection, Sender, Receiver };
+use transport::{ Connection };
 use global;
 use event_loop_msg::*;
 

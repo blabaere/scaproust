@@ -18,7 +18,7 @@
 //! First, create a [Session](struct.Session.html) 
 //! (this will start the thread performing the actual I/O operations).  
 //! Then, use the session to create some [Socket](struct.Socket.html), 
-//! specifying the communication pattern with [SocketType](enum.SocketType.html).  
+//! specifying the communication pattern with `[SocketType](enum.SocketType.html)`.  
 //! If you want, you can now [set some options](struct.Socket.html#method.set_option), like the timeouts.  
 //! To plug the sockets, use the [connect](struct.Socket.html#method.connect) and [bind](struct.Socket.html#method.bind) socket methods.  
 //! Finally, use the socket methods [send](struct.Socket.html#method.send) and
