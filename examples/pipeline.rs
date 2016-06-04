@@ -47,7 +47,10 @@ fn node1(url: &str, msg: &str) {
     socket.connect(url).expect("Failed to connect socket !");
     println!("NODE1: SENDING \"{}\"", msg);
     socket.send(buffer).expect("Send failed !");
-    sleep_ms(50); // TODO remove this when linger is implemented ?
+    sleep_ms(50); 
+    // TODO this can be removed when scaproust will be able to 
+    // deal with both a 'readable' and a 'hup' event in a row 
+    // with the handshake and the received message in the same tcp buffer.
 }
 
 fn usage(program: &str) -> ! {
