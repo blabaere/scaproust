@@ -920,7 +920,7 @@ fn can_recover_from_connect_before_bind_ipc() {
 }
 
 #[test]
-fn can_recover_from_bind_failure() {
+fn can_detect_bind_failure() {
     let _ = env_logger::init();
     let session = Session::new().unwrap();
     let mut pull1 = session.create_socket(SocketType::Pull).unwrap();
@@ -928,7 +928,9 @@ fn can_recover_from_bind_failure() {
 
     pull1.bind("tcp://127.0.0.1:5491").unwrap();
     sleep_enough_for_connections_to_establish();
-    pull2.bind("tcp://127.0.0.1:5491").unwrap();
+    let bind2 = pull2.bind("tcp://127.0.0.1:5491");
+
+    assert!(bind2.is_err(), "Second bind should have failed !");
 }
 
 #[test]

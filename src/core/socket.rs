@@ -183,21 +183,17 @@ impl Socket {
         self.protocol.add_pipe(tok, pipe).map(|_|self.send_event(SocketEvtSignal::PipeAdded(tok)))
     }
 
-    pub fn bind(&mut self, event_loop: &mut EventLoop, url: String) {
+    pub fn bind(&mut self, _: &mut EventLoop, url: String) {
         debug!("[{:?}] bind: '{}'", self.id, url);
 
-        let bind_addr = url.clone();
-        let rebind_addr = url.clone();
-
-        self.parse_url(url.as_ref()).map(|(transport, addr)| {
-            let token = self.next_token();
-            transport.bind(addr).
-                map(|listener| self.create_and_add_acceptor(bind_addr, listener, token)).
-                unwrap_or_else(|_| self.schedule_rebind(event_loop, token, rebind_addr, 0));
-            self.send_notify(SocketNotify::Bound(token));
-        }).unwrap_or_else(|e| {
-            self.send_notify(SocketNotify::NotBound(e));
-        })
+        let token = self.next_token();
+        self.parse_url(url.as_ref())
+            .and_then(|(transport, addr)| transport.bind(addr))
+            .map(|listener| {
+                self.create_and_add_acceptor(url, listener, token);
+                self.send_notify(SocketNotify::Bound(token));
+            })
+            .unwrap_or_else(|e| self.send_notify(SocketNotify::NotBound(e)))
     }
 
     pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token, count: u32) {
@@ -291,6 +287,7 @@ impl Socket {
     }
 
     fn schedule_rebind(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String, times: u32) {
+        debug!("[{:?}] pipe [{:?}] schedule_rebind: '{}'", self.id, tok.as_usize(), addr);
         let timespan = self.options.get_retry_ivl(times);
         let _ = event_loop.
             timeout(EventLoopTimeout::Rebind(self.id, tok, addr, times), timespan).
