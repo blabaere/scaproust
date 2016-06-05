@@ -15,8 +15,14 @@ use std::thread;
 
 use scaproust::*;
 
+#[cfg(not(windows))]
+const SYS_TIMEOUT: u64 = 250;
+
+#[cfg(windows)]
+const SYS_TIMEOUT: u64 = 500;
+
 fn sleep_enough_for_connections_to_establish() {
-    thread::sleep(time::Duration::from_millis(250));
+    thread::sleep(time::Duration::from_millis(SYS_TIMEOUT));
 }
 
 #[test]
