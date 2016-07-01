@@ -65,6 +65,10 @@ impl Protocol for Pub {
     fn on_send_timeout(&mut self, _: &mut EventLoop) {
     }
 
+    fn has_pending_send(&self) -> bool {
+        false
+    }
+
     fn recv(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
         WithoutRecv::recv(self);
         clear_timeout(event_loop, timeout);

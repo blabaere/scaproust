@@ -50,7 +50,7 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
   - [ ] IPC (Windows)
 
 - [ ] Socket options
-  - [ ] Linger
+  - [x] Linger
   - [x] Recv buffer size max
   - [x] Send timeout
   - [x] Recv timeout

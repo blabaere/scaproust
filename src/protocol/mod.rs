@@ -104,6 +104,7 @@ pub trait Protocol {
     fn on_send_done(&mut self, event_loop: &mut EventLoop, tok: mio::Token);
     fn on_send_blocked(&mut self, _: &mut EventLoop, _: mio::Token) {}
     fn on_send_timeout(&mut self, event_loop: &mut EventLoop);
+    fn has_pending_send(&self) -> bool;
 
 /*****************************************************************************/
 /*                                                                           */

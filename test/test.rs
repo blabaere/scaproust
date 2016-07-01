@@ -13,6 +13,8 @@ use std::io;
 use std::time;
 use std::thread;
 
+use std::sync::mpsc;
+
 use scaproust::*;
 
 #[cfg(not(windows))]
@@ -964,4 +966,89 @@ fn can_recover_from_msg_too_long() {
 
     push.send(vec![65, 66, 88]).expect("Push should have sent a small msg");
     pull.recv().expect("Pull should have received the small msg");
+}
+
+#[test]
+fn linger_is_respected() {
+    let _ = env_logger::init();
+    let session = Session::new().unwrap();
+    let push = session.create_socket(SocketType::Push).unwrap();
+    let (pull_tx, pull_rx) = mpsc::channel();
+    let (push_tx, push_rx) = mpsc::channel();
+    let pusher_thread = thread::spawn(|| linger_is_respected_push(push, push_rx));
+
+    // tell push to bind
+    debug!("\n\n\ntell push to bind\n\n\n");
+    push_tx.send(0).unwrap();
+    sleep_enough_for_connections_to_establish();
+
+    // tell push to send
+    debug!("\n\n\ntell push to send\n\n\n");
+    push_tx.send(1).unwrap();
+    sleep_enough_for_connections_to_establish();
+
+    // drop the session
+    debug!("\n\n\ndrop push session\n\n\n");
+    let drop_session_thread = thread::spawn(|| linger_is_respected_session(session));
+    sleep_enough_for_connections_to_establish();
+
+    let puller_thread = thread::spawn(|| linger_is_respected_pull(pull_rx));
+    // tell pull to connect
+    debug!("\n\n\ntell pull to connect\n\n\n");
+    pull_tx.send(2).unwrap();
+    sleep_enough_for_connections_to_establish();
+
+    // tell pull to recv
+    debug!("\n\n\ntell pull to recv\n\n\n");
+    pull_tx.send(3).unwrap();
+    sleep_enough_for_connections_to_establish();
+
+    // tell push to quit
+    debug!("\n\n\ntell push to quit\n\n\n");
+    push_tx.send(4).unwrap();
+
+    // tell pull to quit
+    debug!("\n\n\ntell pull to quit\n\n\n");
+    pull_tx.send(5).unwrap();
+
+    pusher_thread.join().unwrap();
+    puller_thread.join().unwrap();
+    drop_session_thread.join().unwrap();
+}
+
+fn linger_is_respected_push(mut push: Socket, rx: mpsc::Receiver<u8>) {
+    let linger_time = time::Duration::from_secs(2);
+    let send_timeout = time::Duration::from_secs(4);
+    push.set_option(SocketOption::Linger(linger_time)).unwrap();
+    push.set_option(SocketOption::SendTimeout(send_timeout)).unwrap();
+
+    let _ = rx.recv().unwrap();
+    push.bind("tcp://127.0.0.1:5493").unwrap();
+
+    let _ = rx.recv().unwrap();
+    push.send(vec![65, 66, 88]).expect("Push should have sent a small msg");
+
+    let _ = rx.recv().unwrap();
+    drop(push);
+}
+
+fn linger_is_respected_pull(rx: mpsc::Receiver<u8>) {
+    let session = Session::new().unwrap();
+    let mut pull = session.create_socket(SocketType::Pull).unwrap();
+    let recv_timeout = time::Duration::from_secs(1);
+    pull.set_option(SocketOption::RecvTimeout(recv_timeout)).unwrap();
+
+    let _ = rx.recv().unwrap();
+    pull.connect("tcp://127.0.0.1:5493").unwrap();
+
+    let _ = rx.recv().unwrap();
+    pull.recv().expect("Pull should have received the small msg");
+
+    let _ = rx.recv().unwrap();
+    drop(pull);
+    drop(session);
+}
+
+fn linger_is_respected_session(session: Session) {
+    drop(session);
 }

@@ -1,10 +1,3 @@
-LINGER: 
- - make facade::socket::drop wait for a reply for the core.
- - make the core session fire a timer and call the socket destroy function
- - make the core socket destroy check if some send op is pending
- - if none, ack the destroy request and remove all pipes (don't forget to unregister)
- - if any, nack the destroy request and wait for the timeout, then drop
-
 ### 'readable' + 'hup' inside a loop with handshake and message  in the buffer
 This goes wrong, probably because the resubscription fails due to hup.
 

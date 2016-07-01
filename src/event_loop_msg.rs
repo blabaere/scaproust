@@ -93,6 +93,10 @@ pub enum SocketOption {
     #[doc(hidden)]
     DeviceItem(bool),
 
+    /// Specifies how long the socket should try to send pending outbound messages 
+    /// after `drop` have been called. Default value is 1 second.
+    Linger(time::Duration),
+
     /// See [Socket::set_send_timeout](struct.Socket.html#method.set_send_timeout).
     SendTimeout(time::Duration),
 
@@ -215,7 +219,8 @@ pub enum EventLoopTimeout {
     CancelSend(SocketId),
     CancelRecv(SocketId),
     CancelSurvey(SocketId),
-    Resend(SocketId)
+    Resend(SocketId),
+    ForceShutdown
 }
 
 /// Notifications sent by the *backend* session as reply to the commands sent by the facade session.

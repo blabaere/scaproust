@@ -115,6 +115,10 @@ impl Protocol for Bus {
         self.apply(|s, body| s.on_send_timeout(body, event_loop));
     }
 
+    fn has_pending_send(&self) -> bool {
+        false
+    }
+
     fn recv(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
         self.apply(|s, body| s.recv(body, event_loop, timeout));
     }

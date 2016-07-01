@@ -123,6 +123,10 @@ impl Protocol for Rep {
         self.apply(|s, body| s.on_send_timeout(body, event_loop));
     }
 
+    fn has_pending_send(&self) -> bool {
+        self.state.as_ref().map_or(false, |s| s.has_pending_send())
+    }
+
     fn recv(&mut self, event_loop: &mut EventLoop, timeout: Timeout) {
         self.apply(|s, body| s.recv(body, event_loop, timeout));
     }
@@ -255,6 +259,14 @@ impl State {
         }
 
         State::Idle
+    }
+
+    fn has_pending_send(&self) -> bool {
+        match *self {
+            State::Sending(_, _, _)    |
+            State::SendOnHold(_, _, _) => true,
+            _ => false
+        }
     }
 
     fn recv(self, body: &mut Body, event_loop: &mut EventLoop, timeout: Option<mio::Timeout>) -> State {

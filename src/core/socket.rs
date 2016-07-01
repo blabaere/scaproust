@@ -354,6 +354,7 @@ impl Socket {
 
     pub fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) {
         let set_res = match option {
+            SocketOption::Linger(timeout)           => self.options.set_linger(timeout),
             SocketOption::SendTimeout(timeout)      => self.options.set_send_timeout(timeout),
             SocketOption::RecvTimeout(timeout)      => self.options.set_recv_timeout(timeout),
             SocketOption::SendPriority(priority)    => self.options.set_send_priority(priority),
@@ -390,9 +391,18 @@ impl Socket {
         let _: Vec<_> = self.acceptors.drain().map(|(_, mut a)| a.close(event_loop)).collect();
         self.protocol.destroy(event_loop);
     }
+
+    pub fn get_linger_timeout(&mut self) -> Option<u64> {
+        if self.protocol.has_pending_send() {
+            self.options.linger_ms
+        } else {
+            None
+        }
+    }
 }
 
 struct SocketImplOptions {
+    pub linger_ms: Option<u64>,
     pub send_timeout_ms: Option<u64>,
     pub recv_timeout_ms: Option<u64>,
     pub send_priority: u8,
@@ -407,6 +417,7 @@ struct SocketImplOptions {
 impl SocketImplOptions {
     fn new() -> SocketImplOptions {
         SocketImplOptions {
+            linger_ms: Some(1000),
             send_timeout_ms: None,
             recv_timeout_ms: None,
             send_priority: 8,
@@ -417,6 +428,12 @@ impl SocketImplOptions {
             recv_max_size: DEFAULT_RECV_MAX_SIZE,
             is_device_item: false
         }
+    }
+
+    fn set_linger(&mut self, timeout: time::Duration) -> io::Result<()> {
+        self.linger_ms = duration_to_timeout(timeout);
+
+        Ok(())
     }
 
     fn set_send_timeout(&mut self, timeout: time::Duration) -> io::Result<()> {

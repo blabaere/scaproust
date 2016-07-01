@@ -4,10 +4,11 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::cmp::max;
 use std::rc::Rc;
 use std::collections::HashMap;
-
 use std::sync::mpsc;
+use std::time;
 
 use mio;
 
@@ -203,16 +204,48 @@ impl Session {
     }
 
     fn shutdown(&mut self, event_loop: &mut EventLoop) {
-        // TODO take care of linger option:
-        // if some send operations are in progress, wait for completion, but no more than timeout
+        let mut lingering_sockets = HashMap::new();
+        let mut max_timeout = None;
+
+        for (id, mut socket) in self.sockets.drain() {
+            if let Some(timeout) = socket.get_linger_timeout() {
+                lingering_sockets.insert(id, socket);
+                max_timeout = get_max_timeout(max_timeout, timeout)
+            } else {
+                socket.destroy(event_loop);
+            }
+        }
+
+        self.sockets = lingering_sockets;
+
+        if let Some(timeout) = max_timeout {
+            debug!("session shutdown postponed due to socket linger");
+            event_loop.
+               timeout(EventLoopTimeout::ForceShutdown, time::Duration::from_millis(timeout)).
+               map(|_| {/* TODO store it somewhere to cancel it when msg is sent */}).
+               unwrap_or_else(|err| error!("Failed to set timeout on session shutdown: '{:?}'", err));
+        } else {
+            self.socket_ids.clear();
+            self.send_evt(SessionNotify::Shutdown);
+            event_loop.shutdown();
+        }
+    }
+
+    fn force_shutdown(&mut self, event_loop: &mut EventLoop) {
+        debug!("session postponed shutdown resumed");
         for (_, mut socket) in self.sockets.drain() {
             socket.destroy(event_loop);
         }
-
         self.socket_ids.clear();
         self.send_evt(SessionNotify::Shutdown);
-
         event_loop.shutdown();
+    }
+}
+
+fn get_max_timeout(current: Option<u64>, next: u64) -> Option<u64> {
+    match current {
+        Some(current) => Some(max(current, next)),
+        None          => Some(next)
     }
 }
 
@@ -242,7 +275,8 @@ impl mio::Handler for Session {
             EventLoopTimeout::CancelSend(id)                  => self.on_send_timeout(event_loop, id),
             EventLoopTimeout::CancelRecv(id)                  => self.on_recv_timeout(event_loop, id),
             EventLoopTimeout::CancelSurvey(id)                => self.on_survey_timeout(event_loop, id),
-            EventLoopTimeout::Resend(id)                      => self.resend(event_loop, id)
+            EventLoopTimeout::Resend(id)                      => self.resend(event_loop, id),
+            EventLoopTimeout::ForceShutdown                   => self.force_shutdown(event_loop)
         }
     }
 
