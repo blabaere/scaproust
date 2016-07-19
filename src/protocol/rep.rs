@@ -87,7 +87,7 @@ impl Protocol for Rep {
         }
 
         res
-     }
+    }
 
     fn remove_pipe(&mut self, tok: mio::Token) -> Option<Pipe> {
         let pipe = self.body.remove_pipe(tok);

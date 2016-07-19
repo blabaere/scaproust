@@ -263,7 +263,7 @@ impl mio::Handler for Session {
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        debug!("ready: [{:?}] '{:?}'", tok.as_usize(), events);
+        debug!("ready: [{:?}] '{:?}'", tok, events);
 
         self.on_socket_by_token(&tok, |socket| socket.ready(event_loop, tok, events));
     }

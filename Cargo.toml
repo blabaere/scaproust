@@ -20,9 +20,10 @@ exclude       = [
 log = "0.3.6"
 byteorder = "0.5.1"
 time = "0.1.35"
-clippy = "0.0.77"
+clippy = "*"
 #mio = "0.5.1"
-mio = { git = "https://github.com/carllerche/mio", rev = "0a8089422d3bdf5ecb02593b4f68f25f8e985490" }
+#mio = { git = "https://github.com/carllerche/mio" }
+mio = { git = "https://github.com/carllerche/mio", rev = "5d07d0b8ec14858129dfda8dc185ae58255eea11" }
 
 [dev-dependencies]
 env_logger = "0.3.2"

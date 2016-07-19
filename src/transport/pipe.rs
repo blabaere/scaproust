@@ -16,7 +16,8 @@ use transport::{ Connection };
 use global;
 use event_loop_msg::*;
 
-/// A pipe is responsible for handshaking with its peer and transfering raw messages over a connection.
+/// A pipe is responsible for handshaking with its peer and 
+/// transfering raw messages over a connection.
 /// That means send/receive size prefix and then message payload.
 /// This is done according to the connection readiness and the operation progress.
 pub struct Pipe {
@@ -63,19 +64,15 @@ impl Pipe {
     }
 
     pub fn can_recv(&self) -> bool {
-        match self.state.as_ref().map(|s| s.can_recv()) {
-            Some(true)  => true,
-            Some(false) => false,
-            None        => false
-        }
+        self.can_exec_op(|s| s.can_recv())
     }
 
     pub fn can_send(&self) -> bool {
-        match self.state.as_ref().map(|s| s.can_send()) {
-            Some(true)  => true,
-            Some(false) => false,
-            None        => false
-        }
+        self.can_exec_op(|s| s.can_send())
+    }
+
+    fn can_exec_op<F : FnOnce(&PipeState) -> bool>(&self, check: F) -> bool {
+        self.state.as_ref().map_or(false, |s| check(s.as_ref()))
     }
 
     fn apply<F>(&mut self, transition: F) where F : FnOnce(Box<PipeState>) -> Box<PipeState> {
@@ -86,7 +83,7 @@ impl Pipe {
 
             self.state = Some(new_state);
 
-            debug!("[{:?}] switch from '{}' to '{}'.", self.token.as_usize(), old_name, new_name);
+            debug!("[{:?}] switch from '{}' to '{}'.", self.token, old_name, new_name);
         }
     }
 
@@ -232,7 +229,7 @@ trait LivePipeState : PipeState {
     }
 
     fn debug(&self, log: &str) {
-        debug!("[{:?}] {}", self.token().as_usize(), log)
+        debug!("[{:?}] {}", self.token(), log)
     }
 
     fn send_sig(&self, sig: PipeEvtSignal) -> io::Result<()> {

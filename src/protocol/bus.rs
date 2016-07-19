@@ -283,10 +283,11 @@ impl WithBroadcast for Body {
 }
 
 fn decode(raw_msg: Message, pipe_id: mio::Token) -> Message {
+    let pipe_id: usize = From::from(pipe_id);
     let mut msg = raw_msg;
     let mut pipe_id_bytes: [u8; 4] = [0; 4];
 
-    BigEndian::write_u32(&mut pipe_id_bytes[..], pipe_id.as_usize() as u32);
+    BigEndian::write_u32(&mut pipe_id_bytes[..], pipe_id as u32);
 
     msg.header.reserve(4);
     msg.header.extend_from_slice(&pipe_id_bytes);
