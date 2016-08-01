@@ -20,7 +20,7 @@ exclude       = [
 log = "0.3.6"
 byteorder = "0.5.3"
 time = "0.1.35"
-#clippy = "*"
+clippy = "*"
 #mio = "0.5.1"
 #mio = { git = "https://github.com/carllerche/mio" }
 mio = { git = "https://github.com/carllerche/mio", rev = "4184a9d69be927e58ebf3fcc4ce2635c6ed9583e" }
