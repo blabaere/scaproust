@@ -6,5 +6,3 @@
 
 pub mod session;
 pub mod socket;
-pub mod endpoint;
-pub mod device;

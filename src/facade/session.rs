@@ -9,19 +9,17 @@ use std::thread;
 use std::sync::mpsc;
 use std::time;
 
+use facade::socket::Socket;
+use ctrl::{EventLoopSignal, EventLoop, run_event_loop};
+use core::session::{Request, Reply};
+use core::protocol::{Protocol, ProtocolCtor};
+use util::*;
+
 use mio;
 
-use global::*;
-use event_loop_msg::*;
-use facade::socket::*;
-use facade::device::*;
-use EventLoop;
-use core;
-
-/// This is the entry point of scaproust API.
 pub struct Session {
-    cmd_sender: mio::Sender<EventLoopSignal>,
-    evt_receiver: mpsc::Receiver<SessionNotify>
+    request_sender: mio::Sender<EventLoopSignal>,
+    reply_receiver: mpsc::Receiver<Reply>
 }
 
 impl Session {
@@ -35,103 +33,57 @@ impl Session {
             timer_wheel_size(1_024).
             timer_capacity(4_096);
 
-        let mut event_loop = try!(builder.build());
+        let event_loop = try!(builder.build());
         let (tx, rx) = mpsc::channel();
         let session = Session { 
-            cmd_sender: event_loop.channel(),
-            evt_receiver: rx };
+            request_sender: event_loop.channel(),
+            reply_receiver: rx };
 
-        thread::spawn(move || Session::run_event_loop(&mut event_loop, tx));
+        thread::spawn(move || run_event_loop(event_loop, tx));
 
         Ok(session)
     }
 
-    fn run_event_loop(event_loop: &mut EventLoop, evt_tx: mpsc::Sender<SessionNotify>) {
-        let mut handler = core::session::Session::new(evt_tx);
-        let exec = event_loop.run(&mut handler);
+    pub fn create_socket<T: Protocol + From<i32> + 'static>(&self) -> io::Result<Socket>
+    {
+        let protocol_ctor = Session::create_protocol_ctor::<T>();
+        let request = Request::CreateSocket(protocol_ctor);
 
-        match exec {
-            Ok(_) => debug!("event loop exited"),
-            Err(e) => error!("event loop failed to run: {}", e)
+        try!(self.send_request(request));
+
+        match self.reply_receiver.recv() {
+            Ok(Reply::SocketCreated) => Ok(Socket{x: 5}),
+            Ok(_)                            => Err(other_io_error("unexpected reply")),
+            Err(_)                           => Err(other_io_error("channel closed"))
         }
     }
 
-    fn send_cmd(&self, cmd: SessionCmdSignal) -> Result<(), io::Error> {
-        let cmd_sig = CmdSignal::Session(cmd);
-        let loop_sig = EventLoopSignal::Cmd(cmd_sig);
-
-        self.cmd_sender.send(loop_sig).map_err(convert_notify_err)
+    fn create_protocol_ctor<T : Protocol + From<i32> + 'static>() -> ProtocolCtor {
+        Box::new(move |value: i32| {
+            Box::new(T::from(value)) as Box<Protocol>
+        })
     }
 
-    /// Creates a socket of the specified type, which in turn determines its exact semantics.
-    /// See [SocketType](enum.SocketType.html) to get the list of available socket types.
-    /// The newly created socket is initially not associated with any endpoints.
-    /// In order to establish a message flow at least one endpoint has to be added to the socket 
-    /// using [connect](struct.Socket.html#method.connect) and [bind](struct.Socket.html#method.bind) methods.
-    pub fn create_socket(&self, socket_type: SocketType) -> io::Result<Socket> {
-        let cmd = SessionCmdSignal::CreateSocket(socket_type);
+    fn send_request(&self, request: Request) -> Result<(), io::Error> {
+        let signal = EventLoopSignal::SessionRequest(request);
 
-        try!(self.send_cmd(cmd));
-
-        match self.evt_receiver.recv() {
-            Ok(SessionNotify::SocketCreated(id, rx)) => Ok(self.new_socket(id, socket_type, rx)),
-            Ok(_)                                    => Err(other_io_error("unexpected evt")),
-            Err(_)                                   => Err(other_io_error("evt channel closed"))
-        }
-    }
-
-    fn new_socket(&self, id: SocketId, socket_type: SocketType, rx: mpsc::Receiver<SocketNotify>) -> Socket {
-        Socket::new(id, socket_type, self.cmd_sender.clone(), rx)
-    }
-
-    pub fn create_relay_device(&self, socket: Socket) -> io::Result<Box<Device>> {
-        Ok(box RelayDevice::new(socket))
-    }
-
-    pub fn create_bridge_device(&self, left: Socket, right: Socket) -> io::Result<Box<Device>> {
-        if !left.matches(&right) {
-            return Err(other_io_error("Socket types do not match"));
-        }
-
-        match left.get_socket_type() {
-            SocketType::Pull | SocketType::Sub => self.create_one_way_device(left, right),
-            SocketType::Push | SocketType::Pub => self.create_one_way_device(right, left),
-            SocketType::Req        |
-            SocketType::Rep        |
-            SocketType::Respondent |
-            SocketType::Surveyor   |
-            SocketType::Bus        |
-            SocketType::Pair       => self.create_two_way_device(left, right)
-        }
-    }
-
-    fn create_one_way_device(&self, left: Socket, right: Socket) -> io::Result<Box<Device>> {
-        Ok(box OneWayDevice::new(left, right))
-    }
-
-    fn create_two_way_device(&self, mut left: Socket, mut right: Socket) -> io::Result<Box<Device>> {
-        try!(left.set_option(SocketOption::DeviceItem(true)));
-        try!(right.set_option(SocketOption::DeviceItem(true)));
-        let cmd = SessionCmdSignal::CreateProbe(left.get_id(), right.get_id());
-
-        try!(self.send_cmd(cmd));
-
-        match self.evt_receiver.recv() {
-            Ok(SessionNotify::ProbeCreated(id, rx)) => Ok(self.new_device(id, rx, left, right)),
-            Ok(SessionNotify::ProbeNotCreated(e))   => Err(e),
-            Ok(_)                                   => Err(other_io_error("unexpected evt")),
-            Err(_)                                  => Err(other_io_error("evt channel closed"))
-        }
-    }
-
-    fn new_device(&self, id: ProbeId, rx: mpsc::Receiver<ProbeNotify>, left: Socket, right: Socket) -> Box<Device> {
-        box TwoWayDevice::new(id, self.cmd_sender.clone(), rx, left, right)
+        self.request_sender.send(signal).map_err(from_notify_error)
     }
 }
 
-impl Drop for Session {
-    fn drop(&mut self) {
-        let _ = self.send_cmd(SessionCmdSignal::Shutdown);
-        let _ = self.evt_receiver.recv();
+pub struct Push;
+impl Protocol for Push {
+    fn do_it_bob(&self) -> u8 { 0 }
+}
+
+fn new_session_and_socket() {
+    let session = Session::new().unwrap();
+
+    session.create_socket::<Push>();
+}
+
+impl From<i32> for Push {
+    fn from(value: i32) -> Push {
+        Push
     }
 }
