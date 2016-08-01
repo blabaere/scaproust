@@ -30,7 +30,9 @@ pub enum EventLoopSignal {
 }
 
 pub fn run_event_loop(mut event_loop: EventLoop, reply_tx: mpsc::Sender<session::Reply>) {
-    let mut handler = EventLoopHandler { x: 0 };
+    let mut handler = EventLoopHandler { 
+        session: session::Session::new(reply_tx) 
+    };
     let exec = event_loop.run(&mut handler);
 
     /*match exec {
@@ -40,7 +42,7 @@ pub fn run_event_loop(mut event_loop: EventLoop, reply_tx: mpsc::Sender<session:
 }
 
 struct EventLoopHandler {
-    x: u8
+    session: session::Session
 }
 
 impl mio::Handler for EventLoopHandler {
@@ -49,14 +51,7 @@ impl mio::Handler for EventLoopHandler {
 
     fn notify(&mut self, event_loop: &mut EventLoop, signal: Self::Message) {
         match signal {
-            EventLoopSignal::SessionRequest(request) => {
-                match request {
-                    session::Request::CreateSocket(mut ctor) => {
-                        ctor.call_box((5,));
-                    },
-                    _ => {}
-                }
-            },
+            EventLoopSignal::SessionRequest(request) => self.session.process_request(request),
             _ => {}
         }
     }

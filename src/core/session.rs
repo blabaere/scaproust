@@ -6,6 +6,8 @@
 
 use core::protocol::{Protocol, ProtocolCtor};
 
+use std::sync::mpsc;
+
 pub enum Request {
     CreateSocket(ProtocolCtor),
     CreateDevice,
@@ -18,4 +20,26 @@ pub enum Reply {
     DeviceCreated,
     DeviceNotCreated,
     Shutdown
+}
+
+pub struct Session {
+    reply_sender: mpsc::Sender<Reply>
+}
+
+impl Session {
+    pub fn new(reply_tx: mpsc::Sender<Reply>) -> Session {
+        Session {
+            reply_sender: reply_tx
+        }
+    }
+    pub fn process_request(&mut self, request: Request) {
+        match request {
+            Request::CreateSocket(ctor) => self.add_socket(ctor),
+            _ => {}
+        }
+    }
+    fn add_socket(&mut self, protocol_ctor: ProtocolCtor) {
+        let protocol = protocol_ctor.call_box((5,));
+        self.reply_sender.send(Reply::SocketCreated);
+    }
 }
