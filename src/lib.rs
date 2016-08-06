@@ -29,6 +29,8 @@ mod ctrl;
 mod facade;
 mod util;
 
+pub use facade::session::SessionBuilder as SessionBuilder;
 pub use facade::session::Session as Session;
 pub use facade::socket::Socket as Socket;
 pub use core::protocol::Protocol as Protocol;
+pub use message::Message as Message;

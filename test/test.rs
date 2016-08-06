@@ -10,24 +10,19 @@ use scaproust::*;
 
 #[test]
 fn can_create_socket() {
-    let session = Session::new().unwrap();
+    let session = SessionBuilder::build().unwrap();
     let socket = session.create_socket::<Push>().unwrap();
 }
 
-
-pub struct Push;
+pub struct Push {
+    x: i32
+}
 impl Protocol for Push {
     fn do_it_bob(&self) -> u8 { 0 }
 }
 
-fn new_session_and_socket() {
-    let session = Session::new().unwrap();
-
-    session.create_socket::<Push>();
-}
-
 impl From<i32> for Push {
     fn from(value: i32) -> Push {
-        Push
+        Push {x: value}
     }
 }

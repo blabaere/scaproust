@@ -10,6 +10,7 @@ use std::sync::mpsc;
 use std::time;
 
 use core::session;
+use core::socket;
 
 use mio;
 
@@ -19,7 +20,7 @@ pub type EventLoop = mio::EventLoop<EventLoopHandler>;
 /// Information flowing through the event loop so components can communicate with each others.
 pub enum EventLoopSignal {
     SessionRequest(session::Request),
-    Y
+    SocketRequest(socket::Request)
     // SessionRequest
     // SessionReply
     // SocketRequest

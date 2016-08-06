@@ -5,8 +5,10 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use core::protocol::{Protocol, ProtocolCtor};
+use core::socket;
 
 use std::sync::mpsc;
+use std::io;
 
 pub enum Request {
     CreateSocket(ProtocolCtor),
@@ -15,10 +17,9 @@ pub enum Request {
 }
 
 pub enum Reply {
-    SocketCreated,
-    SocketNotCreated,
+    Err(io::Error),
+    SocketCreated(mpsc::Receiver<socket::Reply>),
     DeviceCreated,
-    DeviceNotCreated,
     Shutdown
 }
 
@@ -39,7 +40,10 @@ impl Session {
         }
     }
     fn add_socket(&mut self, protocol_ctor: ProtocolCtor) {
-        let protocol = protocol_ctor.call_box((5,));
-        self.reply_sender.send(Reply::SocketCreated);
+        let ctor_args = (5,);
+        let protocol = protocol_ctor.call_box(ctor_args);
+        let (tx, rx) = mpsc::channel();
+        let socket = socket::Socket::new(tx, protocol);
+        self.reply_sender.send(Reply::SocketCreated(rx));
     }
 }
