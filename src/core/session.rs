@@ -18,19 +18,21 @@ pub enum Request {
 
 pub enum Reply {
     Err(io::Error),
-    SocketCreated(mpsc::Receiver<socket::Reply>),
+    SocketCreated(socket::SocketId, mpsc::Receiver<socket::Reply>),
     DeviceCreated,
     Shutdown
 }
 
 pub struct Session {
-    reply_sender: mpsc::Sender<Reply>
+    reply_sender: mpsc::Sender<Reply>,
+    sockets: socket::SocketCollection
 }
 
 impl Session {
     pub fn new(reply_tx: mpsc::Sender<Reply>) -> Session {
         Session {
-            reply_sender: reply_tx
+            reply_sender: reply_tx,
+            sockets: socket::SocketCollection::new()
         }
     }
     pub fn process_request(&mut self, request: Request) {
@@ -43,7 +45,8 @@ impl Session {
         let ctor_args = (5,);
         let protocol = protocol_ctor.call_box(ctor_args);
         let (tx, rx) = mpsc::channel();
-        let socket = socket::Socket::new(tx, protocol);
-        self.reply_sender.send(Reply::SocketCreated(rx));
+        let id = self.sockets.add(tx, protocol);
+
+        self.reply_sender.send(Reply::SocketCreated(id, rx));
     }
 }

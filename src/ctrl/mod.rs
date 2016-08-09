@@ -20,7 +20,7 @@ pub type EventLoop = mio::EventLoop<EventLoopHandler>;
 /// Information flowing through the event loop so components can communicate with each others.
 pub enum EventLoopSignal {
     SessionRequest(session::Request),
-    SocketRequest(socket::Request)
+    SocketRequest(socket::SocketId, socket::Request)
     // SessionRequest
     // SessionReply
     // SocketRequest

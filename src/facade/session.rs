@@ -13,14 +13,29 @@ use std::time;
 use mio;
 
 use facade::*;
-use facade::socket::Socket;
 use ctrl::{EventLoopSignal, run_event_loop};
 use core::session::{Request, Reply};
 use core::protocol::{Protocol, ProtocolCtor};
+use core;
 use util::*;
 
-type SignalSender = Rc<mio::Sender<EventLoopSignal>>;
 type ReplyReceiver = mpsc::Receiver<Reply>;
+
+struct RequestSender {
+    signal_sender: SignalSender
+}
+
+impl Sender<Request> for RequestSender {
+    fn send(&self, req: Request) -> io::Result<()> {
+        self.signal_sender.send(EventLoopSignal::SessionRequest(req))
+    }
+}
+
+impl RequestSender {
+    fn child_sender(&self, socket_id: core::socket::SocketId) -> socket::RequestSender {
+        socket::RequestSender::new(self.signal_sender.clone(), socket_id)
+    }
+}
 
 pub struct SessionBuilder;
 
@@ -38,31 +53,31 @@ impl SessionBuilder {
             timer_capacity(4_096);
 
         let event_loop = try!(builder.build());
-        let (tx, rx) = mpsc::channel();
-        let request_tx = Rc::new(event_loop.channel());
-        let reply_rx = rx;
+        let (reply_tx, reply_rx) = mpsc::channel();
+        let signal_tx = Rc::new(event_loop.channel());
+        let request_tx = RequestSender {signal_sender: signal_tx};
         let session = Session::new(request_tx, reply_rx);
 
-        thread::spawn(move || run_event_loop(event_loop, tx));
+        thread::spawn(move || run_event_loop(event_loop, reply_tx));
 
         Ok(session)
     }}
 
 pub struct Session {
-    request_sender: SignalSender,
+    request_sender: RequestSender,
     reply_receiver: ReplyReceiver
 }
 
 impl Session {
 
-    fn new(request_tx: SignalSender, reply_rx: ReplyReceiver) -> Session {
+    fn new(request_tx: RequestSender, reply_rx: ReplyReceiver) -> Session {
         Session {
             request_sender: request_tx,
             reply_receiver: reply_rx
         }
     }
 
-    pub fn create_socket<T: Protocol + From<i32> + 'static>(&self) -> io::Result<Socket>
+    pub fn create_socket<T: Protocol + From<i32> + 'static>(&self) -> io::Result<socket::Socket>
     {
         let protocol_ctor = Session::create_protocol_ctor::<T>();
         let request = Request::CreateSocket(protocol_ctor);
@@ -76,9 +91,12 @@ impl Session {
         })
     }
 
-    fn on_create_socket_reply(&self, reply: Reply) -> io::Result<Socket> {
-        if let Reply::SocketCreated(rx) = reply {
-            Ok(Socket::new(self.request_sender.clone(), rx))
+    fn on_create_socket_reply(&self, reply: Reply) -> io::Result<socket::Socket> {
+        if let Reply::SocketCreated(id, rx) = reply {
+            let sender = self.request_sender.child_sender(id);
+            let sock = socket::Socket::new(sender, rx);
+            
+            Ok(sock)
         } else {
             self.unexpected_reply()
         }

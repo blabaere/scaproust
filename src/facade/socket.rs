@@ -9,26 +9,50 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::io;
 
-use facade::Sender;
-use core::socket::{Request, Reply};
+use facade::*;
+use facade::endpoint::Endpoint;
+use core::socket::{SocketId, Request, Reply};
 use ctrl::EventLoopSignal;
 use util::*;
 
 use mio;
 
-pub type SignalSender = Rc<mio::Sender<EventLoopSignal>>;
 pub type ReplyReceiver = mpsc::Receiver<Reply>;
 
+pub struct RequestSender {
+    signal_sender: SignalSender,
+    socket_id: SocketId
+}
+
+impl RequestSender {
+    pub fn new(signal_tx: SignalSender, id: SocketId) -> RequestSender {
+        RequestSender {
+            signal_sender: signal_tx,
+            socket_id: id
+        }
+    }
+}
+
+impl Sender<Request> for RequestSender {
+    fn send(&self, req: Request) -> io::Result<()> {
+        self.signal_sender.send(EventLoopSignal::SocketRequest(self.socket_id, req))
+    }
+}
+
 pub struct Socket {
-    request_sender: SignalSender,
+    request_sender: RequestSender,
     reply_receiver: ReplyReceiver
 }
 
 impl Socket {
-    pub fn new(request_tx: SignalSender, reply_rx: ReplyReceiver) -> Socket {
+    pub fn new(request_tx: RequestSender, reply_rx: ReplyReceiver) -> Socket {
         Socket {
             request_sender: request_tx,
             reply_receiver: reply_rx
         }
+    }
+
+    pub fn connect(&mut self, url: &str) -> io::Result<Endpoint> {
+        unreachable!()
     }
 }

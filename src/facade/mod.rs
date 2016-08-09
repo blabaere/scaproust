@@ -5,17 +5,20 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::ops::Deref;
+use std::rc::Rc;
 use std::sync::mpsc;
 use std::io;
 
-use core;
-use ctrl;
+use ctrl::EventLoopSignal;
 use util::*;
 
 use mio;
 
 pub mod session;
 pub mod socket;
+pub mod endpoint;
+
+pub type SignalSender = Rc<mio::Sender<EventLoopSignal>>;
 
 pub trait Sender<T> {
     fn send(&self, request: T) -> io::Result<()>;
@@ -25,28 +28,12 @@ pub trait Receiver<T> {
     fn recv(&self) -> io::Result<T>;
 }
 
-impl<S, T> Sender<S> for T where 
-    T : Deref<Target = mio::Sender<ctrl::EventLoopSignal>>, 
-    S : Into<ctrl::EventLoopSignal> {
+impl<T> Sender<EventLoopSignal> for T where T : Deref<Target = mio::Sender<EventLoopSignal>> {
 
-    fn send(&self, request: S) -> io::Result<()> {
-        let signal = request.into();
-
+    fn send(&self, signal: EventLoopSignal) -> io::Result<()> {
         self.deref().send(signal).map_err(from_notify_error)
     }
 
-}
-
-impl Into<ctrl::EventLoopSignal> for core::session::Request {
-    fn into(self) -> ctrl::EventLoopSignal {
-        ctrl::EventLoopSignal::SessionRequest(self)
-    }
-}
-
-impl Into<ctrl::EventLoopSignal> for core::socket::Request {
-    fn into(self) -> ctrl::EventLoopSignal {
-        ctrl::EventLoopSignal::SocketRequest(self)
-    }
 }
 
 impl<T> Receiver<T> for mpsc::Receiver<T> {

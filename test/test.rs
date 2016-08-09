@@ -10,7 +10,7 @@ use scaproust::*;
 
 #[test]
 fn can_create_socket() {
-    let session = SessionBuilder::build().unwrap();
+    let mut session = SessionBuilder::build().unwrap();
     let socket = session.create_socket::<Push>().unwrap();
 }
 
