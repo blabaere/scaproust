@@ -25,7 +25,7 @@ pub trait Sender<T> {
 }
 
 pub trait Receiver<T> {
-    fn recv(&self) -> io::Result<T>;
+    fn receive(&self) -> io::Result<T>;
 }
 
 impl<T> Sender<EventLoopSignal> for T where T : Deref<Target = mio::Sender<EventLoopSignal>> {
@@ -37,7 +37,7 @@ impl<T> Sender<EventLoopSignal> for T where T : Deref<Target = mio::Sender<Event
 }
 
 impl<T> Receiver<T> for mpsc::Receiver<T> {
-    fn recv(&self) -> io::Result<T> {
+    fn receive(&self) -> io::Result<T> {
         match mpsc::Receiver::recv(self) {
             Ok(t)  => Ok(t),
             Err(_) => Err(other_io_error("evt channel closed")),

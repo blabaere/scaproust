@@ -35,13 +35,8 @@ impl Session {
             sockets: socket::SocketCollection::new()
         }
     }
-    pub fn process_request(&mut self, request: Request) {
-        match request {
-            Request::CreateSocket(ctor) => self.add_socket(ctor),
-            _ => {}
-        }
-    }
-    fn add_socket(&mut self, protocol_ctor: ProtocolCtor) {
+
+    pub fn add_socket(&mut self, protocol_ctor: ProtocolCtor) {
         let ctor_args = (5,);
         let protocol = protocol_ctor.call_box(ctor_args);
         let (tx, rx) = mpsc::channel();
@@ -49,4 +44,13 @@ impl Session {
 
         self.reply_sender.send(Reply::SocketCreated(id, rx));
     }
+
+    pub fn do_on_socket<F>(&self, id: socket::SocketId, f: F) where F : FnOnce(&socket::Socket) {
+        self.sockets.do_on_socket(id, f)
+    }
+
+    pub fn do_on_socket_mut<F>(&mut self, id: socket::SocketId, f: F) where F : FnOnce(&mut socket::Socket) {
+        self.sockets.do_on_socket_mut(id, f)
+    }
+
 }

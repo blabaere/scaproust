@@ -6,6 +6,11 @@
 
 use std::io;
 use std::fmt;
+use std::sync::mpsc::Sender;
+
+pub enum Request {
+    Close
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct EndpointId(usize);
@@ -19,5 +24,26 @@ impl fmt::Debug for EndpointId {
 impl From<usize> for EndpointId {
     fn from(value: usize) -> EndpointId {
         EndpointId(value)
+    }
+}
+
+pub struct Endpoint {
+    id: EndpointId,
+    url: Option<String>
+}
+
+impl Endpoint {
+    pub fn new_created(id: EndpointId, url: String) -> Endpoint {
+        Endpoint {
+            id: id,
+            url: Some(url)
+        }
+    }
+
+    pub fn new_accepted(id: EndpointId) -> Endpoint {
+        Endpoint {
+            id: id,
+            url: None
+        }
     }
 }

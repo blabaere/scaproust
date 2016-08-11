@@ -4,18 +4,14 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::ops::Deref;
-use std::rc::Rc;
 use std::sync::mpsc;
 use std::io;
 
 use facade::*;
-use facade::endpoint::Endpoint;
 use core::socket::{SocketId, Request, Reply};
+use core;
 use ctrl::EventLoopSignal;
 use util::*;
-
-use mio;
 
 pub type ReplyReceiver = mpsc::Receiver<Reply>;
 
@@ -30,6 +26,9 @@ impl RequestSender {
             signal_sender: signal_tx,
             socket_id: id
         }
+    }
+    fn child_sender(&self, eid: core::endpoint::EndpointId) -> endpoint::RequestSender {
+        endpoint::RequestSender::new(self.signal_sender.clone(), self.socket_id, eid)
     }
 }
 
@@ -52,7 +51,42 @@ impl Socket {
         }
     }
 
-    pub fn connect(&mut self, url: &str) -> io::Result<Endpoint> {
-        unreachable!()
+    pub fn connect(&mut self, url: &str) -> io::Result<endpoint::Endpoint> {
+        let request = Request::Connect(From::from(url));
+
+        self.call(request, |reply| self.on_connect_reply(reply))
+    }
+
+    fn on_connect_reply(&self, reply: Reply) -> io::Result<endpoint::Endpoint> {
+        match reply {
+            Reply::Connect(id) => {
+                let sender = self.request_sender.child_sender(id);
+                let ep = endpoint::Endpoint::new(sender);
+                
+                Ok(ep)
+            },
+            Reply::Err(e) => Err(e),
+            _ => self.unexpected_reply()
+        }
+    }
+
+    fn call<T, F : FnOnce(Reply) -> io::Result<T>>(&self, request: Request, process: F) -> io::Result<T> {
+        self.execute_request(request).and_then(process)
+    }
+
+    fn execute_request(&self, request: Request) -> io::Result<Reply> {
+        self.send_request(request).and_then(|_| self.recv_reply())
+    }
+
+    fn send_request(&self, request: Request) -> io::Result<()> {
+        self.request_sender.send(request)
+    }
+
+    fn recv_reply(&self) -> io::Result<Reply> {
+        self.reply_receiver.receive()
+    }
+
+    fn unexpected_reply<T>(&self) -> io::Result<T> {
+        Err(other_io_error("unexpected reply"))
     }
 }

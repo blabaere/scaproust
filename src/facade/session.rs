@@ -92,13 +92,15 @@ impl Session {
     }
 
     fn on_create_socket_reply(&self, reply: Reply) -> io::Result<socket::Socket> {
-        if let Reply::SocketCreated(id, rx) = reply {
-            let sender = self.request_sender.child_sender(id);
-            let sock = socket::Socket::new(sender, rx);
-            
-            Ok(sock)
-        } else {
-            self.unexpected_reply()
+        match reply {
+            Reply::SocketCreated(id, rx) => {
+                let sender = self.request_sender.child_sender(id);
+                let sock = socket::Socket::new(sender, rx);
+                
+                Ok(sock)
+            },
+            Reply::Err(e) => Err(e),
+            _ => self.unexpected_reply()
         }
     }
 
@@ -119,9 +121,6 @@ impl Session {
     }
 
     fn recv_reply(&self) -> io::Result<Reply> {
-        match self.reply_receiver.recv() {
-            Ok(reply) => Ok(reply),
-            Err(_)    => Err(other_io_error("channel closed"))
-        }
+        self.reply_receiver.receive()
     }
 }

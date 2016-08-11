@@ -11,7 +11,8 @@ use scaproust::*;
 #[test]
 fn can_create_socket() {
     let mut session = SessionBuilder::build().unwrap();
-    let socket = session.create_socket::<Push>().unwrap();
+    let mut socket = session.create_socket::<Push>().unwrap();
+    let ep = socket.connect("url");
 }
 
 pub struct Push {

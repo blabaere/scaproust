@@ -10,7 +10,10 @@ use std::io;
 use std::fmt;
 
 use message::Message;
-use core::protocol::Protocol;
+use super::protocol::Protocol;
+use super::endpoint::Endpoint;
+use super::endpoint::EndpointId;
+use super::network::Network;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SocketId(usize);
@@ -36,24 +39,49 @@ pub enum Request {
 }
 
 pub enum Reply {
-    Connect(io::Result<()>),
-    Bind(io::Result<()>),
-    Send(io::Result<()>),
-    Recv(io::Result<Message>),
-    SetOption(io::Result<()>)
+    Err(io::Error),
+    Connect(EndpointId),
+    Bind(EndpointId),
+    Send,
+    Recv(Message),
+    SetOption
 }
 
 pub struct Socket {
+    id: SocketId,
     reply_sender: Sender<Reply>,
-    protocol: Box<Protocol>
+    protocol: Box<Protocol>,
+    remote_endpoints: HashMap<EndpointId, Endpoint>,
+    local_endpoints: HashMap<EndpointId, Endpoint>
 }
 
 impl Socket {
-    pub fn new(reply_tx: Sender<Reply>, proto: Box<Protocol>) -> Socket {
+    pub fn new(id: SocketId, reply_tx: Sender<Reply>, proto: Box<Protocol>) -> Socket {
         Socket {
+            id: id,
             reply_sender: reply_tx,
-            protocol: proto
+            protocol: proto,
+            remote_endpoints: HashMap::new(),
+            local_endpoints: HashMap::new(), 
         }
+    }
+
+    pub fn connect(&mut self, network: &Network, url: String) {
+        network.connect(self.id, &url).
+            map(|eid| self.connect_succeeded(eid, url)).
+            map_err(|err| self.connect_failed(err)).
+            unwrap()
+    }
+
+    fn connect_succeeded(&mut self, eid: EndpointId, url: String) {
+        let ep = Endpoint::new_created(eid, url);
+
+        self.remote_endpoints.insert(eid, ep);
+        self.reply_sender.send(Reply::Connect(eid));
+    }
+
+    fn connect_failed(&mut self, err: io::Error) {
+        self.reply_sender.send(Reply::Err(err));
     }
 }
 
@@ -72,11 +100,24 @@ impl SocketCollection {
 
     pub fn add(&mut self, reply_tx: Sender<Reply>, proto: Box<Protocol>) -> SocketId {
         let id = SocketId(self.id_sequence);
-        let socket = Socket::new(reply_tx, proto);
+        let socket = Socket::new(id, reply_tx, proto);
 
         self.sockets.insert(id, socket);
         self.id_sequence += 1;
 
         id
     }
+
+    pub fn do_on_socket<F>(&self, id: SocketId, f: F) where F : FnOnce(&Socket) {
+        if let Some(socket) = self.sockets.get(&id) {
+            f(socket)
+        }
+    }
+
+    pub fn do_on_socket_mut<F>(&mut self, id: SocketId, f: F) where F : FnOnce(&mut Socket) {
+        if let Some(socket) = self.sockets.get_mut(&id) {
+            f(socket)
+        }
+    }
 }
+
