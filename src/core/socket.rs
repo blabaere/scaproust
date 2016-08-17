@@ -50,9 +50,7 @@ pub enum Reply {
 pub struct Socket {
     id: SocketId,
     reply_sender: Sender<Reply>,
-    protocol: Box<Protocol>,
-    remote_endpoints: HashMap<EndpointId, Endpoint>,
-    local_endpoints: HashMap<EndpointId, Endpoint>
+    protocol: Box<Protocol>
 }
 
 impl Socket {
@@ -60,28 +58,17 @@ impl Socket {
         Socket {
             id: id,
             reply_sender: reply_tx,
-            protocol: proto,
-            remote_endpoints: HashMap::new(),
-            local_endpoints: HashMap::new(), 
+            protocol: proto
         }
     }
 
     pub fn connect(&mut self, network: &Network, url: String) {
-        network.connect(self.id, &url).
-            map(|eid| self.connect_succeeded(eid, url)).
-            map_err(|err| self.connect_failed(err)).
-            unwrap()
-    }
+        let reply = match network.connect(self.id, &url) {
+            Ok(id) => Reply::Connect(id),
+            Err(e) => Reply::Err(e)
+        };
 
-    fn connect_succeeded(&mut self, eid: EndpointId, url: String) {
-        let ep = Endpoint::new_created(eid, url);
-
-        self.remote_endpoints.insert(eid, ep);
-        self.reply_sender.send(Reply::Connect(eid));
-    }
-
-    fn connect_failed(&mut self, err: io::Error) {
-        self.reply_sender.send(Reply::Err(err));
+        self.reply_sender.send(reply);
     }
 }
 
@@ -121,3 +108,51 @@ impl SocketCollection {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::io;
+
+    use super::*;
+    use core::protocol::Protocol;
+    use core::network::Network;
+    use core::endpoint::EndpointId;
+    use util;
+
+    struct TestProto;
+
+    impl Protocol for TestProto {
+        fn do_it_bob(&self) -> u8 {0}
+    }
+
+    struct FailingNetwork;
+
+    impl Network for FailingNetwork {
+        fn connect(&self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
+            Err(util::other_io_error("FailingNetwork can only fail"))
+        }
+        fn bind(&self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
+            Err(util::other_io_error("FailingNetwork can only fail"))
+        }
+    }
+
+    #[test]
+    fn when_connect_fails() {
+        let id = SocketId::from(1);
+        let (tx, rx) = mpsc::channel();
+        let proto = Box::new(TestProto) as Box<Protocol>;
+        let network = FailingNetwork;
+        let mut socket = Socket::new(id, tx, proto);
+
+        socket.connect(&network, String::from("test://fake"));
+
+        let reply = rx.recv().expect("Socket should have sent a reply to the connect request");
+
+        match reply {
+            Reply::Err(_) => {},
+            _ => {
+                assert!(false, "Socket should have replied an error to the connect request");
+            },
+        }
+    }
+}

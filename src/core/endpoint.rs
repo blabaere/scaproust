@@ -4,6 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::collections::HashMap;
 use std::io;
 use std::fmt;
 use std::sync::mpsc::Sender;
@@ -46,4 +47,27 @@ impl Endpoint {
             url: None
         }
     }
+}
+
+pub struct EndpointCollection {
+    id_sequence: usize,
+    endpoints: HashMap<EndpointId, Endpoint>
+}
+
+impl EndpointCollection {
+    pub fn new() -> EndpointCollection {
+        EndpointCollection {
+            id_sequence: 0,
+            endpoints: HashMap::new()
+        }
+    }
+
+    pub fn reserve_id(&mut self) -> EndpointId {
+        let id = EndpointId(self.id_sequence);
+
+        self.id_sequence += 1;
+
+        id
+    }
+
 }

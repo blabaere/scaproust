@@ -60,8 +60,8 @@ impl Socket {
     fn on_connect_reply(&self, reply: Reply) -> io::Result<endpoint::Endpoint> {
         match reply {
             Reply::Connect(id) => {
-                let sender = self.request_sender.child_sender(id);
-                let ep = endpoint::Endpoint::new(sender);
+                let request_tx = self.request_sender.child_sender(id);
+                let ep = endpoint::Endpoint::new(request_tx);
                 
                 Ok(ep)
             },

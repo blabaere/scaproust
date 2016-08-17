@@ -10,9 +10,6 @@ use super::socket::SocketId;
 use super::endpoint::EndpointId;
 
 pub trait Network {
-    // this is not going to work with reconnect
-    // the endpoint id should be selected by the socket
-    // and then passed to the network functions
     fn connect(&self, socket_id: SocketId, url: &str) -> io::Result<EndpointId>;
     fn bind(&self, socket_id: SocketId, url: &str) -> io::Result<EndpointId>;
 }
