@@ -40,7 +40,7 @@ pub fn run_event_loop(mut event_loop: EventLoop, reply_tx: mpsc::Sender<session:
     }*/
 }
 
-struct EventLoopHandler {
+pub struct EventLoopHandler {
     session: session::Session
 }
 
