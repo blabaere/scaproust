@@ -9,5 +9,8 @@ use std::boxed::FnBox;
 pub type ProtocolCtor = Box<FnBox(i32) -> Box<Protocol> + Send>;
 
 pub trait Protocol {
+    fn id(&self) -> u16;
+    fn peer_id(&self) -> u16;
+    
     fn do_it_bob(&self) -> u8;
 }

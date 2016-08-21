@@ -122,6 +122,8 @@ mod tests {
     struct TestProto;
 
     impl Protocol for TestProto {
+        fn id(&self) -> u16 {0}
+        fn peer_id(&self) -> u16 {0}
         fn do_it_bob(&self) -> u8 {0}
     }
 
