@@ -10,6 +10,6 @@ use super::socket::SocketId;
 use super::endpoint::EndpointId;
 
 pub trait Network {
-    fn connect(&self, socket_id: SocketId, url: &str) -> io::Result<EndpointId>;
-    fn bind(&self, socket_id: SocketId, url: &str) -> io::Result<EndpointId>;
+    fn connect(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId>;
+    fn bind(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId>;
 }

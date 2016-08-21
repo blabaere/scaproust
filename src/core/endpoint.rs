@@ -28,6 +28,20 @@ impl From<usize> for EndpointId {
     }
 }
 
+// Maybe there should be 'local' endpoints (results of a bind) 
+// and 'remote' endpoints (results of a connect)
+// 
+// Protocols care only about remote endpoints because that's where send/recv operations are.
+//
+// Local endpoints can only be operated on from the facade, and only for closing
+// The event loop can notify an error, handled by removing it and scheduling a retry.
+// So while they are similar from the facade point of view, 
+// the core should really have two different concepts.
+//
+// Idea: put an additional bool in the EndpointId struct ?
+// And a method to return that bool
+// Or use even and odd values to test the distinction ?
+
 pub struct Endpoint {
     id: EndpointId,
     url: Option<String>

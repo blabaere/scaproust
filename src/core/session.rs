@@ -6,6 +6,7 @@
 
 use core::protocol::{Protocol, ProtocolCtor};
 use core::socket;
+use core::Sequence;
 
 use std::sync::mpsc;
 use std::io;
@@ -24,15 +25,18 @@ pub enum Reply {
 }
 
 pub struct Session {
+    ids: Sequence,
     reply_sender: mpsc::Sender<Reply>,
     sockets: socket::SocketCollection
 }
 
 impl Session {
     pub fn new(reply_tx: mpsc::Sender<Reply>) -> Session {
+        let seq = Sequence::new();
         Session {
+            ids: seq.clone(),
             reply_sender: reply_tx,
-            sockets: socket::SocketCollection::new()
+            sockets: socket::SocketCollection::new(seq.clone())
         }
     }
 

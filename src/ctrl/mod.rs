@@ -24,8 +24,10 @@ pub enum EventLoopSignal {
     SessionRequest(session::Request),
     SocketRequest(socket::SocketId, socket::Request),
     EndpointRequest(socket::SocketId, endpoint::EndpointId, endpoint::Request)
-    // PipeCmd : Send, Recv
-    // PipeEvent : Opened, Closed, Sent, Received(Message)
+    // PipeCmd : Send, Recv, Close
+    // PipeEvent : Opened, Closed, Sent, Received(Message), Error
+    // AcceptorCmd : Close
+    // AcceptorEvent : Closed, Error, Accepted(Vec<Box<Pipe>>)
 }
 
 pub fn run_event_loop(mut event_loop: EventLoop, reply_tx: mpsc::Sender<session::Reply>) {
@@ -52,10 +54,10 @@ impl EventLoopHandler {
         }
     }
     fn process_socket_request(&mut self, id: socket::SocketId, req: socket::Request) {
-        let network = TestNetwork(666);
+        let mut network = TestNetwork(666);
 
         match req {
-            socket::Request::Connect(url) => self.session.do_on_socket_mut(id, |socket| socket.connect(&network, url)),
+            socket::Request::Connect(url) => self.session.do_on_socket_mut(id, |socket| socket.connect(&mut network, url)),
             _ => {}
         }
 
@@ -91,10 +93,10 @@ impl mio::Handler for EventLoopHandler {
 struct TestNetwork(usize);
 
 impl network::Network for TestNetwork {
-    fn connect(&self, socket_id: socket::SocketId, url: &str) -> io::Result<endpoint::EndpointId> {
+    fn connect(&mut self, socket_id: socket::SocketId, url: &str) -> io::Result<endpoint::EndpointId> {
         Ok(From::from(self.0))
     }
-    fn bind(&self, socket_id: socket::SocketId, url: &str) -> io::Result<endpoint::EndpointId> {
+    fn bind(&mut self, socket_id: socket::SocketId, url: &str) -> io::Result<endpoint::EndpointId> {
         Ok(From::from(self.0))
     }
 }

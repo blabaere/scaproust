@@ -10,6 +10,7 @@ use std::io;
 use std::fmt;
 
 use message::Message;
+use super::Sequence;
 use super::protocol::Protocol;
 use super::endpoint::Endpoint;
 use super::endpoint::EndpointId;
@@ -62,7 +63,7 @@ impl Socket {
         }
     }
 
-    pub fn connect(&mut self, network: &Network, url: String) {
+    pub fn connect(&mut self, network: &mut Network, url: String) {
         let reply = match network.connect(self.id, &url) {
             Ok(id) => Reply::Connect(id),
             Err(e) => Reply::Err(e)
@@ -73,24 +74,23 @@ impl Socket {
 }
 
 pub struct SocketCollection {
-    id_sequence: usize,
+    ids: Sequence,
     sockets: HashMap<SocketId, Socket>
 }
 
 impl SocketCollection {
-    pub fn new() -> SocketCollection {
+    pub fn new(seq: Sequence) -> SocketCollection {
         SocketCollection {
-            id_sequence: 0,
+            ids: seq,
             sockets: HashMap::new()
         }
     }
 
     pub fn add(&mut self, reply_tx: Sender<Reply>, proto: Box<Protocol>) -> SocketId {
-        let id = SocketId(self.id_sequence);
+        let id = SocketId::from(self.ids.next());
         let socket = Socket::new(id, reply_tx, proto);
 
         self.sockets.insert(id, socket);
-        self.id_sequence += 1;
 
         id
     }
@@ -128,10 +128,10 @@ mod tests {
     struct FailingNetwork;
 
     impl Network for FailingNetwork {
-        fn connect(&self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
+        fn connect(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
             Err(util::other_io_error("FailingNetwork can only fail"))
         }
-        fn bind(&self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
+        fn bind(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
             Err(util::other_io_error("FailingNetwork can only fail"))
         }
     }
@@ -141,10 +141,10 @@ mod tests {
         let id = SocketId::from(1);
         let (tx, rx) = mpsc::channel();
         let proto = Box::new(TestProto) as Box<Protocol>;
-        let network = FailingNetwork;
+        let mut network = FailingNetwork;
         let mut socket = Socket::new(id, tx, proto);
 
-        socket.connect(&network, String::from("test://fake"));
+        socket.connect(&mut network, String::from("test://fake"));
 
         let reply = rx.recv().expect("Socket should have sent a reply to the connect request");
 
@@ -154,5 +154,57 @@ mod tests {
                 assert!(false, "Socket should have replied an error to the connect request");
             },
         }
+    }
+
+    struct WorkingNetwork(EndpointId);
+
+    impl Network for WorkingNetwork {
+        fn connect(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
+            Ok(self.0)
+        }
+        fn bind(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
+            Ok(self.0)
+        }
+    }
+
+    #[test]
+    fn when_connect_succeeds() {
+        let id = SocketId::from(1);
+        let (tx, rx) = mpsc::channel();
+        let proto = Box::new(TestProto) as Box<Protocol>;
+        let mut network = WorkingNetwork(EndpointId::from(1));
+        let mut socket = Socket::new(id, tx, proto);
+
+        socket.connect(&mut network, String::from("test://fake"));
+
+        let reply = rx.recv().expect("Socket should have sent a reply to the connect request");
+
+        match reply {
+            Reply::Connect(eid) => {
+                assert_eq!(EndpointId::from(1), eid);
+            },
+            _ => {
+                assert!(false, "Socket should have replied an ack to the connect request");
+            },
+        }
+    }
+
+    trait TraitForTest<T> {
+        fn do_it_raoul(&mut self, t: T);
+    }
+
+    struct Raoul;
+
+    impl<u8> TraitForTest<u8> for Raoul {
+        fn do_it_raoul(&mut self, x: u8) {
+
+        }
+    }
+
+    #[test]
+    fn test_raoul() {
+        let mut boxed_raoul = Box::new(Raoul) as Box<TraitForTest<u8>>;
+
+        boxed_raoul.do_it_raoul(5);
     }
 }

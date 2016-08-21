@@ -10,6 +10,7 @@
 #![feature(box_syntax)]
 #![feature(unboxed_closures)]
 #![feature(fnbox)]
+#![feature(conservative_impl_trait)] 
 
 #![feature(plugin)]
 #![plugin(clippy)]
@@ -27,6 +28,7 @@ mod message;
 mod core;
 mod ctrl;
 mod facade;
+mod transport;
 mod util;
 
 pub use facade::session::SessionBuilder as SessionBuilder;

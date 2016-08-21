@@ -4,8 +4,36 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 pub mod network;
 pub mod protocol;
 pub mod socket;
 pub mod session;
 pub mod endpoint;
+
+
+#[derive(Clone)]
+pub struct Sequence {
+    value: Rc<Cell<usize>>
+}
+
+impl Sequence {
+    pub fn new() -> Sequence {
+        Sequence { value: Rc::new(Cell::new(0)) }
+    }
+
+    pub fn next(&self) -> usize {
+        let id = self.value.get();
+
+        self.value.set(id + 1);
+        id
+    }
+}
+
+impl Default for Sequence {
+    fn default() -> Self {
+        Sequence::new()
+    }
+}
