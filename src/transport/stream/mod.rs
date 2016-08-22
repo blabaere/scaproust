@@ -170,14 +170,55 @@ fn no_transition_if_ok<F : 'static, S>(f: Box<F>, ctx: &mut Context<PipeEvt>, re
 mod tests {
     use std::ops::Deref;
     use std::rc::Rc;
+    use std::cell::RefCell;
     use std::io;
 
     use mio;
 
     use transport::stream;
+    use io_error::*;
     use Message;
 
-    pub struct TestStepStream;
+    pub struct TestStepStreamSensor {
+        sent_handshakes: Vec<(u16, u16)>
+    }
+
+    impl TestStepStreamSensor {
+        pub fn new() -> TestStepStreamSensor {
+            TestStepStreamSensor {
+                sent_handshakes: Vec::new()
+            }
+        }
+
+        pub fn get_sent_handshakes(&self) -> &[(u16, u16)] {
+            &self.sent_handshakes
+        }
+
+        fn push_sent_handshake(&mut self, sent_handshake: (u16, u16)) {
+            self.sent_handshakes.push(sent_handshake);
+        }
+    }
+
+    pub struct TestStepStream {
+        sensor: Rc<RefCell<TestStepStreamSensor>>,
+        send_handshake_ok: bool
+    }
+
+    impl TestStepStream {
+        pub fn new() -> TestStepStream {
+            let sensor = TestStepStreamSensor::new();
+            TestStepStream::with_sensor(Rc::new(RefCell::new(sensor)))
+        }
+        pub fn with_sensor(sensor: Rc<RefCell<TestStepStreamSensor>>) -> TestStepStream {
+            TestStepStream {
+                sensor: sensor,
+                send_handshake_ok: true
+            }
+        }
+        pub fn set_send_handshake_ok(&mut self, send_handshake_ok: bool) {
+            self.send_handshake_ok = send_handshake_ok;
+        }
+    }
 
     impl stream::StepStream for TestStepStream {
     }
@@ -198,6 +239,16 @@ mod tests {
         type Target = mio::Evented;
         fn deref(&self) -> &Self::Target {
             self
+        }
+    }
+
+    impl stream::Handshake for TestStepStream {
+        fn send_handshake(&mut self, pids: (u16, u16)) -> io::Result<()> {
+            self.sensor.borrow_mut().push_sent_handshake(pids);
+            if self.send_handshake_ok { Ok(()) } else { Err(other_io_error("test")) }
+        }
+        fn recv_handshake(&mut self, pids: (u16, u16)) -> io::Result<()> {
+            unimplemented!();
         }
     }
 
@@ -226,15 +277,6 @@ mod tests {
         }
 
         fn has_pending_recv(&self) -> bool {
-            unimplemented!();
-        }
-    }
-
-    impl stream::Handshake for TestStepStream {
-        fn send_handshake(&mut self, pids: (u16, u16)) -> io::Result<()> {
-            unimplemented!();
-        }
-        fn recv_handshake(&mut self, pids: (u16, u16)) -> io::Result<()> {
             unimplemented!();
         }
     }

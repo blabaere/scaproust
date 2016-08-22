@@ -10,6 +10,7 @@ use std::rc::Rc;
 use mio;
 
 use transport::stream::handshake::HandshakeTx; 
+use transport::stream::dead::Dead; 
 use transport::stream::{ 
     StepStream, 
     PipeState,
@@ -45,16 +46,16 @@ impl<T : StepStream> PipeState<T> for Initial<T> {
         transition_if_ok::<Initial<T>, HandshakeTx<T>, T>(self, ctx, res)
     }
     fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        self
+        box Dead
     }
     fn send(self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>> {
-        self
+        box Dead
     }
     fn recv(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        self
+        box Dead
     }
     fn ready(self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>> {
-        self
+        box Dead
     }
 }
 
@@ -68,7 +69,7 @@ mod tests {
 
     #[test]
     fn on_open_the_stream_should_be_registered() {
-        let stream = TestStepStream;
+        let stream = TestStepStream::new();
         let state = box Initial::new(stream, (1, 1));
         let mut ctx = TestPipeContext::new();
         let new_state = state.open(&mut ctx);
