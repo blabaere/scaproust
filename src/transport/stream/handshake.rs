@@ -164,6 +164,14 @@ mod tests {
         assert_eq!(1, sensor.borrow().get_received_handshakes());
         assert_eq!("Active", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
-        // check that an 'Opened' pipe event has been raised
+
+        // find a to check that the last event is PipeEvt::Opened
+        let ref evt = ctx.get_raised_events()[0];
+        let is_opened = match evt {
+            &PipeEvt::Opened => true,
+            _ => false,
+        };
+
+        assert!(is_opened);
     }
 }
