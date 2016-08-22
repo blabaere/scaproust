@@ -6,24 +6,22 @@
 
 use std::rc::Rc;
 
+use mio;
+
 use transport::stream::{ StepStream, PipeState };
 use transport::{ Context, PipeEvt };
 use Message;
 
-use mio;
-
 pub struct Initial<T : StepStream + 'static> {
     stream: T,
-    proto_id: u16,
-    peer_proto_id: u16
+    proto_ids: (u16, u16)
 }
 
 impl<T : StepStream + 'static> Initial<T> {
-    pub fn new(stream: T, proto_id: u16, peer_proto_id: u16) -> Box<PipeState<T>> {
+    pub fn new(stream: T, pids: (u16, u16)) -> Box<PipeState<T>> {
         box Initial {
             stream: stream,
-            proto_id: proto_id,
-            peer_proto_id: peer_proto_id,
+            proto_ids: pids
         }
     }
 }

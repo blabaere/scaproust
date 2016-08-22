@@ -12,10 +12,13 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::io;
 
-use super::*;
-use Message;
+use byteorder::{ BigEndian, ByteOrder };
 
 use mio;
+
+use super::*;
+use Message;
+use util::*;
 
 pub trait Sender {
     fn start_send(&mut self, msg: Rc<Message>) -> io::Result<bool>;
@@ -30,8 +33,8 @@ pub trait Receiver {
 }
 
 pub trait Handshake {
-    fn send_handshake(&mut self, proto_id: u16) -> io::Result<()>;
-    fn recv_handshake(&mut self, proto_id: u16) -> io::Result<()>;
+    fn send_handshake(&mut self, pids: (u16, u16)) -> io::Result<()>;
+    fn recv_handshake(&mut self, pids: (u16, u16)) -> io::Result<()>;
 }
 
 pub trait StepStream : Sender + Receiver + Handshake + Deref<Target=mio::Evented> {
@@ -51,8 +54,8 @@ pub struct Pipe<T : StepStream + 'static> {
 }
 
 impl<T : StepStream + 'static> Pipe<T> {
-    pub fn new(stream: T, proto_id: u16, proto_peer_id: u16) -> Pipe<T> {
-        let initial_state = initial::Initial::new(stream, proto_id, proto_peer_id);
+    pub fn new(stream: T, pids: (u16, u16)) -> Pipe<T> {
+        let initial_state = initial::Initial::new(stream, pids);
 
         Pipe { state: Some(initial_state) }
     }
@@ -89,5 +92,39 @@ impl<T:io::Write> WriteBuffer for T {
         *written += try!(self.write(&buf[*written..]));
 
         Ok(*written == buf.len())
+    }
+}
+
+pub fn send_and_check_handshake<T:io::Write>(stream: &mut T, pids: (u16, u16)) -> io::Result<()> {
+    let (proto_id, _) = pids;
+    let handshake = create_handshake(proto_id);
+
+    match try!(stream.write(&handshake)) {
+        8 => Ok(()),
+        _ => Err(would_block_io_error("failed to send handshake"))
+    }
+}
+
+fn create_handshake(protocol_id: u16) -> [u8; 8] {
+    // handshake is Zero, 'S', 'P', Version, Proto[2], Rsvd[2]
+    let mut handshake = [0, 83, 80, 0, 0, 0, 0, 0];
+    BigEndian::write_u16(&mut handshake[4..6], protocol_id);
+    handshake
+}
+
+pub fn recv_and_check_handshake<T:io::Read>(stream: &mut T, pids: (u16, u16)) -> io::Result<()> {
+    let mut handshake = [0u8; 8];
+
+    stream.read(&mut handshake).and_then(|_| check_handshake(pids, &handshake))
+}
+
+fn check_handshake(pids: (u16, u16), handshake: &[u8; 8]) -> io::Result<()> {
+    let (_, proto_id) = pids;
+    let expected_handshake = create_handshake(proto_id);
+
+    if handshake == &expected_handshake {
+        Ok(())
+    } else {
+        Err(invalid_data_io_error("received bad handshake"))
     }
 }

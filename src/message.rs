@@ -17,6 +17,13 @@ impl Message {
         }
     }
 
+    pub fn from_body(body: Vec<u8>) -> Message {
+        Message {
+            header: Vec::new(),
+            body: body
+        }
+    }
+
     pub fn from_header_and_body(header: Vec<u8>, body: Vec<u8>) -> Message {
         Message {
             header: header,

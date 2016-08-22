@@ -18,13 +18,13 @@ pub struct SendOperation {
 }
 
 impl SendOperation {
-    fn new(msg: Rc<Message>) -> SendOperation {
+    pub fn new(msg: Rc<Message>) -> SendOperation {
         SendOperation { 
             step: Some(SendOperationStep::TransportHdr(msg, 0))
         }
     }
 
-    fn run<T:io::Write>(&mut self, stream: &mut T) -> io::Result<bool> {
+    pub fn run<T:io::Write>(&mut self, stream: &mut T) -> io::Result<bool> {
         if let Some(step) = self.step.take() {
             self.resume_at(stream, step)
         } else {

@@ -15,6 +15,8 @@ use mio;
 pub mod stream;
 pub mod tcp;
 
+pub const DEFAULT_RECV_MAX_SIZE: u64 = 1024 * 1024;
+
 pub trait Endpoint<TCmd, TEvt> {
     //fn id(&self) -> EndpointId; // optional ??? id could be stored in the context
     fn ready(&mut self, ctx: &mut Context<TEvt>, events: mio::EventSet);
@@ -61,7 +63,7 @@ pub enum AcceptorEvt {
 }
 
 pub trait Transport {
-    fn connect(&self, url: &str) -> io::Result<Box<Endpoint<PipeCmd, PipeEvt>>>;
+    fn connect(&self, url: &str, pids: (u16, u16)) -> io::Result<Box<Endpoint<PipeCmd, PipeEvt>>>;
 
-    fn bind(&self, url: &str) -> io::Result<Box<Endpoint<AcceptorCmd, AcceptorEvt>>>;
+    fn bind(&self, url: &str, pids: (u16, u16)) -> io::Result<Box<Endpoint<AcceptorCmd, AcceptorEvt>>>;
 }
