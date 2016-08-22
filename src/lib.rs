@@ -12,11 +12,11 @@
 #![feature(fnbox)]
 #![feature(conservative_impl_trait)] 
 
-#![feature(plugin)]
-#![plugin(clippy)]
-#![allow(boxed_local)]
-#![allow(bool_comparison)]
-#![allow(explicit_iter_loop)]
+//#![feature(plugin)]
+//#![plugin(clippy)]
+//#![allow(boxed_local)]
+//#![allow(bool_comparison)]
+//#![allow(explicit_iter_loop)]
 
 #[macro_use]
 extern crate log;

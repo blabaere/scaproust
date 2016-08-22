@@ -67,3 +67,62 @@ pub trait Transport {
 
     fn bind(&self, url: &str, pids: (u16, u16)) -> io::Result<Box<Endpoint<AcceptorCmd, AcceptorEvt>>>;
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use mio;
+
+    use transport::*;
+    use io_error::*;
+
+    pub struct TestPipeContext {
+        registration_ok: bool,
+        reregistration_ok: bool,
+        deregistration_ok: bool,
+        registrations: Vec<(mio::EventSet, mio::PollOpt)>,
+        reregistrations: Vec<(mio::EventSet, mio::PollOpt)>,
+        deregistrations: usize,
+    }
+
+    impl TestPipeContext {
+        pub fn new() -> TestPipeContext {
+            TestPipeContext {
+                registration_ok: true,
+                reregistration_ok: true,
+                deregistration_ok: true,
+                registrations: Vec::new(),
+                reregistrations: Vec::new(),
+                deregistrations: 0
+            }
+        }
+        pub fn set_registration_ok(&mut self, registration_ok: bool) { self.registration_ok = registration_ok; }
+        pub fn set_reregistration_ok(&mut self, reregistration_ok: bool) { self.reregistration_ok = reregistration_ok; }
+        pub fn set_deregistration_ok(&mut self, deregistration_ok: bool) { self.deregistration_ok = deregistration_ok; }
+        pub fn get_registrations(&self) -> &[(mio::EventSet, mio::PollOpt)] { &self.registrations }
+        pub fn get_reregistrations(&self) -> &[(mio::EventSet, mio::PollOpt)] { &self.reregistrations }
+        pub fn get_deregistrations(&self) -> usize { self.deregistrations }
+    }
+
+    impl Registrar for TestPipeContext {
+        fn register(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()> {
+            self.registrations.push((interest, opt));
+            if self.registration_ok { Ok(()) } else { Err(other_io_error("test")) }
+        }
+        fn reregister(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()> {
+            self.reregistrations.push((interest, opt));
+            if self.reregistration_ok { Ok(()) } else { Err(other_io_error("test")) }
+        }
+        fn deregister(&mut self, io: &mio::Evented) -> io::Result<()> {
+            self.deregistrations += 1;
+            if self.deregistration_ok { Ok(()) } else { Err(other_io_error("test")) }
+        }
+    }
+
+    impl Context<PipeEvt> for TestPipeContext {
+        fn raise(&mut self, evt: PipeEvt) {
+            unimplemented!();
+        }
+    }
+}
