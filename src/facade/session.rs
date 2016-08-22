@@ -17,7 +17,7 @@ use ctrl::{EventLoopSignal, run_event_loop};
 use core::session::{Request, Reply};
 use core::protocol::{Protocol, ProtocolCtor};
 use core;
-use util::*;
+use io_error::*;
 
 type ReplyReceiver = mpsc::Receiver<Reply>;
 

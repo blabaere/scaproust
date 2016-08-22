@@ -9,12 +9,12 @@ use std::thread;
 use std::sync::mpsc;
 use std::time;
 
+use mio;
+
 use core::session;
 use core::socket;
 use core::endpoint;
 use core::network;
-
-use mio;
 
 #[doc(hidden)]
 pub type EventLoop = mio::EventLoop<EventLoopHandler>;

@@ -20,7 +20,7 @@ use self::send::SendOperation;
 use self::recv::RecvOperation;
 use super::*;
 use super::stream::*;
-use util::*;
+use io_error::*;
 use Message;
 
 /*****************************************************************************/

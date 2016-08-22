@@ -17,8 +17,8 @@ use byteorder::{ BigEndian, ByteOrder };
 use mio;
 
 use super::*;
+use io_error::*;
 use Message;
-use util::*;
 
 pub trait Sender {
     fn start_send(&mut self, msg: Rc<Message>) -> io::Result<bool>;

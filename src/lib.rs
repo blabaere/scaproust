@@ -29,7 +29,7 @@ mod core;
 mod ctrl;
 mod facade;
 mod transport;
-mod util;
+mod io_error;
 
 pub use facade::session::SessionBuilder as SessionBuilder;
 pub use facade::session::Session as Session;

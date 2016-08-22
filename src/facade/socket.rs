@@ -11,7 +11,7 @@ use facade::*;
 use core::socket::{SocketId, Request, Reply};
 use core;
 use ctrl::EventLoopSignal;
-use util::*;
+use io_error::*;
 
 pub type ReplyReceiver = mpsc::Receiver<Reply>;
 

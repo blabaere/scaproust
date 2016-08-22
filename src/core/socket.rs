@@ -117,7 +117,7 @@ mod tests {
     use core::protocol::Protocol;
     use core::network::Network;
     use core::endpoint::EndpointId;
-    use util;
+    use io_error::*;
 
     struct TestProto;
 
@@ -131,10 +131,10 @@ mod tests {
 
     impl Network for FailingNetwork {
         fn connect(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
-            Err(util::other_io_error("FailingNetwork can only fail"))
+            Err(other_io_error("FailingNetwork can only fail"))
         }
         fn bind(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
-            Err(util::other_io_error("FailingNetwork can only fail"))
+            Err(other_io_error("FailingNetwork can only fail"))
         }
     }
 

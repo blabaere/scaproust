@@ -4,12 +4,12 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::sync::mpsc;
+use std::io;
+
 use core::protocol::{Protocol, ProtocolCtor};
 use core::socket;
 use core::Sequence;
-
-use std::sync::mpsc;
-use std::io;
 
 pub enum Request {
     CreateSocket(ProtocolCtor),

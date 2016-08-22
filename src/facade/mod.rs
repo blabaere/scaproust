@@ -4,19 +4,19 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+pub mod session;
+pub mod socket;
+pub mod endpoint;
+
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::io;
 
-use ctrl::EventLoopSignal;
-use util::*;
-
 use mio;
 
-pub mod session;
-pub mod socket;
-pub mod endpoint;
+use ctrl::EventLoopSignal;
+use io_error::*;
 
 pub type SignalSender = Rc<mio::Sender<EventLoopSignal>>;
 
