@@ -84,6 +84,7 @@ mod tests {
         registrations: Vec<(mio::EventSet, mio::PollOpt)>,
         reregistrations: Vec<(mio::EventSet, mio::PollOpt)>,
         deregistrations: usize,
+        raised_events: Vec<PipeEvt>
     }
 
     impl TestPipeContext {
@@ -94,7 +95,8 @@ mod tests {
                 deregistration_ok: true,
                 registrations: Vec::new(),
                 reregistrations: Vec::new(),
-                deregistrations: 0
+                deregistrations: 0,
+                raised_events: Vec::new()
             }
         }
         pub fn set_registration_ok(&mut self, registration_ok: bool) { self.registration_ok = registration_ok; }
@@ -103,6 +105,7 @@ mod tests {
         pub fn get_registrations(&self) -> &[(mio::EventSet, mio::PollOpt)] { &self.registrations }
         pub fn get_reregistrations(&self) -> &[(mio::EventSet, mio::PollOpt)] { &self.reregistrations }
         pub fn get_deregistrations(&self) -> usize { self.deregistrations }
+        pub fn get_raised_events(&self) -> &[PipeEvt] { &self.raised_events }
     }
 
     impl Registrar for TestPipeContext {
@@ -122,7 +125,7 @@ mod tests {
 
     impl Context<PipeEvt> for TestPipeContext {
         fn raise(&mut self, evt: PipeEvt) {
-            unimplemented!();
+            self.raised_events.push(evt);
         }
     }
 }

@@ -8,6 +8,7 @@
 
 mod initial;
 mod handshake;
+mod active;
 mod dead;
 
 use std::ops::Deref;
@@ -54,6 +55,12 @@ pub trait PipeState<T : StepStream> {
     }
 
     fn ready(self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>>;
+
+    fn enter(&self, ctx: &mut Context<PipeEvt>) {
+    }
+
+    fn leave(&self, ctx: &mut Context<PipeEvt>) {
+    }
 }
 
 pub struct Pipe<T : StepStream + 'static> {
@@ -136,13 +143,16 @@ fn check_handshake(pids: (u16, u16), handshake: &[u8; 8]) -> io::Result<()> {
     }
 }
 
-pub fn transition<F, T, S>(f: Box<F>) -> Box<T> where
+pub fn transition<F, T, S>(old_state: Box<F>, ctx: &mut Context<PipeEvt>) -> Box<T> where
     F : PipeState<S>,
     F : Into<T>,
     T : PipeState<S>,
     S : StepStream
 {
-    box Into::into(*f)
+    old_state.leave(ctx);
+    let new_state = Into::into(*old_state);
+    new_state.enter(ctx);
+    box new_state
 }
 fn transition_if_ok<F, T : 'static, S>(f: Box<F>, ctx: &mut Context<PipeEvt>, res: io::Result<()>) -> Box<PipeState<S>> where
     F : PipeState<S>,
@@ -151,7 +161,7 @@ fn transition_if_ok<F, T : 'static, S>(f: Box<F>, ctx: &mut Context<PipeEvt>, re
     S : StepStream
 {
     match res {
-        Ok(..) => transition::<F, T, S>(f),
+        Ok(..) => transition::<F, T, S>(f, ctx),
         Err(e) => f.error(ctx, e)
     }
 }
@@ -180,13 +190,15 @@ mod tests {
     use Message;
 
     pub struct TestStepStreamSensor {
-        sent_handshakes: Vec<(u16, u16)>
+        sent_handshakes: Vec<(u16, u16)>,
+        received_handshakes: usize
     }
 
     impl TestStepStreamSensor {
         pub fn new() -> TestStepStreamSensor {
             TestStepStreamSensor {
-                sent_handshakes: Vec::new()
+                sent_handshakes: Vec::new(),
+                received_handshakes: 0
             }
         }
 
@@ -197,11 +209,20 @@ mod tests {
         fn push_sent_handshake(&mut self, sent_handshake: (u16, u16)) {
             self.sent_handshakes.push(sent_handshake);
         }
+
+        pub fn get_received_handshakes(&self) -> usize {
+            self.received_handshakes
+        }
+
+        fn push_received_handshake(&mut self) {
+            self.received_handshakes += 1;
+        }
     }
 
     pub struct TestStepStream {
         sensor: Rc<RefCell<TestStepStreamSensor>>,
-        send_handshake_ok: bool
+        send_handshake_ok: bool,
+        recv_handshake_ok: bool
     }
 
     impl TestStepStream {
@@ -212,7 +233,8 @@ mod tests {
         pub fn with_sensor(sensor: Rc<RefCell<TestStepStreamSensor>>) -> TestStepStream {
             TestStepStream {
                 sensor: sensor,
-                send_handshake_ok: true
+                send_handshake_ok: true,
+                recv_handshake_ok: true
             }
         }
         pub fn set_send_handshake_ok(&mut self, send_handshake_ok: bool) {
@@ -248,7 +270,8 @@ mod tests {
             if self.send_handshake_ok { Ok(()) } else { Err(other_io_error("test")) }
         }
         fn recv_handshake(&mut self, pids: (u16, u16)) -> io::Result<()> {
-            unimplemented!();
+            self.sensor.borrow_mut().push_received_handshake();
+            if self.recv_handshake_ok { Ok(()) } else { Err(other_io_error("test")) }
         }
     }
 
