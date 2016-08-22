@@ -16,7 +16,15 @@ use util::*;
 use Message;
 
 use mio;
-use mio::tcp::{TcpListener, TcpStream};
+use mio::tcp::{TcpListener, TcpStream, Shutdown};
+
+mod send;
+
+/*****************************************************************************/
+/*                                                                           */
+/* Transport                                                                 */
+/*                                                                           */
+/*****************************************************************************/
 
 pub struct Tcp;
 
@@ -43,9 +51,15 @@ impl Transport for Tcp {
     }
 }
 
+/*****************************************************************************/
+/*                                                                           */
+/* Step Stream                                                               */
+/*                                                                           */
+/*****************************************************************************/
+
 struct TcpStepStream {
     stream: TcpStream,
-    send_operation: Option<usize>, // usize => TcpSendOperation ...
+    send_operation: Option<send::SendOperation>, // usize => TcpSendOperation ...
     recv_operation: Option<usize>
 }
 
@@ -63,6 +77,12 @@ impl TcpStepStream {
             send_operation: None,
             recv_operation: None
         }
+    }
+}
+
+impl Drop for TcpStepStream {
+    fn drop(&mut self) {
+        let _ = self.stream.shutdown(Shutdown::Both);
     }
 }
 

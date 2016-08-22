@@ -19,6 +19,8 @@ pub struct Push {
     x: i32
 }
 impl Protocol for Push {
+    fn id(&self) -> u16 { 0 }
+    fn peer_id(&self) -> u16 { 0 }
     fn do_it_bob(&self) -> u8 { 0 }
 }
 

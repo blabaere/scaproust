@@ -10,11 +10,30 @@ pub struct Message {
 }
 
 impl Message {
-    fn new() -> Message {
+    pub fn new() -> Message {
         Message {
             header: Vec::new(),
             body: Vec::new()
         }
+    }
+
+    pub fn from_header_and_body(header: Vec<u8>, body: Vec<u8>) -> Message {
+        Message {
+            header: header,
+            body: body
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.header.len() + self.body.len()
+    }
+
+    pub fn get_header(&self) -> &[u8] {
+        &self.header
+    }
+
+    pub fn get_body(&self) -> &[u8] {
+        &self.body
     }
 }
 
