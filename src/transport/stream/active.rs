@@ -57,8 +57,35 @@ impl<T : StepStream> Active<T> {
         }
     }
 
+    fn on_recv_progress(&mut self, ctx: &mut Context<PipeEvt>, progress: io::Result<Option<Message>>) -> io::Result<()> {
+        progress.map(|recv| match recv {
+            Some(msg) => self.received_msg(ctx, msg),
+            None      => self.receiving_msg(ctx)
+        })
+    }
+
+    fn received_msg(&mut self, ctx: &mut Context<PipeEvt>, msg: Message) {
+        ctx.raise(PipeEvt::Received(msg))
+    }
+
+    fn receiving_msg(&mut self, ctx: &mut Context<PipeEvt>) {
+        //self.readable = false;
+        //self.send_sig(PipeEvtSignal::RecvBlocked)
+    }
+
     fn readable_changed(&mut self, ctx: &mut Context<PipeEvt>, readable: bool) -> io::Result<()> {
-        Ok(())
+        if readable {
+            if self.stream.has_pending_recv() {
+                let progress = self.stream.resume_recv();
+
+                self.on_recv_progress(ctx, progress)
+            } else {
+                // TODO raise a Readable, or CanSRecv or RecvReady event, or whatever
+                Ok(())
+            }
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -73,6 +100,7 @@ impl<T : StepStream> PipeState<T> for Active<T> {
     fn open(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         box Dead
     }
+
     fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         ctx.deregister(self.stream.deref());
         ctx.raise(PipeEvt::Closed);
@@ -86,7 +114,10 @@ impl<T : StepStream> PipeState<T> for Active<T> {
         no_transition_if_ok(self, ctx, res)
     }
     fn recv(mut self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        box Dead
+        let progress = self.stream.start_recv();
+        let res = self.on_recv_progress(ctx, progress);
+
+        no_transition_if_ok(self, ctx, res)
     }
     fn ready(mut self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>> {
         let res = 
@@ -218,5 +249,59 @@ mod tests {
         };
 
         assert!(is_sent);
+    }
+
+    #[test]
+    fn recv_with_immediate_success() {
+        let sensor_srv = TestStepStreamSensor::new();
+        let sensor = Rc::new(RefCell::new(sensor_srv));
+        let stream = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stream);
+        let mut ctx = TestPipeContext::new();
+        let payload = vec!(66, 65, 67);
+        let msg = Message::from_body(payload);
+
+        sensor.borrow_mut().set_start_recv_result(Some(msg));
+        let new_state = state.recv(&mut ctx);
+        assert_eq!("Active", new_state.name());
+        assert_eq!(1, ctx.get_raised_events().len());
+
+        let ref evt = ctx.get_raised_events()[0];
+        let is_recv = match evt {
+            &PipeEvt::Received(_) => true,
+            _ => false,
+        };
+
+        assert!(is_recv);
+    }
+
+    #[test]
+    fn recv_with_postponed_success() {
+        let sensor_srv = TestStepStreamSensor::new();
+        let sensor = Rc::new(RefCell::new(sensor_srv));
+        let stream = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stream);
+        let mut ctx = TestPipeContext::new();
+        let payload = vec!(66, 65, 67);
+        let msg = Message::from_body(payload);
+
+        sensor.borrow_mut().set_start_recv_result(None);
+        let new_state = state.recv(&mut ctx);
+        assert_eq!("Active", new_state.name());
+        assert_eq!(0, ctx.get_raised_events().len());
+
+        sensor.borrow_mut().set_resume_recv_result(Some(msg));
+        let events = mio::EventSet::readable();
+        let new_state = new_state.ready(&mut ctx, events);
+        assert_eq!("Active", new_state.name());
+        assert_eq!(1, ctx.get_raised_events().len());
+
+        let ref evt = ctx.get_raised_events()[0];
+        let is_recv = match evt {
+            &PipeEvt::Received(_) => true,
+            _ => false,
+        };
+
+        assert!(is_recv);
     }
 }

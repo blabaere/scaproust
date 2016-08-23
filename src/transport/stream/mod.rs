@@ -192,7 +192,9 @@ mod tests {
         sent_handshakes: Vec<(u16, u16)>,
         received_handshakes: usize,
         start_send_result: Option<bool>,
-        resume_send_result: Option<bool>
+        resume_send_result: Option<bool>,
+        start_recv_result: Option<Message>,
+        resume_recv_result: Option<Message>
     }
 
     impl TestStepStreamSensor {
@@ -201,7 +203,9 @@ mod tests {
                 sent_handshakes: Vec::new(),
                 received_handshakes: 0,
                 start_send_result: Some(true),
-                resume_send_result: None
+                resume_send_result: None,
+                start_recv_result: None,
+                resume_recv_result: None
             }
         }
 
@@ -236,13 +240,30 @@ mod tests {
         pub fn set_resume_send_result(&mut self, res: Option<bool>) {
             self.resume_send_result = res;
         }
+
+        fn take_start_recv_result(&mut self) -> Option<Message> {
+            self.start_recv_result.take()
+        }
+
+        pub fn set_start_recv_result(&mut self, res: Option<Message>) {
+            self.start_recv_result = res;
+        }
+
+        fn take_resume_recv_result(&mut self) -> Option<Message> {
+            self.resume_recv_result.take()
+        }
+
+        pub fn set_resume_recv_result(&mut self, res: Option<Message>) {
+            self.resume_recv_result = res;
+        }
     }
 
     pub struct TestStepStream {
         sensor: Rc<RefCell<TestStepStreamSensor>>,
         send_handshake_ok: bool,
         recv_handshake_ok: bool,
-        pending_send: bool
+        pending_send: bool,
+        pending_recv: bool
     }
 
     impl TestStepStream {
@@ -255,7 +276,8 @@ mod tests {
                 sensor: sensor,
                 send_handshake_ok: true,
                 recv_handshake_ok: true,
-                pending_send: false
+                pending_send: false,
+                pending_recv: false
             }
         }
         pub fn set_send_handshake_ok(&mut self, send_handshake_ok: bool) {
@@ -299,7 +321,7 @@ mod tests {
     impl stream::Sender for TestStepStream {
         fn start_send(&mut self, msg: Rc<Message>) -> io::Result<bool> {
             match self.sensor.borrow_mut().take_start_send_result() {
-                Some(true) => Ok(true),
+                Some(true) => { self.pending_send = false; Ok(true) },
                 Some(false) => { self.pending_send = true; Ok(false) },
                 None => Err(other_io_error("test"))
             }
@@ -320,15 +342,21 @@ mod tests {
 
     impl stream::Receiver for TestStepStream {
         fn start_recv(&mut self) -> io::Result<Option<Message>> {
-            unimplemented!();
+            match self.sensor.borrow_mut().take_start_recv_result() {
+                Some(msg) => { self.pending_recv = false; Ok(Some(msg)) },
+                None =>      { self.pending_recv = true; Ok(None) }
+            }
         }
 
         fn resume_recv(&mut self) -> io::Result<Option<Message>> {
-            unimplemented!();
+            match self.sensor.borrow_mut().take_resume_recv_result() {
+                Some(msg) => { self.pending_recv = false; Ok(Some(msg)) },
+                None =>      { self.pending_recv = true; Ok(None) }
+            }
         }
 
         fn has_pending_recv(&self) -> bool {
-            unimplemented!();
+            self.pending_recv
         }
     }
 
