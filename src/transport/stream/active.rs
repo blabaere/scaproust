@@ -74,6 +74,9 @@ impl<T : StepStream> PipeState<T> for Active<T> {
         box Dead
     }
     fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+        ctx.deregister(self.stream.deref());
+        ctx.raise(PipeEvt::Closed);
+
         box Dead
     }
     fn send(mut self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>> {
@@ -109,7 +112,7 @@ mod tests {
     use Message;
 
     #[test]
-    fn on_enter_stream_is_reregisterd() {
+    fn on_enter_stream_is_reregistered_and_an_event_is_raised() {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stream = TestStepStream::with_sensor(sensor.clone());
@@ -128,6 +131,38 @@ mod tests {
 
         assert_eq!(&all, interest);
         assert_eq!(&edge, poll_opt);
+
+        assert_eq!(1, ctx.get_raised_events().len());
+        let ref evt = ctx.get_raised_events()[0];
+        let is_opened = match evt {
+            &PipeEvt::Opened => true,
+            _ => false,
+        };
+
+        assert!(is_opened);
+    }
+
+    #[test]
+    fn close_should_deregister_raise_an_event_and_cause_a_transition_to_dead() {
+        let stream = TestStepStream::new();
+        let state = box Active::new(stream);
+        let mut ctx = TestPipeContext::new();
+        let new_state = state.close(&mut ctx);
+
+        assert_eq!(0, ctx.get_registrations().len());
+        assert_eq!(0, ctx.get_reregistrations().len());
+        assert_eq!(1, ctx.get_deregistrations());
+
+        assert_eq!("Dead", new_state.name());
+
+        assert_eq!(1, ctx.get_raised_events().len());
+        let ref evt = ctx.get_raised_events()[0];
+        let is_closed = match evt {
+            &PipeEvt::Closed => true,
+            _ => false,
+        };
+
+        assert!(is_closed);
     }
 
     #[test]

@@ -58,7 +58,6 @@ pub trait PipeState<T : StepStream> {
 
     fn enter(&self, ctx: &mut Context<PipeEvt>) {
     }
-
     fn leave(&self, ctx: &mut Context<PipeEvt>) {
     }
 }

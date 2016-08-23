@@ -44,6 +44,9 @@ impl<T : StepStream> PipeState<T> for Initial<T> {
         transition::<Initial<T>, HandshakeTx<T>, T>(self, ctx)
     }
     fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+        ctx.deregister(self.stream.deref());
+        ctx.raise(PipeEvt::Closed);
+
         box Dead
     }
     fn send(self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>> {
@@ -77,5 +80,28 @@ mod tests {
         assert_eq!(0, ctx.get_deregistrations());
 
         assert_eq!("HandshakeTx", new_state.name());
+    }
+
+    #[test]
+    fn close_should_deregister_raise_an_event_and_cause_a_transition_to_dead() {
+        let stream = TestStepStream::new();
+        let state = box Initial::new(stream, (1, 1));
+        let mut ctx = TestPipeContext::new();
+        let new_state = state.close(&mut ctx);
+
+        assert_eq!(0, ctx.get_registrations().len());
+        assert_eq!(0, ctx.get_reregistrations().len());
+        assert_eq!(1, ctx.get_deregistrations());
+
+        assert_eq!("Dead", new_state.name());
+
+        assert_eq!(1, ctx.get_raised_events().len());
+        let ref evt = ctx.get_raised_events()[0];
+        let is_closed = match evt {
+            &PipeEvt::Closed => true,
+            _ => false,
+        };
+
+        assert!(is_closed);
     }
 }

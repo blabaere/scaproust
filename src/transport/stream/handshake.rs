@@ -55,6 +55,9 @@ impl<T : StepStream> PipeState<T> for HandshakeTx<T> {
         box Dead
     }
     fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+        ctx.deregister(self.stream.deref());
+        ctx.raise(PipeEvt::Closed);
+
         box Dead
     }
     fn send(self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>> {
@@ -111,6 +114,9 @@ impl<T : StepStream> PipeState<T> for HandshakeRx<T> {
         box Dead
     }
     fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+        ctx.deregister(self.stream.deref());
+        ctx.raise(PipeEvt::Closed);
+
         box Dead
     }
     fn send(self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>> {
@@ -164,23 +170,26 @@ mod tests {
     }
 
     #[test]
-    fn on_enter_rx_should_reregister() {
+    fn tx_close_should_deregister_raise_an_event_and_cause_a_transition_to_dead() {
         let stream = TestStepStream::new();
-        let state = box HandshakeRx::new(stream, (4, 2));
+        let state = box HandshakeTx::new(stream, (1, 1));
         let mut ctx = TestPipeContext::new();
-
-        state.enter(&mut ctx);
+        let new_state = state.close(&mut ctx);
 
         assert_eq!(0, ctx.get_registrations().len());
-        assert_eq!(1, ctx.get_reregistrations().len());
-        assert_eq!(0, ctx.get_deregistrations());
+        assert_eq!(0, ctx.get_reregistrations().len());
+        assert_eq!(1, ctx.get_deregistrations());
 
-        let (ref interest, ref poll_opt) = ctx.get_reregistrations()[0];
-        let all = mio::EventSet::readable();
-        let edge = mio::PollOpt::level();
+        assert_eq!("Dead", new_state.name());
 
-        assert_eq!(&all, interest);
-        assert_eq!(&edge, poll_opt);
+        assert_eq!(1, ctx.get_raised_events().len());
+        let ref evt = ctx.get_raised_events()[0];
+        let is_closed = match evt {
+            &PipeEvt::Closed => true,
+            _ => false,
+        };
+
+        assert!(is_closed);
     }
 
     #[test]
@@ -201,6 +210,49 @@ mod tests {
     }
 
     #[test]
+    fn on_enter_rx_should_reregister() {
+        let stream = TestStepStream::new();
+        let state = box HandshakeRx::new(stream, (4, 2));
+        let mut ctx = TestPipeContext::new();
+
+        state.enter(&mut ctx);
+
+        assert_eq!(0, ctx.get_registrations().len());
+        assert_eq!(1, ctx.get_reregistrations().len());
+        assert_eq!(0, ctx.get_deregistrations());
+
+        let (ref interest, ref poll_opt) = ctx.get_reregistrations()[0];
+        let all = mio::EventSet::readable();
+        let edge = mio::PollOpt::level();
+
+        assert_eq!(&all, interest);
+        assert_eq!(&edge, poll_opt);
+    }
+
+    #[test]
+    fn rx_close_should_deregister_raise_an_event_and_cause_a_transition_to_dead() {
+        let stream = TestStepStream::new();
+        let state = box HandshakeRx::new(stream, (1, 1));
+        let mut ctx = TestPipeContext::new();
+        let new_state = state.close(&mut ctx);
+
+        assert_eq!(0, ctx.get_registrations().len());
+        assert_eq!(0, ctx.get_reregistrations().len());
+        assert_eq!(1, ctx.get_deregistrations());
+
+        assert_eq!("Dead", new_state.name());
+
+        assert_eq!(1, ctx.get_raised_events().len());
+        let ref evt = ctx.get_raised_events()[0];
+        let is_closed = match evt {
+            &PipeEvt::Closed => true,
+            _ => false,
+        };
+
+        assert!(is_closed);
+    }
+
+    #[test]
     fn readable_the_handshake_should_be_received() {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
@@ -213,16 +265,5 @@ mod tests {
 
         assert_eq!(1, sensor.borrow().get_received_handshakes());
         assert_eq!("Active", new_state.name());
-        assert_eq!(1, ctx.get_raised_events().len());
-
-        let ref evt = ctx.get_raised_events()[0];
-        let is_opened = match evt {
-            &PipeEvt::Opened => true,
-            _ => false,
-        };
-
-        assert!(is_opened);
     }
 }
-
-// TODO move registration from previous state stimuli to state enter 
