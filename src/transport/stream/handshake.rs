@@ -165,7 +165,6 @@ mod tests {
         assert_eq!("Active", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
 
-        // find a to check that the last event is PipeEvt::Opened
         let ref evt = ctx.get_raised_events()[0];
         let is_opened = match evt {
             &PipeEvt::Opened => true,
