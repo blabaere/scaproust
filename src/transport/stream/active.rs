@@ -43,10 +43,15 @@ impl<T : StepStream> Active<T> {
     }
 
     fn writable_changed(&mut self, ctx: &mut Context<PipeEvt>, writable: bool) -> io::Result<()> {
-        if writable && self.stream.has_pending_send() {
-            let progress = self.stream.resume_send();
+        if writable {
+            if self.stream.has_pending_send() {
+                let progress = self.stream.resume_send();
 
-            self.on_send_progress(ctx, progress)
+                self.on_send_progress(ctx, progress)
+            } else {
+                // TODO raise a Writable, or CanSend or SendReady event, or whatever
+                Ok(())
+            }
         } else {
             Ok(())
         }
@@ -61,6 +66,7 @@ impl<T : StepStream> PipeState<T> for Active<T> {
     fn name(&self) -> &'static str {"Active"}
 
     fn enter(&self, ctx: &mut Context<PipeEvt>) {
+        ctx.reregister(self.stream.deref(), mio::EventSet::all(), mio::PollOpt::edge());
         ctx.raise(PipeEvt::Opened);
     }
 
@@ -101,6 +107,28 @@ mod tests {
     use transport::stream::tests::*;
     use transport::stream::active::*;
     use Message;
+
+    #[test]
+    fn on_enter_stream_is_reregisterd() {
+        let sensor_srv = TestStepStreamSensor::new();
+        let sensor = Rc::new(RefCell::new(sensor_srv));
+        let stream = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stream);
+        let mut ctx = TestPipeContext::new();
+
+        state.enter(&mut ctx);
+
+        assert_eq!(0, ctx.get_registrations().len());
+        assert_eq!(1, ctx.get_reregistrations().len());
+        assert_eq!(0, ctx.get_deregistrations());
+
+        let (ref interest, ref poll_opt) = ctx.get_reregistrations()[0];
+        let all = mio::EventSet::all();
+        let edge = mio::PollOpt::edge();
+
+        assert_eq!(&all, interest);
+        assert_eq!(&edge, poll_opt);
+    }
 
     #[test]
     fn send_with_immediate_success() {

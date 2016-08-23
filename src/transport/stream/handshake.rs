@@ -46,6 +46,11 @@ impl<T : StepStream> Into<HandshakeRx<T>> for HandshakeTx<T> {
 
 impl<T : StepStream> PipeState<T> for HandshakeTx<T> {
     fn name(&self) -> &'static str {"HandshakeTx"}
+
+    fn enter(&self, ctx: &mut Context<PipeEvt>) {
+        ctx.register(self.stream.deref(), mio::EventSet::writable(), mio::PollOpt::level());
+    }
+
     fn open(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         box Dead
     }
@@ -97,6 +102,11 @@ impl<T : StepStream> Into<Active<T>> for HandshakeRx<T> {
 
 impl<T : StepStream> PipeState<T> for HandshakeRx<T> {
     fn name(&self) -> &'static str {"HandshakeRx"}
+
+    fn enter(&self, ctx: &mut Context<PipeEvt>) {
+        ctx.reregister(self.stream.deref(), mio::EventSet::readable(), mio::PollOpt::level());
+    }
+
     fn open(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         box Dead
     }
@@ -132,6 +142,46 @@ mod tests {
     use transport::stream::*;
     use transport::stream::tests::*;
     use transport::stream::handshake::*;
+
+    #[test]
+    fn on_enter_tx_should_register() {
+        let stream = TestStepStream::new();
+        let state = box HandshakeTx::new(stream, (4, 2));
+        let mut ctx = TestPipeContext::new();
+
+        state.enter(&mut ctx);
+
+        assert_eq!(1, ctx.get_registrations().len());
+        assert_eq!(0, ctx.get_reregistrations().len());
+        assert_eq!(0, ctx.get_deregistrations());
+
+        let (ref interest, ref poll_opt) = ctx.get_registrations()[0];
+        let all = mio::EventSet::writable();
+        let edge = mio::PollOpt::level();
+
+        assert_eq!(&all, interest);
+        assert_eq!(&edge, poll_opt);
+    }
+
+    #[test]
+    fn on_enter_rx_should_reregister() {
+        let stream = TestStepStream::new();
+        let state = box HandshakeRx::new(stream, (4, 2));
+        let mut ctx = TestPipeContext::new();
+
+        state.enter(&mut ctx);
+
+        assert_eq!(0, ctx.get_registrations().len());
+        assert_eq!(1, ctx.get_reregistrations().len());
+        assert_eq!(0, ctx.get_deregistrations());
+
+        let (ref interest, ref poll_opt) = ctx.get_reregistrations()[0];
+        let all = mio::EventSet::readable();
+        let edge = mio::PollOpt::level();
+
+        assert_eq!(&all, interest);
+        assert_eq!(&edge, poll_opt);
+    }
 
     #[test]
     fn on_writable_the_handshake_should_be_sent() {
@@ -174,3 +224,5 @@ mod tests {
         assert!(is_opened);
     }
 }
+
+// TODO move registration from previous state stimuli to state enter 

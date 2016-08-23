@@ -14,7 +14,7 @@ use transport::stream::dead::Dead;
 use transport::stream::{ 
     StepStream, 
     PipeState,
-    transition_if_ok };
+    transition };
 use transport::{ Context, PipeEvt };
 use Message;
 
@@ -41,9 +41,7 @@ impl<T : StepStream> Into<HandshakeTx<T>> for Initial<T> {
 impl<T : StepStream> PipeState<T> for Initial<T> {
     fn name(&self) -> &'static str {"Initial"}
     fn open(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        let res = ctx.register(self.stream.deref(), mio::EventSet::writable(), mio::PollOpt::level());
-
-        transition_if_ok::<Initial<T>, HandshakeTx<T>, T>(self, ctx, res)
+        transition::<Initial<T>, HandshakeTx<T>, T>(self, ctx)
     }
     fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         box Dead
@@ -68,13 +66,13 @@ mod tests {
     use transport::stream::initial::*;
 
     #[test]
-    fn on_open_the_stream_should_be_registered() {
+    fn open_should_cause_transition_to_handshake() {
         let stream = TestStepStream::new();
         let state = box Initial::new(stream, (1, 1));
         let mut ctx = TestPipeContext::new();
         let new_state = state.open(&mut ctx);
 
-        assert_eq!(1, ctx.get_registrations().len());
+        assert_eq!(1, ctx.get_registrations().len()); // this is caused by HandshakeTx::enter
         assert_eq!(0, ctx.get_reregistrations().len());
         assert_eq!(0, ctx.get_deregistrations());
 
