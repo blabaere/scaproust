@@ -4,10 +4,13 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::collections::HashMap;
+use std::rc::Rc;
 use std::io;
 use std::fmt;
 use std::sync::mpsc::Sender;
+
+use super::network::Network;
+use message::Message;
 
 pub enum Request {
     Close
@@ -28,6 +31,18 @@ impl From<usize> for EndpointId {
     }
 }
 
+impl Into<usize> for EndpointId {
+    fn into(self) -> usize {
+        self.0
+    }
+}
+
+impl<'x> Into<usize> for &'x EndpointId {
+    fn into(self) -> usize {
+        self.0
+    }
+}
+
 // Maybe there should be 'local' endpoints (results of a bind) 
 // and 'remote' endpoints (results of a connect)
 // 
@@ -45,6 +60,8 @@ impl From<usize> for EndpointId {
 pub struct Endpoint {
     id: EndpointId,
     url: Option<String>
+    // priorities should go there too
+    // therefore, endpoint should have open, close, send and recv methods
 }
 
 impl Endpoint {
@@ -61,27 +78,17 @@ impl Endpoint {
             url: None
         }
     }
-}
 
-pub struct EndpointCollection {
-    id_sequence: usize,
-    endpoints: HashMap<EndpointId, Endpoint>
-}
-
-impl EndpointCollection {
-    pub fn new() -> EndpointCollection {
-        EndpointCollection {
-            id_sequence: 0,
-            endpoints: HashMap::new()
-        }
+    pub fn open(&self, network: &mut Network) {
+        network.open(self.id)
     }
-
-    pub fn reserve_id(&mut self) -> EndpointId {
-        let id = EndpointId(self.id_sequence);
-
-        self.id_sequence += 1;
-
-        id
+    pub fn close(&self, network: &mut Network) {
+        network.close(self.id)
     }
-
+    pub fn send(&self, network: &mut Network, msg: Rc<Message>) {
+        network.send(self.id, msg)
+    }
+    pub fn recv(&self, network: &mut Network) {
+        network.recv(self.id)
+    }
 }

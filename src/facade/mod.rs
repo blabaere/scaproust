@@ -15,10 +15,8 @@ use std::io;
 
 use mio;
 
-use ctrl::EventLoopSignal;
+use ctrl;
 use io_error::*;
-
-pub type SignalSender = Rc<mio::Sender<EventLoopSignal>>;
 
 pub trait Sender<T> {
     fn send(&self, request: T) -> io::Result<()>;
@@ -28,10 +26,10 @@ pub trait Receiver<T> {
     fn receive(&self) -> io::Result<T>;
 }
 
-impl<T> Sender<EventLoopSignal> for T where T : Deref<Target = mio::Sender<EventLoopSignal>> {
+impl<T> Sender<ctrl::Request> for T where T : Deref<Target = mio::Sender<ctrl::Request>> {
 
-    fn send(&self, signal: EventLoopSignal) -> io::Result<()> {
-        self.deref().send(signal).map_err(from_notify_error)
+    fn send(&self, req: ctrl::Request) -> io::Result<()> {
+        self.deref().send(req).map_err(from_notify_error)
     }
 
 }
@@ -44,3 +42,6 @@ impl<T> Receiver<T> for mpsc::Receiver<T> {
         }
     }
 }
+
+pub type EventLoopRequestSender = Rc<mio::Sender<ctrl::Request>>;
+

@@ -12,7 +12,7 @@ use scaproust::*;
 fn can_create_socket() {
     let mut session = SessionBuilder::build().unwrap();
     let mut socket = session.create_socket::<Push>().unwrap();
-    let ep = socket.connect("url");
+    let ep = socket.connect("tcp://127.0.0.1:5454").unwrap();
 }
 
 pub struct Push {

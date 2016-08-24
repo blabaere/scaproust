@@ -9,7 +9,7 @@ use std::io;
 
 use core::protocol::{Protocol, ProtocolCtor};
 use core::socket;
-use core::Sequence;
+use sequence::Sequence;
 
 pub enum Request {
     CreateSocket(ProtocolCtor),
@@ -25,18 +25,15 @@ pub enum Reply {
 }
 
 pub struct Session {
-    ids: Sequence,
     reply_sender: mpsc::Sender<Reply>,
     sockets: socket::SocketCollection
 }
 
 impl Session {
-    pub fn new(reply_tx: mpsc::Sender<Reply>) -> Session {
-        let seq = Sequence::new();
+    pub fn new(seq: Sequence, reply_tx: mpsc::Sender<Reply>) -> Session {
         Session {
-            ids: seq.clone(),
             reply_sender: reply_tx,
-            sockets: socket::SocketCollection::new(seq.clone())
+            sockets: socket::SocketCollection::new(seq)
         }
     }
 
@@ -55,6 +52,10 @@ impl Session {
 
     pub fn do_on_socket_mut<F>(&mut self, id: socket::SocketId, f: F) where F : FnOnce(&mut socket::Socket) {
         self.sockets.do_on_socket_mut(id, f)
+    }
+
+    pub fn get_socket_mut<'a>(&'a mut self, id: socket::SocketId) -> Option<&'a mut socket::Socket> {
+        self.sockets.get_socket_mut(id)
     }
 
 }

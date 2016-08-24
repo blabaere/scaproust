@@ -45,17 +45,26 @@ pub trait StepStream : Sender + Receiver + Handshake + Deref<Target=mio::Evented
 
 pub trait PipeState<T : StepStream> {
     fn name(&self) -> &'static str;
-    fn open(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>>;
-    fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>>;
-    fn send(self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>>;
-    fn recv(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>>;
-
-    fn error(self: Box<Self>, ctx: &mut Context<PipeEvt>, err: io::Error) -> Box<PipeState<T>> {
+    fn open(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         box dead::Dead
     }
+    fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+        box dead::Dead
+    }
+    fn send(self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>> {
+        box dead::Dead
+    }
+    fn recv(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+        box dead::Dead
+    }
+    fn error(self: Box<Self>, ctx: &mut Context<PipeEvt>, err: io::Error) -> Box<PipeState<T>> {
+        ctx.raise(PipeEvt::Error(err));
 
-    fn ready(self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>>;
-
+        box dead::Dead
+    }
+    fn ready(self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>> {
+        box dead::Dead
+    }
     fn enter(&self, ctx: &mut Context<PipeEvt>) {
     }
     fn leave(&self, ctx: &mut Context<PipeEvt>) {
@@ -75,7 +84,11 @@ impl<T : StepStream + 'static> Pipe<T> {
 
     fn apply<F>(&mut self, transition: F) where F : FnOnce(Box<PipeState<T>>) -> Box<PipeState<T>> {
         if let Some(old_state) = self.state.take() {
+            let old_state_name = old_state.name();
             let new_state = transition(old_state);
+            let new_state_name = new_state.name();
+
+            println!("Pipe state changed from {} to {}", old_state_name, new_state_name);
 
             self.state = Some(new_state);
         }

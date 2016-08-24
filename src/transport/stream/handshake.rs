@@ -50,20 +50,9 @@ impl<T : StepStream> PipeState<T> for HandshakeTx<T> {
     fn enter(&self, ctx: &mut Context<PipeEvt>) {
         ctx.register(self.stream.deref(), mio::EventSet::writable(), mio::PollOpt::level());
     }
-
-    fn open(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        box Dead
-    }
     fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         ctx.deregister(self.stream.deref());
-        ctx.raise(PipeEvt::Closed);
 
-        box Dead
-    }
-    fn send(self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>> {
-        box Dead
-    }
-    fn recv(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         box Dead
     }
     fn ready(mut self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>> {
@@ -109,20 +98,9 @@ impl<T : StepStream> PipeState<T> for HandshakeRx<T> {
     fn enter(&self, ctx: &mut Context<PipeEvt>) {
         ctx.reregister(self.stream.deref(), mio::EventSet::readable(), mio::PollOpt::level());
     }
-
-    fn open(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        box Dead
-    }
     fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         ctx.deregister(self.stream.deref());
-        ctx.raise(PipeEvt::Closed);
 
-        box Dead
-    }
-    fn send(self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>> {
-        box Dead
-    }
-    fn recv(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         box Dead
     }
     fn ready(mut self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>> {
@@ -170,7 +148,7 @@ mod tests {
     }
 
     #[test]
-    fn tx_close_should_deregister_raise_an_event_and_cause_a_transition_to_dead() {
+    fn tx_close_should_deregister_and_cause_a_transition_to_dead() {
         let stream = TestStepStream::new();
         let state = box HandshakeTx::new(stream, (1, 1));
         let mut ctx = TestPipeContext::new();
@@ -181,15 +159,6 @@ mod tests {
         assert_eq!(1, ctx.get_deregistrations());
 
         assert_eq!("Dead", new_state.name());
-
-        assert_eq!(1, ctx.get_raised_events().len());
-        let ref evt = ctx.get_raised_events()[0];
-        let is_closed = match evt {
-            &PipeEvt::Closed => true,
-            _ => false,
-        };
-
-        assert!(is_closed);
     }
 
     #[test]
@@ -230,7 +199,7 @@ mod tests {
     }
 
     #[test]
-    fn rx_close_should_deregister_raise_an_event_and_cause_a_transition_to_dead() {
+    fn rx_close_should_deregister_and_cause_a_transition_to_dead() {
         let stream = TestStepStream::new();
         let state = box HandshakeRx::new(stream, (1, 1));
         let mut ctx = TestPipeContext::new();
@@ -241,15 +210,6 @@ mod tests {
         assert_eq!(1, ctx.get_deregistrations());
 
         assert_eq!("Dead", new_state.name());
-
-        assert_eq!(1, ctx.get_raised_events().len());
-        let ref evt = ctx.get_raised_events()[0];
-        let is_closed = match evt {
-            &PipeEvt::Closed => true,
-            _ => false,
-        };
-
-        assert!(is_closed);
     }
 
     #[test]

@@ -6,21 +6,21 @@
 
 use std::io;
 
-use facade::*;
+use super::*;
+use ctrl;
 use core::socket::SocketId;
 use core::endpoint::{EndpointId, Request};
-use ctrl::EventLoopSignal;
 
 pub struct RequestSender {
-    signal_sender: SignalSender,
+    req_tx: EventLoopRequestSender,
     socket_id: SocketId,
     id: EndpointId
 }
 
 impl RequestSender {
-    pub fn new(signal_tx: SignalSender, socket_id: SocketId, id: EndpointId) -> RequestSender {
+    pub fn new(tx: EventLoopRequestSender, socket_id: SocketId, id: EndpointId) -> RequestSender {
         RequestSender {
-            signal_sender: signal_tx,
+            req_tx: tx,
             socket_id: socket_id,
             id: id
         }
@@ -29,7 +29,7 @@ impl RequestSender {
 
 impl Sender<Request> for RequestSender {
     fn send(&self, req: Request) -> io::Result<()> {
-        self.signal_sender.send(EventLoopSignal::EndpointRequest(self.socket_id, self.id, req))
+        self.req_tx.send(ctrl::Request::Endpoint(self.socket_id, self.id, req))
     }
 }
 

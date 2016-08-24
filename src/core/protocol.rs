@@ -12,6 +12,11 @@ pub trait Protocol {
     fn id(&self) -> u16;
     fn peer_id(&self) -> u16;
     fn do_it_bob(&self) -> u8;
+
+    // add_endpoint
+    // remove_endpoint
+    // send
+    // recv
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

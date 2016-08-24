@@ -7,34 +7,34 @@
 use std::sync::mpsc;
 use std::io;
 
-use facade::*;
+use super::*;
+use ctrl;
 use core::socket::{SocketId, Request, Reply};
 use core;
-use ctrl::EventLoopSignal;
 use io_error::*;
 
 pub type ReplyReceiver = mpsc::Receiver<Reply>;
 
 pub struct RequestSender {
-    signal_sender: SignalSender,
+    req_tx: EventLoopRequestSender,
     socket_id: SocketId
 }
 
 impl RequestSender {
-    pub fn new(signal_tx: SignalSender, id: SocketId) -> RequestSender {
+    pub fn new(tx: EventLoopRequestSender, id: SocketId) -> RequestSender {
         RequestSender {
-            signal_sender: signal_tx,
+            req_tx: tx,
             socket_id: id
         }
     }
     fn child_sender(&self, eid: core::endpoint::EndpointId) -> endpoint::RequestSender {
-        endpoint::RequestSender::new(self.signal_sender.clone(), self.socket_id, eid)
+        endpoint::RequestSender::new(self.req_tx.clone(), self.socket_id, eid)
     }
 }
 
 impl Sender<Request> for RequestSender {
     fn send(&self, req: Request) -> io::Result<()> {
-        self.signal_sender.send(EventLoopSignal::SocketRequest(self.socket_id, req))
+        self.req_tx.send(ctrl::Request::Socket(self.socket_id, req))
     }
 }
 

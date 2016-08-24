@@ -17,22 +17,24 @@ pub mod tcp;
 
 pub const DEFAULT_RECV_MAX_SIZE: u64 = 1024 * 1024;
 
+pub trait Transport {
+    fn connect(&self, url: &str, pids: (u16, u16)) -> io::Result<Box<Endpoint<PipeCmd, PipeEvt>>>;
+    fn bind(&self, url: &str, pids: (u16, u16)) -> io::Result<Box<Endpoint<AcceptorCmd, AcceptorEvt>>>;
+}
+
 pub trait Endpoint<TCmd, TEvt> {
-    //fn id(&self) -> EndpointId; // optional ??? id could be stored in the context
     fn ready(&mut self, ctx: &mut Context<TEvt>, events: mio::EventSet);
     fn process(&mut self, ctx: &mut Context<TEvt>, cmd: TCmd);
 }
 
 pub trait Registrar {
-    fn register(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()>;
-    fn reregister(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()>;
+    fn register(&mut self, io: &mio::Evented, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()>;
+    fn reregister(&mut self, io: &mio::Evented, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()>;
     fn deregister(&mut self, io: &mio::Evented) -> io::Result<()>;
 }
 
 pub trait Context<TEvt> : Registrar {
-
     fn raise(&mut self, evt: TEvt);
-
 }
 
 pub enum PipeCmd {
@@ -45,6 +47,8 @@ pub enum PipeCmd {
 pub enum PipeEvt {
     Opened,
     Closed,
+    CanSend,
+    CanRecv,
     Sent,
     Received(Message),
     Error(io::Error)
@@ -60,12 +64,6 @@ pub enum AcceptorEvt {
     Closed,
     Accepted(Vec<Box<Endpoint<PipeCmd, PipeEvt>>>),
     Error(io::Error)
-}
-
-pub trait Transport {
-    fn connect(&self, url: &str, pids: (u16, u16)) -> io::Result<Box<Endpoint<PipeCmd, PipeEvt>>>;
-
-    fn bind(&self, url: &str, pids: (u16, u16)) -> io::Result<Box<Endpoint<AcceptorCmd, AcceptorEvt>>>;
 }
 
 #[cfg(test)]

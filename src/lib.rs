@@ -24,6 +24,7 @@ extern crate byteorder;
 extern crate mio;
 extern crate time;
 
+mod sequence;
 mod message;
 mod core;
 mod ctrl;
@@ -36,3 +37,41 @@ pub use facade::session::Session as Session;
 pub use facade::socket::Socket as Socket;
 pub use core::protocol::Protocol as Protocol;
 pub use message::Message as Message;
+
+#[cfg(test)]
+mod tests {
+    struct Editable {
+        x: usize
+    }
+    struct Editor {
+        y: usize
+    }
+    struct Outter {
+        editable: Editable,
+        editor: Editor
+    }
+    impl Editable {
+        fn edit(&mut self) { self.x += 1; }
+    }
+    impl Editor {
+        fn edit(&mut self, editable: &mut Editable) { 
+            self.y += 1; 
+            editable.edit();
+        }
+    }
+    impl Outter {
+        fn test(&mut self) {
+            self.editor.edit(&mut self.editable);
+        }
+    }
+
+    #[test]
+    fn can_pass_mutable_field_ref_to_other_field() {
+        let mut master = Outter {
+            editable: Editable { x: 0 },
+            editor: Editor { y: 0 },
+        };
+
+        master.test();
+    }
+}

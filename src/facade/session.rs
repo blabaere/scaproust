@@ -12,8 +12,8 @@ use std::time;
 
 use mio;
 
-use facade::*;
-use ctrl::{EventLoopSignal, run_event_loop};
+use super::*;
+use ctrl;
 use core::session::{Request, Reply};
 use core::protocol::{Protocol, ProtocolCtor};
 use core;
@@ -22,18 +22,21 @@ use io_error::*;
 type ReplyReceiver = mpsc::Receiver<Reply>;
 
 struct RequestSender {
-    signal_sender: SignalSender
+    req_tx: EventLoopRequestSender
 }
 
 impl Sender<Request> for RequestSender {
     fn send(&self, req: Request) -> io::Result<()> {
-        self.signal_sender.send(EventLoopSignal::SessionRequest(req))
+        self.req_tx.send(ctrl::Request::Session(req))
     }
 }
 
 impl RequestSender {
+    fn new(tx: EventLoopRequestSender) -> RequestSender {
+        RequestSender { req_tx: tx }
+    }
     fn child_sender(&self, socket_id: core::socket::SocketId) -> socket::RequestSender {
-        socket::RequestSender::new(self.signal_sender.clone(), socket_id)
+        socket::RequestSender::new(self.req_tx.clone(), socket_id)
     }
 }
 
@@ -55,10 +58,10 @@ impl SessionBuilder {
         let event_loop = try!(builder.build());
         let (reply_tx, reply_rx) = mpsc::channel();
         let signal_tx = Rc::new(event_loop.channel());
-        let request_tx = RequestSender {signal_sender: signal_tx};
+        let request_tx = RequestSender {req_tx: signal_tx};
         let session = Session::new(request_tx, reply_rx);
 
-        thread::spawn(move || run_event_loop(event_loop, reply_tx));
+        thread::spawn(move || ctrl::run_event_loop(event_loop, reply_tx));
 
         Ok(session)
     }}

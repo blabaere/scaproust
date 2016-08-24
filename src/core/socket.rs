@@ -10,10 +10,9 @@ use std::io;
 use std::fmt;
 
 use message::Message;
-use super::Sequence;
+use sequence::Sequence;
 use super::protocol::Protocol;
-use super::endpoint::Endpoint;
-use super::endpoint::EndpointId;
+use super::endpoint::{Endpoint, EndpointId};
 use super::network::Network;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -51,7 +50,8 @@ pub enum Reply {
 pub struct Socket {
     id: SocketId,
     reply_sender: Sender<Reply>,
-    protocol: Box<Protocol>
+    protocol: Box<Protocol>,
+    remote_eps: HashMap<EndpointId, Endpoint>
 }
 
 impl Socket {
@@ -59,12 +59,43 @@ impl Socket {
         Socket {
             id: id,
             reply_sender: reply_tx,
-            protocol: proto
+            protocol: proto,
+            remote_eps: HashMap::new()
         }
     }
 
+    fn get_protocol_ids(&self) -> (u16, u16) {
+        let proto_id = self.protocol.id();
+        let peer_proto_id = self.protocol.peer_id();
+
+        (proto_id, peer_proto_id)
+    }
+
     pub fn connect(&mut self, network: &mut Network, url: String) {
-        let reply = match network.connect(self.id, &url) {
+        let pids = self.get_protocol_ids();
+
+        match network.connect(self.id, &url, pids) {
+            Ok(id) => self.on_connect_success(network, url, id),
+            Err(e) => self.on_connect_error(e)
+        };
+    }
+
+    fn on_connect_success(&mut self, network: &mut Network, url: String, id: EndpointId) {
+        let ep = Endpoint::new_created(id, url);
+
+        ep.open(network);
+
+        self.remote_eps.insert(id, ep);
+        self.reply_sender.send(Reply::Connect(id));
+    }
+
+    fn on_connect_error(&mut self, err: io::Error) {
+        self.reply_sender.send(Reply::Err(err));
+    }
+
+    pub fn bind(&mut self, network: &mut Network, url: String) {
+        let pids = self.get_protocol_ids();
+        let reply = match network.bind(self.id, &url, pids) {
             Ok(id) => Reply::Connect(id),
             Err(e) => Reply::Err(e)
         };
@@ -106,10 +137,15 @@ impl SocketCollection {
             f(socket)
         }
     }
+
+    pub fn get_socket_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut Socket> {
+        self.sockets.get_mut(&id)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
     use std::sync::mpsc;
     use std::io;
 
@@ -118,6 +154,7 @@ mod tests {
     use core::network::Network;
     use core::endpoint::EndpointId;
     use io_error::*;
+    use Message;
 
     struct TestProto;
 
@@ -130,11 +167,19 @@ mod tests {
     struct FailingNetwork;
 
     impl Network for FailingNetwork {
-        fn connect(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
+        fn connect(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
-        fn bind(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
+        fn bind(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
             Err(other_io_error("FailingNetwork can only fail"))
+        }
+        fn open(&mut self, endpoint_id: EndpointId) {
+        }
+        fn close(&mut self, endpoint_id: EndpointId) {
+        }
+        fn send(&mut self, endpoint_id: EndpointId, msg: Rc<Message>) {
+        }
+        fn recv(&mut self, endpoint_id: EndpointId) {
         }
     }
 
@@ -161,11 +206,19 @@ mod tests {
     struct WorkingNetwork(EndpointId);
 
     impl Network for WorkingNetwork {
-        fn connect(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
+        fn connect(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
             Ok(self.0)
         }
-        fn bind(&mut self, socket_id: SocketId, url: &str) -> io::Result<EndpointId> {
+        fn bind(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
             Ok(self.0)
+        }
+        fn open(&mut self, endpoint_id: EndpointId) {
+        }
+        fn close(&mut self, endpoint_id: EndpointId) {
+        }
+        fn send(&mut self, endpoint_id: EndpointId, msg: Rc<Message>) {
+        }
+        fn recv(&mut self, endpoint_id: EndpointId) {
         }
     }
 
@@ -189,24 +242,5 @@ mod tests {
                 assert!(false, "Socket should have replied an ack to the connect request");
             },
         }
-    }
-
-    trait TraitForTest<T> {
-        fn do_it_raoul(&mut self, t: T);
-    }
-
-    struct Raoul;
-
-    impl<u8> TraitForTest<u8> for Raoul {
-        fn do_it_raoul(&mut self, x: u8) {
-
-        }
-    }
-
-    #[test]
-    fn test_raoul() {
-        let mut boxed_raoul = Box::new(Raoul) as Box<TraitForTest<u8>>;
-
-        boxed_raoul.do_it_raoul(5);
     }
 }
