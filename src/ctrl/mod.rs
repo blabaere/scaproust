@@ -115,6 +115,39 @@ impl EventLoopHandler {
             socket.bind(&mut ctx, url);
         }
     }
+
+    fn process_pipe_cmd(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId, cmd: PipeCmd) {
+        println!("process_pipe_cmd {:?} {:?}", sid, eid);
+        match cmd {
+            PipeCmd::Open => self.open_pipe(event_loop, sid, eid),
+            _ => {}
+        }
+    }
+
+    fn open_pipe(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId) {
+        if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
+            let mut ctx = EndpointEventLoopContext {
+                socket_id: sid,
+                endpoint_id: eid,
+                signal_sender: &mut self.signal_bus,
+                event_loop: event_loop
+            };
+
+            pipe.open(&mut ctx);
+        }
+    }
+
+    fn process_pipe_evt(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId, cmd: PipeEvt) {
+        println!("process_pipe_evt {:?} {:?}", sid, eid);
+    }
+
+    fn process_acceptor_cmd(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId, cmd: AcceptorCmd) {
+        println!("process_acceptor_cmd {:?} {:?}", sid, eid);
+    }
+
+    fn process_acceptor_evt(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId, cmd: AcceptorEvt) {
+        println!("process_acceptor_evt {:?} {:?}", sid, eid);
+    }
 }
 
 impl mio::Handler for EventLoopHandler {
@@ -130,9 +163,18 @@ impl mio::Handler for EventLoopHandler {
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        println!("EventLoopHandler.ready {} {:?}", tok.0, events);
-        // here find the registered io readiness observer
-        // then pass and call the readiness notification method
+        if tok == BUS_TOKEN {
+            while let Some(signal) = self.signal_bus.recv() {
+                match signal {
+                    Signal::PipeCmd(sid, eid, cmd) => self.process_pipe_cmd(event_loop, sid, eid, cmd),
+                    Signal::PipeEvt(sid, eid, cmd) => self.process_pipe_evt(event_loop, sid, eid, cmd),
+                    Signal::AcceptorCmd(sid, eid, cmd) => self.process_acceptor_cmd(event_loop, sid, eid, cmd),
+                    Signal::AcceptorEvt(sid, eid, cmd) => self.process_acceptor_evt(event_loop, sid, eid, cmd)
+                }
+            }
+        } else {
+            // 
+        }
     }
 
     fn timeout(&mut self, event_loop: &mut EventLoop, timeout: Self::Timeout) {
@@ -154,13 +196,17 @@ impl<'x> Into<mio::Token> for &'x endpoint::EndpointId {
     }
 }
 
-
 struct PipeController {
     socket_id: socket::SocketId,
     endpoint_id: endpoint::EndpointId,
     pipe: Box<Endpoint<PipeCmd, PipeEvt>>
 }
 
+impl PipeController {
+    fn open(&mut self, ctx: &mut EndpointEventLoopContext) {
+        self.pipe.process(ctx, PipeCmd::Open);
+    }
+}
 struct AcceptorController {
     socket_id: socket::SocketId,
     endpoint_id: endpoint::EndpointId,
@@ -180,6 +226,10 @@ impl EndpointCollection {
             pipes: HashMap::new(),
             acceptors: HashMap::new()
         }
+    }
+
+    fn get_pipe_mut<'a>(&'a mut self, eid: endpoint::EndpointId) -> Option<&'a mut PipeController> {
+        self.pipes.get_mut(&eid)
     }
 
     fn insert_pipe(&mut self, sid: socket::SocketId, ep: Box<Endpoint<PipeCmd, PipeEvt>>) -> endpoint::EndpointId {
@@ -243,7 +293,6 @@ impl<'a> network::Network for SocketEventLoopContext<'a> {
     }
 
     fn open(&mut self, endpoint_id: endpoint::EndpointId) {
-        println!("SocketEventLoopContext.open {:?}", endpoint_id);
         self.send_pipe_cmd(endpoint_id, PipeCmd::Open);
     }
     fn close(&mut self, endpoint_id: endpoint::EndpointId) {
@@ -260,7 +309,7 @@ impl<'a> network::Network for SocketEventLoopContext<'a> {
 struct EndpointEventLoopContext<'a, 'b> {
     socket_id: socket::SocketId,
     endpoint_id: endpoint::EndpointId,
-    signal_sender: &'a EventLoopBus<Signal>,
+    signal_sender: &'a mut EventLoopBus<Signal>,
     event_loop: &'b mut EventLoop
 }
 
@@ -279,8 +328,8 @@ impl<'a, 'b> Registrar for EndpointEventLoopContext<'a, 'b> {
 
 impl<'a, 'b> Context<PipeEvt> for EndpointEventLoopContext<'a, 'b> {
     fn raise(&mut self, evt: PipeEvt) {
-        /*let signal = EventLoopSignal::PipeEvt(self.socket_id, self.endpoint_id, evt);
+        let signal = Signal::PipeEvt(self.socket_id, self.endpoint_id, evt);
 
-        self.signal_sender.send(signal);*/
+        self.signal_sender.send(signal);
     }
 }

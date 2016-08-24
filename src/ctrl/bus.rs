@@ -63,9 +63,6 @@ impl<T> Evented for EventLoopBus<T> {
             let _ = readiness.set_readiness(EventSet::readable());
         }
 
-        //let registration_ref = self.registration.borrow_mut();
-        //let readiness_ref = self.readiness.borrow_mut();
-
         *self.registration.borrow_mut() = Some(registration);
         *self.readiness.borrow_mut() = Some(readiness);
 
