@@ -7,7 +7,6 @@
 use std::rc::Rc;
 use std::io;
 
-use core::endpoint::EndpointId;
 use Message;
 
 use mio;

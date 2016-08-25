@@ -134,8 +134,9 @@ impl EventLoopHandler {
     }
     fn process_pipe_evt(&mut self, sid: socket::SocketId, eid: endpoint::EndpointId, evt: PipeEvt) {
         match evt {
-            PipeEvt::Opened => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
-            PipeEvt::Sent   => self.apply_on_socket(sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
+            PipeEvt::Opened        => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
+            PipeEvt::Sent          => self.apply_on_socket(sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
+            PipeEvt::Received(msg) => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
             _ => {}
         }
     }

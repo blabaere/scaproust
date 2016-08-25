@@ -33,7 +33,7 @@ pub struct SocketEventLoopContext<'a> {
 pub struct EndpointEventLoopContext<'a, 'b> {
     socket_id: socket::SocketId,
     endpoint_id: endpoint::EndpointId,
-    signal_sender: &'a mut EventLoopBus<Signal>,
+    signal_tx: &'a mut EventLoopBus<Signal>,
     registrar: &'b mut Registrar
 }
 
@@ -84,7 +84,7 @@ impl PipeController {
         EndpointEventLoopContext {
             socket_id: self.socket_id,
             endpoint_id: self.endpoint_id,
-            signal_sender: signal_bus,
+            signal_tx: signal_bus,
             registrar: registrar
         }
     }
@@ -107,7 +107,7 @@ impl AcceptorController {
         EndpointEventLoopContext {
             socket_id: self.socket_id,
             endpoint_id: self.endpoint_id,
-            signal_sender: signal_bus,
+            signal_tx: signal_bus,
             registrar: registrar
         }
     }
@@ -259,7 +259,7 @@ impl<'a, 'b> Context<PipeEvt> for EndpointEventLoopContext<'a, 'b> {
     fn raise(&mut self, evt: PipeEvt) {
         let signal = Signal::PipeEvt(self.socket_id, self.endpoint_id, evt);
 
-        self.signal_sender.send(signal);
+        self.signal_tx.send(signal);
     }
 }
 
@@ -276,7 +276,7 @@ impl<'a, 'b> Context<AcceptorEvt> for EndpointEventLoopContext<'a, 'b> {
     fn raise(&mut self, evt: AcceptorEvt) {
         let signal = Signal::AcceptorEvt(self.socket_id, self.endpoint_id, evt);
 
-        self.signal_sender.send(signal);
+        self.signal_tx.send(signal);
     }
 }
 

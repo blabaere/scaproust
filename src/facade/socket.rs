@@ -105,6 +105,20 @@ impl Socket {
         }
     }
 
+    pub fn recv(&mut self) -> io::Result<Vec<u8>> {
+        let request = Request::Recv;
+
+        self.call(request, |reply| self.on_recv_reply(reply))
+    }
+
+    fn on_recv_reply(&self, reply: Reply) -> io::Result<Vec<u8>> {
+        match reply {
+            Reply::Recv(msg) => Ok(msg.into()),
+            Reply::Err(e) => Err(e),
+            _ => self.unexpected_reply()
+        }
+    }
+
     fn call<T, F : FnOnce(Reply) -> io::Result<T>>(&self, request: Request, process: F) -> io::Result<T> {
         self.execute_request(request).and_then(process)
     }

@@ -25,4 +25,5 @@ pub trait Protocol {
     fn on_send_ack(&mut self, network: &mut Network, eid: EndpointId);
     
     fn recv(&mut self, network: &mut Network);
+    fn on_recv_ack(&mut self, network: &mut Network, eid: EndpointId, msg: Message);
 }

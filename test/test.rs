@@ -42,6 +42,7 @@ impl Protocol for Push {
     fn recv(&mut self, network: &mut Network) {
 
     }
+    fn on_recv_ack(&mut self, network: &mut Network, eid: EndpointId, msg: Message) {}
 }
 
 impl From<mpsc::Sender<SocketReply>> for Push {

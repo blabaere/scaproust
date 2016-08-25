@@ -28,18 +28,11 @@ impl<T : StepStream> Active<T> {
         }
     }
     fn on_send_progress(&mut self, ctx: &mut Context<PipeEvt>, progress: io::Result<bool>) -> io::Result<()> {
-        progress.map(|sent| if sent {
-            self.sent_msg(ctx)
-        } else {
-            self.sending_msg(ctx)
-        })
+        progress.map(|sent| if sent { self.on_msg_sent(ctx) } )
     }
-    fn sent_msg(&mut self, ctx: &mut Context<PipeEvt>) {
-        ctx.raise(PipeEvt::Sent)
-    }
-    fn sending_msg(&mut self, ctx: &mut Context<PipeEvt>) {
-        //self.writable = false;
-        //self.send_sig(PipeEvtSignal::SendBlocked)
+    fn on_msg_sent(&mut self, ctx: &mut Context<PipeEvt>) {
+        ctx.raise(PipeEvt::Sent);
+        ctx.reregister(self.stream.deref(), mio::EventSet::all(), mio::PollOpt::edge());
     }
 
     fn writable_changed(&mut self, ctx: &mut Context<PipeEvt>, writable: bool) -> io::Result<()> {
@@ -49,7 +42,8 @@ impl<T : StepStream> Active<T> {
 
                 self.on_send_progress(ctx, progress)
             } else {
-                // TODO raise a Writable, or CanSend or SendReady event, or whatever
+                ctx.raise(PipeEvt::CanSend);
+
                 Ok(())
             }
         } else {
@@ -58,19 +52,12 @@ impl<T : StepStream> Active<T> {
     }
 
     fn on_recv_progress(&mut self, ctx: &mut Context<PipeEvt>, progress: io::Result<Option<Message>>) -> io::Result<()> {
-        progress.map(|recv| match recv {
-            Some(msg) => self.received_msg(ctx, msg),
-            None      => self.receiving_msg(ctx)
-        })
+        progress.map(|recv| if let Some(msg) = recv { self.on_msg_received(ctx, msg) } )
     }
 
-    fn received_msg(&mut self, ctx: &mut Context<PipeEvt>, msg: Message) {
-        ctx.raise(PipeEvt::Received(msg))
-    }
-
-    fn receiving_msg(&mut self, ctx: &mut Context<PipeEvt>) {
-        //self.readable = false;
-        //self.send_sig(PipeEvtSignal::RecvBlocked)
+    fn on_msg_received(&mut self, ctx: &mut Context<PipeEvt>, msg: Message) {
+        ctx.raise(PipeEvt::Received(msg));
+        ctx.reregister(self.stream.deref(), mio::EventSet::all(), mio::PollOpt::edge());
     }
 
     fn readable_changed(&mut self, ctx: &mut Context<PipeEvt>, readable: bool) -> io::Result<()> {
@@ -80,7 +67,8 @@ impl<T : StepStream> Active<T> {
 
                 self.on_recv_progress(ctx, progress)
             } else {
-                // TODO raise a Readable, or CanSRecv or RecvReady event, or whatever
+                ctx.raise(PipeEvt::CanRecv);
+                
                 Ok(())
             }
         } else {

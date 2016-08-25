@@ -133,6 +133,10 @@ impl Socket {
         self.protocol.recv(network);
     }
 
+    pub fn on_recv_ack(&mut self, network: &mut Network, eid: EndpointId, msg: Message) {
+        self.protocol.on_recv_ack(network, eid, msg);
+    }
+
     pub fn on_pipe_opened(&mut self, network: &mut Network, eid: EndpointId) {
         if let Some(pipe) = self.pipes.remove(&eid) {
             self.protocol.add_pipe(network, eid, pipe);
@@ -199,6 +203,7 @@ mod tests {
         fn send(&mut self, _: &mut Network, _: Message) {}
         fn on_send_ack(&mut self, _: &mut Network, _: EndpointId) {}
         fn recv(&mut self, _: &mut Network) {}
+        fn on_recv_ack(&mut self, _: &mut Network, _: EndpointId, _: Message) {}
     }
 
     struct FailingNetwork;

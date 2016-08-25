@@ -4,12 +4,10 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::rc::Rc;
 use std::io;
 
 use byteorder::{ BigEndian, ByteOrder };
 
-use transport::stream::*;
 use io_error::*;
 use Message;
 

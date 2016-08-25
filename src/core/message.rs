@@ -44,6 +44,12 @@ impl Message {
     }
 }
 
+impl Into<Vec<u8>> for Message {
+    fn into(self) -> Vec<u8> {
+        self.body
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
