@@ -9,9 +9,3 @@ pub mod protocol;
 pub mod socket;
 pub mod session;
 pub mod endpoint;
-
-/*
-Context
-- connect -> Pipe
-- bind -> Acceptor
-*/

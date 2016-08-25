@@ -12,6 +12,7 @@ use ctrl;
 use core::socket::{SocketId, Request, Reply};
 use core;
 use io_error::*;
+use Message;
 
 pub type ReplyReceiver = mpsc::Receiver<Reply>;
 
@@ -65,6 +66,21 @@ impl Socket {
                 
                 Ok(ep)
             },
+            Reply::Err(e) => Err(e),
+            _ => self.unexpected_reply()
+        }
+    }
+
+    pub fn send(&mut self, buffer: Vec<u8>) -> io::Result<()> {
+        let msg = Message::from_body(buffer);
+        let request = Request::Send(msg);
+
+        self.call(request, |reply| self.on_send_reply(reply))
+    }
+
+    fn on_send_reply(&self, reply: Reply) -> io::Result<()> {
+        match reply {
+            Reply::Send => Ok(()),
             Reply::Err(e) => Err(e),
             _ => self.unexpected_reply()
         }

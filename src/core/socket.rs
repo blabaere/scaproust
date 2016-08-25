@@ -12,7 +12,7 @@ use std::fmt;
 use message::Message;
 use sequence::Sequence;
 use super::protocol::Protocol;
-use super::endpoint::{Endpoint, EndpointId};
+use super::endpoint::{EndpointId, Pipe, Acceptor};
 use super::network::Network;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -51,7 +51,8 @@ pub struct Socket {
     id: SocketId,
     reply_sender: Sender<Reply>,
     protocol: Box<Protocol>,
-    remote_eps: HashMap<EndpointId, Endpoint>
+    pipes: HashMap<EndpointId, Pipe>,
+    acceptors: HashMap<EndpointId, Acceptor>,
 }
 
 impl Socket {
@@ -60,7 +61,8 @@ impl Socket {
             id: id,
             reply_sender: reply_tx,
             protocol: proto,
-            remote_eps: HashMap::new()
+            pipes: HashMap::new(),
+            acceptors: HashMap::new()
         }
     }
 
@@ -69,6 +71,14 @@ impl Socket {
         let peer_proto_id = self.protocol.peer_id();
 
         (proto_id, peer_proto_id)
+    }
+
+    pub fn process(&mut self, network: &mut Network, req: Request) {
+        match req {
+            Request::Connect(url) => self.connect(network, url),
+            Request::Bind(url) => self.bind(network, url),
+            _ => {}
+        }
     }
 
     pub fn connect(&mut self, network: &mut Network, url: String) {
@@ -80,13 +90,13 @@ impl Socket {
         };
     }
 
-    fn on_connect_success(&mut self, network: &mut Network, url: String, id: EndpointId) {
-        let ep = Endpoint::new_created(id, url);
+    fn on_connect_success(&mut self, network: &mut Network, url: String, eid: EndpointId) {
+        let pipe = Pipe::new_created(eid, url);
 
-        ep.open(network);
+        pipe.open(network);
 
-        self.remote_eps.insert(id, ep);
-        self.reply_sender.send(Reply::Connect(id));
+        self.pipes.insert(eid, pipe);
+        self.reply_sender.send(Reply::Connect(eid));
     }
 
     fn on_connect_error(&mut self, err: io::Error) {
@@ -95,12 +105,38 @@ impl Socket {
 
     pub fn bind(&mut self, network: &mut Network, url: String) {
         let pids = self.get_protocol_ids();
-        let reply = match network.bind(self.id, &url, pids) {
-            Ok(id) => Reply::Connect(id),
-            Err(e) => Reply::Err(e)
-        };
 
-        self.reply_sender.send(reply);
+        match network.bind(self.id, &url, pids) {
+            Ok(id) => self.on_bind_success(network, url, id),
+            Err(e) => self.on_bind_error(e)
+        };
+    }
+
+    fn on_bind_success(&mut self, network: &mut Network, url: String, eid: EndpointId) {
+        let acceptor = Acceptor::new(eid, url);
+
+        acceptor.open(network);
+
+        self.acceptors.insert(eid, acceptor);
+        self.reply_sender.send(Reply::Bind(eid));
+    }
+
+    fn on_bind_error(&mut self, err: io::Error) {
+        self.reply_sender.send(Reply::Err(err));
+    }
+
+    pub fn send(&mut self, network: &mut Network, msg: Message) {
+        self.protocol.send(network, msg);
+    }
+
+    pub fn recv(&mut self, network: &mut Network) {
+        self.protocol.recv(network);
+    }
+
+    pub fn on_pipe_opened(&mut self, network: &mut Network, eid: EndpointId) {
+        if let Some(pipe) = self.pipes.remove(&eid) {
+            self.protocol.add_pipe(eid, pipe);
+        }
     }
 }
 
@@ -152,7 +188,7 @@ mod tests {
     use super::*;
     use core::protocol::Protocol;
     use core::network::Network;
-    use core::endpoint::EndpointId;
+    use core::endpoint::{EndpointId, Pipe};
     use io_error::*;
     use Message;
 
@@ -161,7 +197,10 @@ mod tests {
     impl Protocol for TestProto {
         fn id(&self) -> u16 {0}
         fn peer_id(&self) -> u16 {0}
-        fn do_it_bob(&self) -> u8 {0}
+    fn add_pipe(&mut self, eid: EndpointId, pipe: Pipe) {}
+    fn remove_pipe(&mut self, eid: EndpointId) -> Option<Pipe> {None}
+    fn send(&mut self, network: &mut Network, msg: Message) {}
+    fn recv(&mut self, network: &mut Network) {}
     }
 
     struct FailingNetwork;

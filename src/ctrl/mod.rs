@@ -32,14 +32,14 @@ const BUS_TOKEN: mio::Token = mio::Token(::std::usize::MAX - 3);
 #[doc(hidden)]
 pub type EventLoop = mio::EventLoop<EventLoopHandler>;
 
-/// Requests accepted by core components
+/// Requests flowing to core components via the controller
 pub enum Request {
     Session(session::Request),
     Socket(socket::SocketId, socket::Request),
     Endpoint(socket::SocketId, endpoint::EndpointId, endpoint::Request)
 }
 
-/// Commands and events flowing between core and transport components.
+/// Commands and events flowing between the controller and transport components.
 enum Signal {
     PipeCmd(socket::SocketId, endpoint::EndpointId, PipeCmd),
     PipeEvt(socket::SocketId, endpoint::EndpointId, PipeEvt),
@@ -49,9 +49,9 @@ enum Signal {
 
 pub fn run_event_loop(mut event_loop: EventLoop, reply_tx: mpsc::Sender<session::Reply>) {
     let signal_bus = EventLoopBus::new();
-    let signal_bus_reg = register_signal_bus(&mut event_loop, &signal_bus).expect("bus registration failed");
+    let signal_bus_reg = register_signal_bus(&mut event_loop, &signal_bus);
     let mut handler = EventLoopHandler::new(signal_bus, reply_tx);
-    let exec = event_loop.run(&mut handler);
+    let exec = signal_bus_reg.and_then(|_| event_loop.run(&mut handler));
 
     /*match exec {
         Ok(_) => debug!("event loop exited"),
@@ -77,22 +77,31 @@ impl EventLoopHandler {
             session: session::Session::new(seq.clone(), reply_tx),
             endpoints: EndpointCollection::new(seq.clone())
         }
-    }    
-    fn process_session_request(&mut self, req: session::Request) {
-        match req {
+    }
+    fn process_request(&mut self, event_loop: &mut EventLoop, request: Request) {
+        match request {
+            Request::Session(req) => self.process_session_request(req),
+            Request::Socket(id, req) => self.process_socket_request(event_loop, id, req),
+            _ => {}
+        }
+    }
+    fn process_session_request(&mut self, request: session::Request) {
+        match request {
             session::Request::CreateSocket(ctor) => self.session.add_socket(ctor),
             _ => {}
         }
     }
-    fn process_socket_request(&mut self, event_loop: &mut EventLoop, id: socket::SocketId, req: socket::Request) {
-        match req {
-            socket::Request::Connect(url) => self.connect(event_loop, id, url),
-            socket::Request::Bind(url) => self.bind(event_loop, id, url),
+    fn process_socket_request(&mut self, event_loop: &mut EventLoop, id: socket::SocketId, request: socket::Request) {
+        match request {
+            socket::Request::Connect(url) => self.apply_on_socket(id, |socket, network| socket.connect(network, url)),
+            socket::Request::Bind(url)    => self.apply_on_socket(id, |socket, network| socket.bind(network, url)),
+            socket::Request::Send(msg)    => self.apply_on_socket(id, |socket, network| socket.send(network, msg)),
+            socket::Request::Recv         => self.apply_on_socket(id, |socket, network| socket.recv(network)),
             _ => {}
         }
     }
-
-    fn connect(&mut self, event_loop: &mut EventLoop, id: socket::SocketId, url: String) {
+    fn apply_on_socket<F>(&mut self, id: socket::SocketId, f: F) 
+    where F : FnOnce(&mut socket::Socket, &mut SocketEventLoopContext) {
         if let Some(socket) = self.session.get_socket_mut(id) {
             let mut ctx = SocketEventLoopContext {
                 socket_id: id,
@@ -100,53 +109,42 @@ impl EventLoopHandler {
                 endpoints: &mut self.endpoints
             };
 
-            socket.connect(&mut ctx, url);
+            f(socket, &mut ctx);
         }
     }
-
-    fn bind(&mut self, event_loop: &mut EventLoop, id: socket::SocketId, url: String) {
-        if let Some(socket) = self.session.get_socket_mut(id) {
-            let mut ctx = SocketEventLoopContext {
-                socket_id: id,
-                signal_sender: &mut self.signal_bus,
-                endpoints: &mut self.endpoints
-            };
-
-            socket.bind(&mut ctx, url);
-        }
-    }
-
     fn process_pipe_cmd(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId, cmd: PipeCmd) {
-        println!("process_pipe_cmd {:?} {:?}", sid, eid);
-        match cmd {
-            PipeCmd::Open => self.open_pipe(event_loop, sid, eid),
+        if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
+            pipe.process(event_loop, &mut self.signal_bus, cmd);
+        }
+    }
+    fn process_pipe_evt(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId, evt: PipeEvt) {
+        match evt {
+            PipeEvt::Opened => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
             _ => {}
         }
-    }
-
-    fn open_pipe(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId) {
-        if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
-            let mut ctx = EndpointEventLoopContext {
-                socket_id: sid,
-                endpoint_id: eid,
-                signal_sender: &mut self.signal_bus,
-                event_loop: event_loop
-            };
-
-            pipe.open(&mut ctx);
-        }
-    }
-
-    fn process_pipe_evt(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId, cmd: PipeEvt) {
         println!("process_pipe_evt {:?} {:?}", sid, eid);
     }
-
     fn process_acceptor_cmd(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId, cmd: AcceptorCmd) {
         println!("process_acceptor_cmd {:?} {:?}", sid, eid);
     }
-
     fn process_acceptor_evt(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId, cmd: AcceptorEvt) {
         println!("process_acceptor_evt {:?} {:?}", sid, eid);
+    }
+    fn process_endpoint_readiness(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+        let eid = endpoint::EndpointId::from(tok);
+        if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
+            pipe.ready(event_loop, &mut self.signal_bus, events);
+        }
+    }
+    fn process_signal_bus_readiness(&mut self, event_loop: &mut EventLoop) {
+        while let Some(signal) = self.signal_bus.recv() {
+            match signal {
+                Signal::PipeCmd(sid, eid, cmd) => self.process_pipe_cmd(event_loop, sid, eid, cmd),
+                Signal::PipeEvt(sid, eid, cmd) => self.process_pipe_evt(event_loop, sid, eid, cmd),
+                Signal::AcceptorCmd(sid, eid, cmd) => self.process_acceptor_cmd(event_loop, sid, eid, cmd),
+                Signal::AcceptorEvt(sid, eid, cmd) => self.process_acceptor_evt(event_loop, sid, eid, cmd)
+            }
+        }
     }
 }
 
@@ -155,25 +153,14 @@ impl mio::Handler for EventLoopHandler {
     type Message = Request;
 
     fn notify(&mut self, event_loop: &mut EventLoop, request: Self::Message) {
-        match request {
-            Request::Session(req) => self.process_session_request(req),
-            Request::Socket(id, req) => self.process_socket_request(event_loop, id, req),
-            _ => {}
-        }
+        self.process_request(event_loop, request);
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         if tok == BUS_TOKEN {
-            while let Some(signal) = self.signal_bus.recv() {
-                match signal {
-                    Signal::PipeCmd(sid, eid, cmd) => self.process_pipe_cmd(event_loop, sid, eid, cmd),
-                    Signal::PipeEvt(sid, eid, cmd) => self.process_pipe_evt(event_loop, sid, eid, cmd),
-                    Signal::AcceptorCmd(sid, eid, cmd) => self.process_acceptor_cmd(event_loop, sid, eid, cmd),
-                    Signal::AcceptorEvt(sid, eid, cmd) => self.process_acceptor_evt(event_loop, sid, eid, cmd)
-                }
-            }
+            self.process_signal_bus_readiness(event_loop);
         } else {
-            // 
+            self.process_endpoint_readiness(event_loop, tok, events);
         }
     }
 
@@ -196,6 +183,12 @@ impl<'x> Into<mio::Token> for &'x endpoint::EndpointId {
     }
 }
 
+impl From<mio::Token> for endpoint::EndpointId {
+    fn from(tok: mio::Token) -> endpoint::EndpointId {
+        endpoint::EndpointId::from(tok.0)
+    }
+}
+
 struct PipeController {
     socket_id: socket::SocketId,
     endpoint_id: endpoint::EndpointId,
@@ -203,10 +196,29 @@ struct PipeController {
 }
 
 impl PipeController {
-    fn open(&mut self, ctx: &mut EndpointEventLoopContext) {
-        self.pipe.process(ctx, PipeCmd::Open);
+    fn ready(&mut self, event_loop: &mut EventLoop, signal_bus: &mut EventLoopBus<Signal>, events: mio::EventSet) {
+        let mut ctx = EndpointEventLoopContext {
+            socket_id: self.socket_id,
+            endpoint_id: self.endpoint_id,
+            signal_sender: signal_bus,
+            event_loop: event_loop
+        };
+
+        self.pipe.ready(&mut ctx, events);
+    }
+
+    fn process(&mut self, event_loop: &mut EventLoop, signal_bus: &mut EventLoopBus<Signal>, cmd: PipeCmd) {
+        let mut ctx = EndpointEventLoopContext {
+            socket_id: self.socket_id,
+            endpoint_id: self.endpoint_id,
+            signal_sender: signal_bus,
+            event_loop: event_loop
+        };
+
+        self.pipe.process(&mut ctx, cmd);
     }
 }
+
 struct AcceptorController {
     socket_id: socket::SocketId,
     endpoint_id: endpoint::EndpointId,
@@ -241,6 +253,19 @@ impl EndpointCollection {
         };
 
         self.pipes.insert(eid, controller);
+
+        eid
+    }
+
+    fn insert_acceptor(&mut self, sid: socket::SocketId, ep: Box<Endpoint<AcceptorCmd, AcceptorEvt>>) -> endpoint::EndpointId {
+        let eid = endpoint::EndpointId::from(self.ids.next());
+        let controller = AcceptorController {
+            socket_id: sid,
+            endpoint_id: eid,
+            acceptor: ep
+        };
+
+        self.acceptors.insert(eid, controller);
 
         eid
     }
@@ -289,7 +314,18 @@ impl<'a> network::Network for SocketEventLoopContext<'a> {
     }
 
     fn bind(&mut self, socket_id: socket::SocketId, url: &str, pids: (u16, u16)) -> io::Result<endpoint::EndpointId> {
-        Ok(From::from(0))
+        let index = match url.find("://") {
+            Some(x) => x,
+            None => return Err(invalid_input_io_error(url.to_owned()))
+        };
+
+        let (scheme, remainder) = url.split_at(index);
+        let addr = &remainder[3..];
+        let transport = try!(self.get_transport(scheme));
+        let endpoint = try!(transport.bind(addr, pids));
+        let id = self.endpoints.insert_acceptor(socket_id, endpoint);
+
+        Ok(id)
     }
 
     fn open(&mut self, endpoint_id: endpoint::EndpointId) {

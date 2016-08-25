@@ -6,17 +6,19 @@
 
 use std::boxed::FnBox;
 
+use core::endpoint::{ Pipe, EndpointId };
+use core::network::Network;
+use Message;
+
 pub type ProtocolCtor = Box<FnBox(i32) -> Box<Protocol> + Send>;
 
 pub trait Protocol {
     fn id(&self) -> u16;
     fn peer_id(&self) -> u16;
-    fn do_it_bob(&self) -> u8;
-
-    // add_endpoint
-    // remove_endpoint
-    // send
-    // recv
+    fn add_pipe(&mut self, eid: EndpointId, pipe: Pipe);
+    fn remove_pipe(&mut self, eid: EndpointId) -> Option<Pipe>;
+    fn send(&mut self, network: &mut Network, msg: Message);
+    fn recv(&mut self, network: &mut Network);
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
