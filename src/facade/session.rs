@@ -13,7 +13,7 @@ use std::time;
 use mio;
 
 use super::*;
-use ctrl;
+use ctrl::reactor;
 use core::session::{Request, Reply};
 use core::protocol::{Protocol, ProtocolCtor};
 use core;
@@ -27,7 +27,7 @@ struct RequestSender {
 
 impl Sender<Request> for RequestSender {
     fn send(&self, req: Request) -> io::Result<()> {
-        self.req_tx.send(ctrl::Request::Session(req))
+        self.req_tx.send(reactor::Request::Session(req))
     }
 }
 
@@ -61,7 +61,7 @@ impl SessionBuilder {
         let request_tx = RequestSender {req_tx: signal_tx};
         let session = Session::new(request_tx, reply_rx);
 
-        thread::spawn(move || ctrl::run_event_loop(event_loop, reply_tx));
+        thread::spawn(move || reactor::run_event_loop(event_loop, reply_tx));
 
         Ok(session)
     }}

@@ -7,7 +7,7 @@
 use std::io;
 
 use super::*;
-use ctrl;
+use ctrl::reactor;
 use core::socket::SocketId;
 use core::endpoint::{EndpointId, Request};
 
@@ -29,7 +29,7 @@ impl RequestSender {
 
 impl Sender<Request> for RequestSender {
     fn send(&self, req: Request) -> io::Result<()> {
-        self.req_tx.send(ctrl::Request::Endpoint(self.socket_id, self.id, req))
+        self.req_tx.send(reactor::Request::Endpoint(self.socket_id, self.id, req))
     }
 }
 

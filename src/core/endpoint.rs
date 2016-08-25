@@ -5,12 +5,10 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::rc::Rc;
-use std::io;
 use std::fmt;
-use std::sync::mpsc::Sender;
 
 use super::network::Network;
-use message::Message;
+use super::message::Message;
 
 pub enum Request {
     Close

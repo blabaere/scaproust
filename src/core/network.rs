@@ -9,7 +9,7 @@ use std::io;
 
 use super::socket::SocketId;
 use super::endpoint::EndpointId;
-use message::Message;
+use super::message::Message;
 
 pub trait Network {
     fn connect(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId>;

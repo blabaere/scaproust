@@ -7,7 +7,7 @@
 use std::sync::mpsc;
 use std::io;
 
-use core::protocol::{Protocol, ProtocolCtor};
+use core::protocol::ProtocolCtor;
 use core::socket;
 use sequence::Sequence;
 
@@ -37,21 +37,17 @@ impl Session {
         }
     }
 
+    fn send_reply(&self, reply: Reply) {
+        let _ = self.reply_sender.send(reply);
+    }
+
     pub fn add_socket(&mut self, protocol_ctor: ProtocolCtor) {
         let (tx, rx) = mpsc::channel();
         let protocol_ctor_args = (tx.clone(),);
         let protocol = protocol_ctor.call_box(protocol_ctor_args);
         let id = self.sockets.add(tx, protocol);
 
-        self.reply_sender.send(Reply::SocketCreated(id, rx));
-    }
-
-    pub fn do_on_socket<F>(&self, id: socket::SocketId, f: F) where F : FnOnce(&socket::Socket) {
-        self.sockets.do_on_socket(id, f)
-    }
-
-    pub fn do_on_socket_mut<F>(&mut self, id: socket::SocketId, f: F) where F : FnOnce(&mut socket::Socket) {
-        self.sockets.do_on_socket_mut(id, f)
+        self.send_reply(Reply::SocketCreated(id, rx));
     }
 
     pub fn get_socket_mut<'a>(&'a mut self, id: socket::SocketId) -> Option<&'a mut socket::Socket> {

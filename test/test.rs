@@ -26,11 +26,11 @@ pub struct Push {
 impl Protocol for Push {
     fn id(&self) -> u16 { (5 * 16) }
     fn peer_id(&self) -> u16 { (5 * 16) + 1 }
-    fn add_pipe(&mut self, eid: EndpointId, pipe: Pipe) {
+    fn add_pipe(&mut self, network: &mut Network, eid: EndpointId, pipe: Pipe) {
         self.pipe_id = Some(eid);
         self.pipe = Some(pipe);
     }
-    fn remove_pipe(&mut self, eid: EndpointId) -> Option<Pipe> {
+    fn remove_pipe(&mut self, network: &mut Network, eid: EndpointId) -> Option<Pipe> {
         let (_, pipe) = (self.pipe_id.take(), self.pipe.take());
 
         pipe
@@ -38,6 +38,7 @@ impl Protocol for Push {
     fn send(&mut self, network: &mut Network, msg: Message) {
         self.pipe_id.map(|eid| network.send(eid, Rc::new(msg)));
     }
+    fn on_send_ack(&mut self, network: &mut Network, eid: EndpointId) {}
     fn recv(&mut self, network: &mut Network) {
 
     }

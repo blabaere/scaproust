@@ -9,3 +9,4 @@ pub mod protocol;
 pub mod socket;
 pub mod session;
 pub mod endpoint;
+pub mod message;

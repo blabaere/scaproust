@@ -27,13 +27,10 @@ pub trait Endpoint<TCmd, TEvt> {
     fn process(&mut self, ctx: &mut Context<TEvt>, cmd: TCmd);
 }
 
-pub trait Registrar {
+pub trait Context<TEvt> {
     fn register(&mut self, io: &mio::Evented, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()>;
     fn reregister(&mut self, io: &mio::Evented, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()>;
     fn deregister(&mut self, io: &mio::Evented) -> io::Result<()>;
-}
-
-pub trait Context<TEvt> : Registrar {
     fn raise(&mut self, evt: TEvt);
 }
 
@@ -106,7 +103,7 @@ mod tests {
         pub fn get_raised_events(&self) -> &[PipeEvt] { &self.raised_events }
     }
 
-    impl Registrar for TestPipeContext {
+    impl Context<PipeEvt> for TestPipeContext {
         fn register(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()> {
             self.registrations.push((interest, opt));
             if self.registration_ok { Ok(()) } else { Err(other_io_error("test")) }
@@ -119,9 +116,6 @@ mod tests {
             self.deregistrations += 1;
             if self.deregistration_ok { Ok(()) } else { Err(other_io_error("test")) }
         }
-    }
-
-    impl Context<PipeEvt> for TestPipeContext {
         fn raise(&mut self, evt: PipeEvt) {
             self.raised_events.push(evt);
         }

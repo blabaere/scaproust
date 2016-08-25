@@ -9,8 +9,8 @@ use std::sync::mpsc::Sender;
 use std::io;
 use std::fmt;
 
-use message::Message;
 use sequence::Sequence;
+use super::message::Message;
 use super::protocol::Protocol;
 use super::endpoint::{EndpointId, Pipe, Acceptor};
 use super::network::Network;
@@ -73,12 +73,8 @@ impl Socket {
         (proto_id, peer_proto_id)
     }
 
-    pub fn process(&mut self, network: &mut Network, req: Request) {
-        match req {
-            Request::Connect(url) => self.connect(network, url),
-            Request::Bind(url) => self.bind(network, url),
-            _ => {}
-        }
+    fn send_reply(&self, reply: Reply) {
+        let _ = self.reply_sender.send(reply);
     }
 
     pub fn connect(&mut self, network: &mut Network, url: String) {
@@ -96,11 +92,11 @@ impl Socket {
         pipe.open(network);
 
         self.pipes.insert(eid, pipe);
-        self.reply_sender.send(Reply::Connect(eid));
+        self.send_reply(Reply::Connect(eid));
     }
 
     fn on_connect_error(&mut self, err: io::Error) {
-        self.reply_sender.send(Reply::Err(err));
+        self.send_reply(Reply::Err(err));
     }
 
     pub fn bind(&mut self, network: &mut Network, url: String) {
@@ -118,15 +114,19 @@ impl Socket {
         acceptor.open(network);
 
         self.acceptors.insert(eid, acceptor);
-        self.reply_sender.send(Reply::Bind(eid));
+        self.send_reply(Reply::Bind(eid));
     }
 
     fn on_bind_error(&mut self, err: io::Error) {
-        self.reply_sender.send(Reply::Err(err));
+        self.send_reply(Reply::Err(err));
     }
 
     pub fn send(&mut self, network: &mut Network, msg: Message) {
         self.protocol.send(network, msg);
+    }
+
+    pub fn on_send_ack(&mut self, network: &mut Network, eid: EndpointId) {
+        self.protocol.on_send_ack(network, eid);
     }
 
     pub fn recv(&mut self, network: &mut Network) {
@@ -135,9 +135,10 @@ impl Socket {
 
     pub fn on_pipe_opened(&mut self, network: &mut Network, eid: EndpointId) {
         if let Some(pipe) = self.pipes.remove(&eid) {
-            self.protocol.add_pipe(eid, pipe);
+            self.protocol.add_pipe(network, eid, pipe);
         }
     }
+
 }
 
 pub struct SocketCollection {
@@ -160,18 +161,6 @@ impl SocketCollection {
         self.sockets.insert(id, socket);
 
         id
-    }
-
-    pub fn do_on_socket<F>(&self, id: SocketId, f: F) where F : FnOnce(&Socket) {
-        if let Some(socket) = self.sockets.get(&id) {
-            f(socket)
-        }
-    }
-
-    pub fn do_on_socket_mut<F>(&mut self, id: SocketId, f: F) where F : FnOnce(&mut Socket) {
-        if let Some(socket) = self.sockets.get_mut(&id) {
-            f(socket)
-        }
     }
 
     pub fn get_socket_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut Socket> {
@@ -197,10 +186,11 @@ mod tests {
     impl Protocol for TestProto {
         fn id(&self) -> u16 {0}
         fn peer_id(&self) -> u16 {0}
-    fn add_pipe(&mut self, eid: EndpointId, pipe: Pipe) {}
-    fn remove_pipe(&mut self, eid: EndpointId) -> Option<Pipe> {None}
-    fn send(&mut self, network: &mut Network, msg: Message) {}
-    fn recv(&mut self, network: &mut Network) {}
+        fn add_pipe(&mut self, network: &mut Network, eid: EndpointId, pipe: Pipe) {}
+        fn remove_pipe(&mut self, network: &mut Network, eid: EndpointId) -> Option<Pipe> {None}
+        fn send(&mut self, network: &mut Network, msg: Message) {}
+        fn on_send_ack(&mut self, network: &mut Network, eid: EndpointId) {}
+        fn recv(&mut self, network: &mut Network) {}
     }
 
     struct FailingNetwork;
@@ -251,14 +241,10 @@ mod tests {
         fn bind(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
             Ok(self.0)
         }
-        fn open(&mut self, endpoint_id: EndpointId) {
-        }
-        fn close(&mut self, endpoint_id: EndpointId) {
-        }
-        fn send(&mut self, endpoint_id: EndpointId, msg: Rc<Message>) {
-        }
-        fn recv(&mut self, endpoint_id: EndpointId) {
-        }
+        fn open(&mut self, endpoint_id: EndpointId) {}
+        fn close(&mut self, endpoint_id: EndpointId) {}
+        fn send(&mut self, endpoint_id: EndpointId, msg: Rc<Message>) {}
+        fn recv(&mut self, endpoint_id: EndpointId) {}
     }
 
     #[test]

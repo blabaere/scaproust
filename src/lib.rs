@@ -25,24 +25,22 @@ extern crate mio;
 extern crate time;
 
 mod sequence;
-mod message;
 mod core;
 mod ctrl;
 mod facade;
 mod transport;
 mod io_error;
 
-pub use facade::session::SessionBuilder as SessionBuilder;
-pub use facade::session::Session as Session;
-pub use facade::socket::Socket as Socket;
+pub use facade::session::SessionBuilder;
+pub use facade::session::Session;
+pub use facade::socket::Socket;
 
 pub use core::socket::Reply as SocketReply;
-pub use core::protocol::Protocol as Protocol;
-pub use core::endpoint::EndpointId as EndpointId;
-pub use core::endpoint::Pipe as Pipe;
-pub use core::network::Network as Network;
-
-pub use message::Message as Message;
+pub use core::protocol::Protocol;
+pub use core::endpoint::EndpointId;
+pub use core::endpoint::Pipe;
+pub use core::network::Network;
+pub use core::message::Message;
 
 #[cfg(test)]
 mod tests {

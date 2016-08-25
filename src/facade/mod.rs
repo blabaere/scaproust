@@ -15,7 +15,7 @@ use std::io;
 
 use mio;
 
-use ctrl;
+use ctrl::reactor;
 use io_error::*;
 
 pub trait Sender<T> {
@@ -26,9 +26,9 @@ pub trait Receiver<T> {
     fn receive(&self) -> io::Result<T>;
 }
 
-impl<T> Sender<ctrl::Request> for T where T : Deref<Target = mio::Sender<ctrl::Request>> {
+impl<T> Sender<reactor::Request> for T where T : Deref<Target = mio::Sender<reactor::Request>> {
 
-    fn send(&self, req: ctrl::Request) -> io::Result<()> {
+    fn send(&self, req: reactor::Request) -> io::Result<()> {
         self.deref().send(req).map_err(from_notify_error)
     }
 
@@ -43,5 +43,5 @@ impl<T> Receiver<T> for mpsc::Receiver<T> {
     }
 }
 
-pub type EventLoopRequestSender = Rc<mio::Sender<ctrl::Request>>;
+pub type EventLoopRequestSender = Rc<mio::Sender<reactor::Request>>;
 

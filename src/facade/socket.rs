@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use std::io;
 
 use super::*;
-use ctrl;
+use ctrl::reactor;
 use core::socket::{SocketId, Request, Reply};
 use core;
 use io_error::*;
@@ -35,7 +35,7 @@ impl RequestSender {
 
 impl Sender<Request> for RequestSender {
     fn send(&self, req: Request) -> io::Result<()> {
-        self.req_tx.send(ctrl::Request::Socket(self.socket_id, req))
+        self.req_tx.send(reactor::Request::Socket(self.socket_id, req))
     }
 }
 
