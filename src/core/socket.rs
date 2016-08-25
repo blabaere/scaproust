@@ -139,6 +139,14 @@ impl Socket {
         }
     }
 
+    pub fn on_pipe_accepted(&mut self, network: &mut Network, eid: EndpointId) {
+        let pipe = Pipe::new_accepted(eid);
+
+        pipe.open(network);
+
+        self.pipes.insert(eid, pipe);
+    }
+
 }
 
 pub struct SocketCollection {
@@ -186,29 +194,29 @@ mod tests {
     impl Protocol for TestProto {
         fn id(&self) -> u16 {0}
         fn peer_id(&self) -> u16 {0}
-        fn add_pipe(&mut self, network: &mut Network, eid: EndpointId, pipe: Pipe) {}
-        fn remove_pipe(&mut self, network: &mut Network, eid: EndpointId) -> Option<Pipe> {None}
-        fn send(&mut self, network: &mut Network, msg: Message) {}
-        fn on_send_ack(&mut self, network: &mut Network, eid: EndpointId) {}
-        fn recv(&mut self, network: &mut Network) {}
+        fn add_pipe(&mut self, _: &mut Network, _: EndpointId, _: Pipe) {}
+        fn remove_pipe(&mut self, _: &mut Network, _: EndpointId) -> Option<Pipe> {None}
+        fn send(&mut self, _: &mut Network, _: Message) {}
+        fn on_send_ack(&mut self, _: &mut Network, _: EndpointId) {}
+        fn recv(&mut self, _: &mut Network) {}
     }
 
     struct FailingNetwork;
 
     impl Network for FailingNetwork {
-        fn connect(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
+        fn connect(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
-        fn bind(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
+        fn bind(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
-        fn open(&mut self, endpoint_id: EndpointId) {
+        fn open(&mut self, _: EndpointId, _: bool) {
         }
-        fn close(&mut self, endpoint_id: EndpointId) {
+        fn close(&mut self, _: EndpointId, _: bool) {
         }
-        fn send(&mut self, endpoint_id: EndpointId, msg: Rc<Message>) {
+        fn send(&mut self, _: EndpointId, _: Rc<Message>) {
         }
-        fn recv(&mut self, endpoint_id: EndpointId) {
+        fn recv(&mut self, _: EndpointId) {
         }
     }
 
@@ -241,8 +249,8 @@ mod tests {
         fn bind(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
             Ok(self.0)
         }
-        fn open(&mut self, endpoint_id: EndpointId) {}
-        fn close(&mut self, endpoint_id: EndpointId) {}
+        fn open(&mut self, endpoint_id: EndpointId, _: bool) {}
+        fn close(&mut self, endpoint_id: EndpointId, _: bool) {}
         fn send(&mut self, endpoint_id: EndpointId, msg: Rc<Message>) {}
         fn recv(&mut self, endpoint_id: EndpointId) {}
     }

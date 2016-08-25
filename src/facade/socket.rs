@@ -62,7 +62,26 @@ impl Socket {
         match reply {
             Reply::Connect(id) => {
                 let request_tx = self.request_sender.child_sender(id);
-                let ep = endpoint::Endpoint::new(request_tx);
+                let ep = endpoint::Endpoint::new(request_tx, true);
+                
+                Ok(ep)
+            },
+            Reply::Err(e) => Err(e),
+            _ => self.unexpected_reply()
+        }
+    }
+
+    pub fn bind(&mut self, url: &str) -> io::Result<endpoint::Endpoint> {
+        let request = Request::Bind(From::from(url));
+
+        self.call(request, |reply| self.on_bind_reply(reply))
+    }
+
+    fn on_bind_reply(&self, reply: Reply) -> io::Result<endpoint::Endpoint> {
+        match reply {
+            Reply::Bind(id) => {
+                let request_tx = self.request_sender.child_sender(id);
+                let ep = endpoint::Endpoint::new(request_tx, false);
                 
                 Ok(ep)
             },

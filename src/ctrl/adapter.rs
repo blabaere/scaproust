@@ -125,7 +125,7 @@ impl EndpointCollection {
         self.pipes.get_mut(&eid)
     }
 
-    fn insert_pipe(&mut self, sid: socket::SocketId, ep: Box<Endpoint<PipeCmd, PipeEvt>>) -> endpoint::EndpointId {
+    pub fn insert_pipe(&mut self, sid: socket::SocketId, ep: Box<Endpoint<PipeCmd, PipeEvt>>) -> endpoint::EndpointId {
         let eid = endpoint::EndpointId::from(self.ids.next());
         let controller = PipeController {
             socket_id: sid,
@@ -179,6 +179,12 @@ impl<'a> SocketEventLoopContext<'a> {
         self.send_signal(signal);
     }
 
+    fn send_acceptor_cmd(&mut self, endpoint_id: endpoint::EndpointId, cmd: AcceptorCmd) {
+        let signal = Signal::AcceptorCmd(self.socket_id, endpoint_id, cmd);
+
+        self.send_signal(signal);
+    }
+
     fn get_transport(&self, scheme: &str) -> io::Result<Box<Transport>> {
         match scheme {
             "tcp" => Ok(Box::new(Tcp)),
@@ -217,11 +223,19 @@ impl<'a> network::Network for SocketEventLoopContext<'a> {
 
         Ok(id)
     }
-    fn open(&mut self, endpoint_id: endpoint::EndpointId) {
-        self.send_pipe_cmd(endpoint_id, PipeCmd::Open);
+    fn open(&mut self, endpoint_id: endpoint::EndpointId, remote: bool) {
+        if remote {
+            self.send_pipe_cmd(endpoint_id, PipeCmd::Open);
+        } else {
+            self.send_acceptor_cmd(endpoint_id, AcceptorCmd::Open)
+        }
     }
-    fn close(&mut self, endpoint_id: endpoint::EndpointId) {
-        self.send_pipe_cmd(endpoint_id, PipeCmd::Close);
+    fn close(&mut self, endpoint_id: endpoint::EndpointId, remote: bool) {
+        if remote {
+            self.send_pipe_cmd(endpoint_id, PipeCmd::Close);
+        } else {
+            self.send_acceptor_cmd(endpoint_id, AcceptorCmd::Close)
+        }
     }
     fn send(&mut self, endpoint_id: endpoint::EndpointId, msg: Rc<message::Message>) {
         self.send_pipe_cmd(endpoint_id, PipeCmd::Send(msg));

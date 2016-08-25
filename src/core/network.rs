@@ -14,8 +14,8 @@ use super::message::Message;
 pub trait Network {
     fn connect(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId>;
     fn bind(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId>;
-    fn open(&mut self, endpoint_id: EndpointId);
-    fn close(&mut self, endpoint_id: EndpointId);
+    fn open(&mut self, endpoint_id: EndpointId, remote: bool);
+    fn close(&mut self, endpoint_id: EndpointId, remote: bool);
     fn send(&mut self, endpoint_id: EndpointId, msg: Rc<Message>);
     fn recv(&mut self, endpoint_id: EndpointId);
 }

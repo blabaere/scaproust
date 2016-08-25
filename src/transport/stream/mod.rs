@@ -45,16 +45,16 @@ pub trait StepStream : Sender + Receiver + Handshake + Deref<Target=mio::Evented
 
 pub trait PipeState<T : StepStream> {
     fn name(&self) -> &'static str;
-    fn open(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+    fn open(self: Box<Self>, _: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         box dead::Dead
     }
-    fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+    fn close(self: Box<Self>, _: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         box dead::Dead
     }
-    fn send(self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>> {
+    fn send(self: Box<Self>, _: &mut Context<PipeEvt>, _: Rc<Message>) -> Box<PipeState<T>> {
         box dead::Dead
     }
-    fn recv(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+    fn recv(self: Box<Self>, _: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
         box dead::Dead
     }
     fn error(self: Box<Self>, ctx: &mut Context<PipeEvt>, err: io::Error) -> Box<PipeState<T>> {
@@ -62,12 +62,12 @@ pub trait PipeState<T : StepStream> {
 
         box dead::Dead
     }
-    fn ready(self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>> {
+    fn ready(self: Box<Self>, _: &mut Context<PipeEvt>, _: mio::EventSet) -> Box<PipeState<T>> {
         box dead::Dead
     }
-    fn enter(&self, ctx: &mut Context<PipeEvt>) {
+    fn enter(&self, _: &mut Context<PipeEvt>) {
     }
-    fn leave(&self, ctx: &mut Context<PipeEvt>) {
+    fn leave(&self, _: &mut Context<PipeEvt>) {
     }
 }
 

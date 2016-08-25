@@ -18,11 +18,11 @@ pub struct RequestSender {
 }
 
 impl RequestSender {
-    pub fn new(tx: EventLoopRequestSender, socket_id: SocketId, id: EndpointId) -> RequestSender {
+    pub fn new(tx: EventLoopRequestSender, sid: SocketId, eid: EndpointId) -> RequestSender {
         RequestSender {
             req_tx: tx,
-            socket_id: socket_id,
-            id: id
+            socket_id: sid,
+            id: eid,
         }
     }
 }
@@ -34,17 +34,19 @@ impl Sender<Request> for RequestSender {
 }
 
 pub struct Endpoint {
-    request_sender: RequestSender
+    request_sender: RequestSender,
+    remote: bool
 }
 
 impl Endpoint {
-    pub fn new(request_tx: RequestSender) -> Endpoint {
+    pub fn new(request_tx: RequestSender, remote: bool) -> Endpoint {
         Endpoint {
-            request_sender: request_tx
+            request_sender: request_tx,
+            remote: remote
         }
     }
 
     pub fn close(self) -> io::Result<()> {
-        self.request_sender.send(Request::Close)
+        self.request_sender.send(Request::Close(self.remote))
     }
 }

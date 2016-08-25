@@ -39,10 +39,10 @@ pub fn run_event_loop(mut event_loop: EventLoop, reply_tx: mpsc::Sender<session:
     let mut handler = EventLoopHandler::new(signal_bus, reply_tx);
     let exec = signal_bus_reg.and_then(|_| event_loop.run(&mut handler));
 
-    /*match exec {
+    match exec {
         Ok(_) => debug!("event loop exited"),
         Err(e) => error!("event loop failed to run: {}", e)
-    }*/
+    }
 }
 
 fn register_signal_bus(event_loop: &mut EventLoop, signal_bus: &EventLoopBus<Signal>) -> io::Result<()> {
@@ -96,8 +96,17 @@ impl EventLoopHandler {
     }
     fn process_endpoint_readiness(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         let eid = endpoint::EndpointId::from(tok);
-        if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
-            pipe.ready(event_loop, &mut self.signal_bus, events);
+        {
+            if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
+                pipe.ready(event_loop, &mut self.signal_bus, events);
+                return;
+            } 
+        }
+        {
+            if let Some(acceptor) = self.endpoints.get_acceptor_mut(eid) {
+                acceptor.ready(event_loop, &mut self.signal_bus, events);
+                return;
+            }
         }
     }
     fn process_signal_bus_readiness(&mut self, event_loop: &mut EventLoop) {
@@ -110,12 +119,17 @@ impl EventLoopHandler {
             Signal::PipeCmd(_, eid, cmd) => self.process_pipe_cmd(event_loop, eid, cmd),
             Signal::AcceptorCmd(_, eid, cmd) => self.process_acceptor_cmd(event_loop, eid, cmd),
             Signal::PipeEvt(sid, eid, cmd) => self.process_pipe_evt(sid, eid, cmd),
-            Signal::AcceptorEvt(sid, eid, cmd) => self.process_acceptor_evt(event_loop, sid, eid, cmd)
+            Signal::AcceptorEvt(sid, eid, cmd) => self.process_acceptor_evt(sid, eid, cmd)
         }
     }
     fn process_pipe_cmd(&mut self, event_loop: &mut EventLoop, eid: endpoint::EndpointId, cmd: PipeCmd) {
         if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
             pipe.process(event_loop, &mut self.signal_bus, cmd);
+        }
+    }
+    fn process_acceptor_cmd(&mut self, event_loop: &mut EventLoop, eid: endpoint::EndpointId, cmd: AcceptorCmd) {
+        if let Some(acceptor) = self.endpoints.get_acceptor_mut(eid) {
+            acceptor.process(event_loop, &mut self.signal_bus, cmd);
         }
     }
     fn process_pipe_evt(&mut self, sid: socket::SocketId, eid: endpoint::EndpointId, evt: PipeEvt) {
@@ -125,12 +139,17 @@ impl EventLoopHandler {
             _ => {}
         }
     }
-    fn process_acceptor_cmd(&mut self, event_loop: &mut EventLoop, eid: endpoint::EndpointId, cmd: AcceptorCmd) {
-        if let Some(acceptor) = self.endpoints.get_acceptor_mut(eid) {
-            acceptor.process(event_loop, &mut self.signal_bus, cmd);
+    fn process_acceptor_evt(&mut self, sid: socket::SocketId, _: endpoint::EndpointId, evt: AcceptorEvt) {
+        match evt {
+            AcceptorEvt::Accepted(pipes) => {
+                for pipe in pipes {
+                    let eid = self.endpoints.insert_pipe(sid, pipe);
+
+                    self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_accepted(ctx, eid));
+                }
+            },
+            _ => {}
         }
-    }
-    fn process_acceptor_evt(&mut self, event_loop: &mut EventLoop, sid: socket::SocketId, eid: endpoint::EndpointId, cmd: AcceptorEvt) {
     }
 }
 

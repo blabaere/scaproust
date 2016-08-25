@@ -11,7 +11,7 @@ use super::network::Network;
 use super::message::Message;
 
 pub enum Request {
-    Close
+    Close(bool)
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -65,11 +65,11 @@ impl Endpoint {
         }
     }
 
-    fn open(&self, network: &mut Network) {
-        network.open(self.id)
+    fn open(&self, network: &mut Network, remote: bool) {
+        network.open(self.id, remote)
     }
-    fn close(&self, network: &mut Network) {
-        network.close(self.id)
+    fn close(&self, network: &mut Network, remote: bool) {
+        network.close(self.id, remote)
     }
     fn send(&self, network: &mut Network, msg: Rc<Message>) {
         network.send(self.id, msg)
@@ -89,10 +89,10 @@ impl Pipe {
     }
 
     pub fn open(&self, network: &mut Network) {
-        self.0.open(network)
+        self.0.open(network, true)
     }
     pub fn close(&self, network: &mut Network) {
-        self.0.close(network)
+        self.0.close(network, true)
     }
     pub fn send(&self, network: &mut Network, msg: Rc<Message>) {
         self.0.send(network, msg)
@@ -107,9 +107,9 @@ impl Acceptor {
         Acceptor(Endpoint::new_created(id, url))
     }
     pub fn open(&self, network: &mut Network) {
-        self.0.open(network)
+        self.0.open(network, false)
     }
     pub fn close(&self, network: &mut Network) {
-        self.0.close(network)
+        self.0.close(network, false)
     }
 }
