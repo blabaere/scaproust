@@ -38,9 +38,9 @@ impl Session {
     }
 
     pub fn add_socket(&mut self, protocol_ctor: ProtocolCtor) {
-        let ctor_args = (5,);
-        let protocol = protocol_ctor.call_box(ctor_args);
         let (tx, rx) = mpsc::channel();
+        let protocol_ctor_args = (tx.clone(),);
+        let protocol = protocol_ctor.call_box(protocol_ctor_args);
         let id = self.sockets.add(tx, protocol);
 
         self.reply_sender.send(Reply::SocketCreated(id, rx));

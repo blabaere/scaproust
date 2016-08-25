@@ -35,10 +35,13 @@ mod io_error;
 pub use facade::session::SessionBuilder as SessionBuilder;
 pub use facade::session::Session as Session;
 pub use facade::socket::Socket as Socket;
+
+pub use core::socket::Reply as SocketReply;
 pub use core::protocol::Protocol as Protocol;
 pub use core::endpoint::EndpointId as EndpointId;
 pub use core::endpoint::Pipe as Pipe;
 pub use core::network::Network as Network;
+
 pub use message::Message as Message;
 
 #[cfg(test)]

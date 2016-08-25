@@ -80,7 +80,8 @@ impl Session {
         }
     }
 
-    pub fn create_socket<T: Protocol + From<i32> + 'static>(&self) -> io::Result<socket::Socket>
+    pub fn create_socket<T>(&self) -> io::Result<socket::Socket>
+    where T : Protocol + From<mpsc::Sender<core::socket::Reply>> + 'static
     {
         let protocol_ctor = Session::create_protocol_ctor::<T>();
         let request = Request::CreateSocket(protocol_ctor);
@@ -88,9 +89,11 @@ impl Session {
         self.call(request, |reply| self.on_create_socket_reply(reply))
     }
 
-    fn create_protocol_ctor<T : Protocol + From<i32> + 'static>() -> ProtocolCtor {
-        Box::new(move |value: i32| {
-            Box::new(T::from(value)) as Box<Protocol>
+    fn create_protocol_ctor<T>() -> ProtocolCtor 
+    where T : Protocol + From<mpsc::Sender<core::socket::Reply>> + 'static
+    {
+        Box::new(move |sender: mpsc::Sender<core::socket::Reply>| {
+            Box::new(T::from(sender)) as Box<Protocol>
         })
     }
 

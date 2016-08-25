@@ -5,12 +5,14 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::boxed::FnBox;
+use std::sync::mpsc::Sender;
 
+use core::socket::Reply;
 use core::endpoint::{ Pipe, EndpointId };
 use core::network::Network;
 use Message;
 
-pub type ProtocolCtor = Box<FnBox(i32) -> Box<Protocol> + Send>;
+pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
 
 pub trait Protocol {
     fn id(&self) -> u16;

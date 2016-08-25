@@ -7,6 +7,7 @@
 extern crate scaproust;
 
 use std::rc::Rc;
+use std::sync::mpsc;
 
 use scaproust::*;
 
@@ -18,7 +19,7 @@ fn can_create_socket() {
 }
 
 pub struct Push {
-    x: i32,
+    sender: mpsc::Sender<SocketReply>,
     pipe_id: Option<EndpointId>,
     pipe: Option<Pipe>
 }
@@ -42,10 +43,10 @@ impl Protocol for Push {
     }
 }
 
-impl From<i32> for Push {
-    fn from(value: i32) -> Push {
+impl From<mpsc::Sender<SocketReply>> for Push {
+    fn from(tx: mpsc::Sender<SocketReply>) -> Push {
         Push {
-            x: value,
+            sender: tx,
             pipe_id: None,
             pipe: None
         }
