@@ -4,7 +4,7 @@ Modules
 
 - Core : implements or specify the core concept of scaproust, session, socket, endpoint and protocol. Contains the backend counterpart of each facade component.
 
-- Ctrl : interaction with the event loop, routing between core and transport components.
+- Ctrl : interaction with the event loop, receives the requests sent by the facade, routing between core and transport components.
 
 - Protocol : implementation of each scalability protocol
 
