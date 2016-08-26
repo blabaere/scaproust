@@ -11,7 +11,7 @@ use std::io;
 
 use mio;
 
-use transport::stream;
+use transport::async::*;
 use io_error::*;
 use Message;
 
@@ -112,7 +112,7 @@ impl TestStepStream {
     }
 }
 
-impl stream::StepStream for TestStepStream {
+impl stub::AsyncPipeStub for TestStepStream {
 }
 
 impl mio::Evented for TestStepStream {
@@ -134,7 +134,7 @@ impl Deref for TestStepStream {
     }
 }
 
-impl stream::Handshake for TestStepStream {
+impl stub::Handshake for TestStepStream {
     fn send_handshake(&mut self, pids: (u16, u16)) -> io::Result<()> {
         self.sensor.borrow_mut().push_sent_handshake(pids);
         if self.send_handshake_ok { Ok(()) } else { Err(other_io_error("test")) }
@@ -145,7 +145,7 @@ impl stream::Handshake for TestStepStream {
     }
 }
 
-impl stream::Sender for TestStepStream {
+impl stub::Sender for TestStepStream {
     fn start_send(&mut self, msg: Rc<Message>) -> io::Result<bool> {
         match self.sensor.borrow_mut().take_start_send_result() {
             Some(true) => { self.pending_send = false; Ok(true) },
@@ -167,7 +167,7 @@ impl stream::Sender for TestStepStream {
     }
 }
 
-impl stream::Receiver for TestStepStream {
+impl stub::Receiver for TestStepStream {
     fn start_recv(&mut self) -> io::Result<Option<Message>> {
         match self.sensor.borrow_mut().take_start_recv_result() {
             Some(msg) => { self.pending_recv = false; Ok(Some(msg)) },

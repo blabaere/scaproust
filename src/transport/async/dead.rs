@@ -48,15 +48,14 @@ mod tests {
 
     use transport::*;
     use transport::tests::*;
-    use transport::stream::*;
-    use transport::stream::tests::*;
-    use transport::stream::dead::*;
-    use Message;
+    use transport::async::state::*;
+    use transport::async::tests::*;
+    use transport::async::dead::*;
 
     #[test]
     fn on_enter_an_event_is_raised() {
         let state = box Dead as Box<PipeState<TestStepStream>>;
-        let mut ctx = TestContext::new();
+        let mut ctx = TestPipeContext::new();
 
         state.enter(&mut ctx);
 
@@ -67,7 +66,7 @@ mod tests {
         assert_eq!(1, ctx.get_raised_events().len());
         let ref evt = ctx.get_raised_events()[0];
         let is_closed = match evt {
-            &PipeEvt::Closed => true,
+            &pipe::Event::Closed => true,
             _ => false,
         };
 

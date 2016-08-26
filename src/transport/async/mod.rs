@@ -17,7 +17,6 @@ mod dead;
 mod tests;
 
 use std::rc::Rc;
-use std::io;
 
 use mio;
 
@@ -74,17 +73,5 @@ impl<S : AsyncPipeStub> pipe::Pipe for AsyncPipe<S> {
 
     fn recv(&mut self, ctx: &mut Context) {
         self.apply(|s| s.recv(ctx))
-    }
-}
-
-pub trait WriteBuffer {
-    fn write_buffer(&mut self, buffer: &[u8], written: &mut usize) -> io::Result<bool>;
-}
-
-impl<T:io::Write> WriteBuffer for T {
-    fn write_buffer(&mut self, buf: &[u8], written: &mut usize) -> io::Result<bool> {
-        *written += try!(self.write(&buf[*written..]));
-
-        Ok(*written == buf.len())
     }
 }

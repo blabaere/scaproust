@@ -47,17 +47,16 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Initial<S> {
 
 #[cfg(test)]
 mod tests {
-    use transport::*;
     use transport::tests::*;
-    use transport::stub::*;
-    use transport::stub::tests::*;
-    use transport::stub::initial::*;
+    use transport::async::state::*;
+    use transport::async::tests::*;
+    use transport::async::initial::*;
 
     #[test]
     fn open_should_cause_transition_to_handshake() {
         let stub = TestStepStream::new();
         let state = box Initial::new(stub, (1, 1));
-        let mut ctx = TestContext::new();
+        let mut ctx = TestPipeContext::new();
         let new_state = state.open(&mut ctx);
 
         assert_eq!(1, ctx.get_registrations().len()); // this is caused by HandshakeTx::enter
@@ -71,7 +70,7 @@ mod tests {
     fn close_should_deregister_and_cause_a_transition_to_dead() {
         let stub = TestStepStream::new();
         let state = box Initial::new(stub, (1, 1));
-        let mut ctx = TestContext::new();
+        let mut ctx = TestPipeContext::new();
         let new_state = state.close(&mut ctx);
 
         assert_eq!(0, ctx.get_registrations().len());

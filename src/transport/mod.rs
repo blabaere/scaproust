@@ -35,7 +35,7 @@ mod tests {
         registrations: Vec<(mio::EventSet, mio::PollOpt)>,
         reregistrations: Vec<(mio::EventSet, mio::PollOpt)>,
         deregistrations: usize,
-        raised_events: Vec<PipeEvt>
+        raised_events: Vec<pipe::Event>
     }
 
     impl TestPipeContext {
@@ -56,10 +56,10 @@ mod tests {
         pub fn get_registrations(&self) -> &[(mio::EventSet, mio::PollOpt)] { &self.registrations }
         pub fn get_reregistrations(&self) -> &[(mio::EventSet, mio::PollOpt)] { &self.reregistrations }
         pub fn get_deregistrations(&self) -> usize { self.deregistrations }
-        pub fn get_raised_events(&self) -> &[PipeEvt] { &self.raised_events }
+        pub fn get_raised_events(&self) -> &[pipe::Event] { &self.raised_events }
     }
 
-    impl Context<PipeEvt> for TestPipeContext {
+    impl endpoint::EndpointRegistrar for TestPipeContext {
         fn register(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()> {
             self.registrations.push((interest, opt));
             if self.registration_ok { Ok(()) } else { Err(other_io_error("test")) }
@@ -72,7 +72,10 @@ mod tests {
             self.deregistrations += 1;
             if self.deregistration_ok { Ok(()) } else { Err(other_io_error("test")) }
         }
-        fn raise(&mut self, evt: PipeEvt) {
+    }
+
+    impl pipe::Context for TestPipeContext {
+        fn raise(&mut self, evt: pipe::Event) {
             self.raised_events.push(evt);
         }
     }

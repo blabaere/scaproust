@@ -117,9 +117,9 @@ mod tests {
 
     use transport::*;
     use transport::tests::*;
-    use transport::stub::*;
-    use transport::stub::tests::*;
-    use transport::stub::active::*;
+    use transport::async::state::*;
+    use transport::async::tests::*;
+    use transport::async::active::*;
     use Message;
 
     #[test]
@@ -128,7 +128,7 @@ mod tests {
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
         let state = box Active::new(stub);
-        let mut ctx = TestContext::new();
+        let mut ctx = TestPipeContext::new();
 
         state.enter(&mut ctx);
 
@@ -146,7 +146,7 @@ mod tests {
         assert_eq!(1, ctx.get_raised_events().len());
         let ref evt = ctx.get_raised_events()[0];
         let is_opened = match evt {
-            &PipeEvt::Opened => true,
+            &pipe::Event::Opened => true,
             _ => false,
         };
 
@@ -157,7 +157,7 @@ mod tests {
     fn close_should_deregister_and_cause_a_transition_to_dead() {
         let stub = TestStepStream::new();
         let state = box Active::new(stub);
-        let mut ctx = TestContext::new();
+        let mut ctx = TestPipeContext::new();
         let new_state = state.close(&mut ctx);
 
         assert_eq!(0, ctx.get_registrations().len());
@@ -173,7 +173,7 @@ mod tests {
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
         let state = box Active::new(stub);
-        let mut ctx = TestContext::new();
+        let mut ctx = TestPipeContext::new();
         let payload = vec!(66, 65, 67);
         let msg = Rc::new(Message::from_body(payload));
         let new_state = state.send(&mut ctx, msg);
@@ -183,7 +183,7 @@ mod tests {
 
         let ref evt = ctx.get_raised_events()[0];
         let is_sent = match evt {
-            &PipeEvt::Sent => true,
+            &pipe::Event::Sent => true,
             _ => false,
         };
 
@@ -196,7 +196,7 @@ mod tests {
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
         let state = box Active::new(stub);
-        let mut ctx = TestContext::new();
+        let mut ctx = TestPipeContext::new();
 
         sensor.borrow_mut().set_start_send_result(Some(false));
         let payload = vec!(66, 65, 67);
@@ -215,7 +215,7 @@ mod tests {
 
         let ref evt = ctx.get_raised_events()[0];
         let is_sent = match evt {
-            &PipeEvt::Sent => true,
+            &pipe::Event::Sent => true,
             _ => false,
         };
 
@@ -228,7 +228,7 @@ mod tests {
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
         let state = box Active::new(stub);
-        let mut ctx = TestContext::new();
+        let mut ctx = TestPipeContext::new();
         let payload = vec!(66, 65, 67);
         let msg = Message::from_body(payload);
 
@@ -239,7 +239,7 @@ mod tests {
 
         let ref evt = ctx.get_raised_events()[0];
         let is_recv = match evt {
-            &PipeEvt::Received(_) => true,
+            &pipe::Event::Received(_) => true,
             _ => false,
         };
 
@@ -252,7 +252,7 @@ mod tests {
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
         let state = box Active::new(stub);
-        let mut ctx = TestContext::new();
+        let mut ctx = TestPipeContext::new();
         let payload = vec!(66, 65, 67);
         let msg = Message::from_body(payload);
 
@@ -269,7 +269,7 @@ mod tests {
 
         let ref evt = ctx.get_raised_events()[0];
         let is_recv = match evt {
-            &PipeEvt::Received(_) => true,
+            &pipe::Event::Received(_) => true,
             _ => false,
         };
 
