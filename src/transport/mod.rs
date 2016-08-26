@@ -4,62 +4,19 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::rc::Rc;
-use std::io;
-
-use Message;
-
-use mio;
-
-pub mod stream;
+pub mod async;
 pub mod tcp;
+pub mod endpoint;
+pub mod pipe;
+pub mod acceptor;
+
+use std::io::Result;
 
 pub const DEFAULT_RECV_MAX_SIZE: u64 = 1024 * 1024;
 
 pub trait Transport {
-    fn connect(&self, url: &str, pids: (u16, u16)) -> io::Result<Box<Endpoint<PipeCmd, PipeEvt>>>;
-    fn bind(&self, url: &str, pids: (u16, u16)) -> io::Result<Box<Endpoint<AcceptorCmd, AcceptorEvt>>>;
-}
-
-pub trait Endpoint<TCmd, TEvt> {
-    fn ready(&mut self, ctx: &mut Context<TEvt>, events: mio::EventSet);
-    fn process(&mut self, ctx: &mut Context<TEvt>, cmd: TCmd);
-}
-
-pub trait Context<TEvt> {
-    fn register(&mut self, io: &mio::Evented, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()>;
-    fn reregister(&mut self, io: &mio::Evented, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()>;
-    fn deregister(&mut self, io: &mio::Evented) -> io::Result<()>;
-    fn raise(&mut self, evt: TEvt);
-}
-
-pub enum PipeCmd {
-    Open,
-    Close,
-    Send(Rc<Message>),
-    Recv
-}
-
-pub enum PipeEvt {
-    Opened,
-    Closed,
-    CanSend,
-    CanRecv,
-    Sent,
-    Received(Message),
-    Error(io::Error)
-}
-
-pub enum AcceptorCmd {
-    Open,
-    Close
-}
-
-pub enum AcceptorEvt {
-    Opened,
-    Closed,
-    Accepted(Vec<Box<Endpoint<PipeCmd, PipeEvt>>>),
-    Error(io::Error)
+    fn connect(&self, url: &str, pids: (u16, u16)) -> Result<Box<pipe::Pipe>>;
+    fn bind(&self, url: &str, pids: (u16, u16)) -> Result<Box<acceptor::Acceptor>>;
 }
 
 #[cfg(test)]

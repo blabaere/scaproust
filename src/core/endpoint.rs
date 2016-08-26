@@ -17,30 +17,6 @@ pub enum Request {
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct EndpointId(usize);
 
-impl fmt::Debug for EndpointId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<usize> for EndpointId {
-    fn from(value: usize) -> EndpointId {
-        EndpointId(value)
-    }
-}
-
-impl Into<usize> for EndpointId {
-    fn into(self) -> usize {
-        self.0
-    }
-}
-
-impl<'x> Into<usize> for &'x EndpointId {
-    fn into(self) -> usize {
-        self.0
-    }
-}
-
 pub struct Endpoint {
     id: EndpointId,
     url: Option<String>
@@ -111,5 +87,29 @@ impl Acceptor {
     }
     pub fn close(&self, network: &mut Network) {
         self.0.close(network, false)
+    }
+}
+
+impl fmt::Debug for EndpointId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<usize> for EndpointId {
+    fn from(value: usize) -> EndpointId {
+        EndpointId(value)
+    }
+}
+
+impl Into<usize> for EndpointId {
+    fn into(self) -> usize {
+        self.0
+    }
+}
+
+impl<'x> Into<usize> for &'x EndpointId {
+    fn into(self) -> usize {
+        self.0
     }
 }

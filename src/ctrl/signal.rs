@@ -4,13 +4,16 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use core::{socket, endpoint};
-use transport::{PipeCmd, PipeEvt, AcceptorCmd, AcceptorEvt};
+use core::socket::SocketId;
+use core::endpoint::EndpointId;
+use transport::pipe;
+use transport::acceptor;
 
 /// Commands and events flowing between the controller and transport components.
+/// The controller sends commands, the transport sends events.
 pub enum Signal {
-    PipeCmd(socket::SocketId, endpoint::EndpointId, PipeCmd),
-    PipeEvt(socket::SocketId, endpoint::EndpointId, PipeEvt),
-    AcceptorCmd(socket::SocketId, endpoint::EndpointId, AcceptorCmd),
-    AcceptorEvt(socket::SocketId, endpoint::EndpointId, AcceptorEvt)
+    PipeCmd(SocketId, EndpointId, pipe::Command),
+    PipeEvt(SocketId, EndpointId, pipe::Event),
+    AcceptorCmd(SocketId, EndpointId, acceptor::Command),
+    AcceptorEvt(SocketId, EndpointId, acceptor::Event)
 }

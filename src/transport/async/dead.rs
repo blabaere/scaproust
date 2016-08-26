@@ -6,34 +6,37 @@
 
 use std::rc::Rc;
 
-use mio;
+use mio::EventSet;
 
-use transport::stream::{ StepStream, PipeState };
-use transport::{ Context, PipeEvt };
-use Message;
+use transport::async::stub::*;
+use transport::async::state::*;
+use transport::pipe::{Event, Context};
+use core::message::Message;
 
 pub struct Dead;
 
-impl<T : StepStream> PipeState<T> for Dead {
+impl<S : AsyncPipeStub + 'static> PipeState<S> for Dead {
+
     fn name(&self) -> &'static str {"Dead"}
-    fn enter(&self, ctx: &mut Context<PipeEvt>) {
-        ctx.raise(PipeEvt::Closed);
+    fn enter(&self, ctx: &mut Context) {
+        ctx.raise(Event::Closed);
     }
-    fn open(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+    fn open(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
         self
     }
-    fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+    fn close(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
         self
     }
-    fn send(self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>> {
+    fn send(self: Box<Self>, _: &mut Context, _: Rc<Message>) -> Box<PipeState<S>> {
         self
     }
-    fn recv(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
+    fn recv(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
         self
     }
-    fn ready(self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>> {
+    fn ready(self: Box<Self>, _: &mut Context, _: EventSet) -> Box<PipeState<S>> {
         self
     }
+
 }
 
 #[cfg(test)]
@@ -53,7 +56,7 @@ mod tests {
     #[test]
     fn on_enter_an_event_is_raised() {
         let state = box Dead as Box<PipeState<TestStepStream>>;
-        let mut ctx = TestPipeContext::new();
+        let mut ctx = TestContext::new();
 
         state.enter(&mut ctx);
 

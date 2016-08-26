@@ -24,6 +24,15 @@ pub enum Schedulable {
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Scheduled(usize);
 
+pub trait Scheduler {
+    fn schedule(&mut self, schedulable: Schedulable) -> io::Result<Scheduled>;
+    fn cancel(&mut self, scheduled: Scheduled);
+}
+
+pub trait Context /* : Network + Scheduler */{
+    fn raise(&mut self, evt: SocketEvt);
+}
+
 impl fmt::Debug for Scheduled {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
@@ -46,13 +55,4 @@ impl<'x> Into<usize> for &'x Scheduled {
     fn into(self) -> usize {
         self.0
     }
-}
-
-pub trait Scheduler {
-    fn schedule(&mut self, schedulable: Schedulable) -> io::Result<Scheduled>;
-    fn cancel(&mut self, scheduled: Scheduled);
-}
-
-pub trait Context /* : Network + Scheduler */{
-    fn raise(&mut self, evt: SocketEvt);
 }

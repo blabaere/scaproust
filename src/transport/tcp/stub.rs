@@ -14,32 +14,32 @@ use mio::tcp::{TcpStream, Shutdown};
 use transport::DEFAULT_RECV_MAX_SIZE;
 use transport::tcp::send::SendOperation;
 use transport::tcp::recv::RecvOperation;
-use transport::stream::*;
+use transport::async::stub::*;
 use core::message::Message;
 use io_error::*;
 
 /*****************************************************************************/
 /*                                                                           */
-/* Step Stream                                                               */
+/* TcpPipeStub                                                               */
 /*                                                                           */
 /*****************************************************************************/
 
-pub struct TcpStepStream {
+pub struct TcpPipeStub {
     stream: TcpStream,
     send_operation: Option<SendOperation>,
     recv_operation: Option<RecvOperation>
 }
 
-impl Deref for TcpStepStream {
+impl Deref for TcpPipeStub {
     type Target = mio::Evented;
     fn deref(&self) -> &Self::Target {
         &self.stream
     }
 }
 
-impl TcpStepStream {
-    pub fn new(stream: TcpStream) -> TcpStepStream {
-        TcpStepStream {
+impl TcpPipeStub {
+    pub fn new(stream: TcpStream) -> TcpPipeStub {
+        TcpPipeStub {
             stream: stream,
             send_operation: None,
             recv_operation: None
@@ -66,7 +66,7 @@ impl TcpStepStream {
     }
 }
 
-impl Drop for TcpStepStream {
+impl Drop for TcpPipeStub {
     fn drop(&mut self) {
         let _ = self.stream.shutdown(Shutdown::Both);
     }
@@ -74,11 +74,11 @@ impl Drop for TcpStepStream {
 
 /*****************************************************************************/
 /*                                                                           */
-/* Sender for TcpStepStream                                                  */
+/* Sender for TcpPipeStub                                                    */
 /*                                                                           */
 /*****************************************************************************/
 
-impl Sender for TcpStepStream {
+impl Sender for TcpPipeStub {
     fn start_send(&mut self, msg: Rc<Message>) -> io::Result<bool> {
         let send_operation = SendOperation::new(msg);
 
@@ -100,11 +100,11 @@ impl Sender for TcpStepStream {
 
 /*****************************************************************************/
 /*                                                                           */
-/* Receiver for TcpStepStream                                                */
+/* Receiver for TcpPipeStub                                                  */
 /*                                                                           */
 /*****************************************************************************/
 
-impl Receiver for TcpStepStream {
+impl Receiver for TcpPipeStub {
     fn start_recv(&mut self) -> io::Result<Option<Message>> {
         let recv_operation = RecvOperation::new(DEFAULT_RECV_MAX_SIZE);
 
@@ -126,11 +126,11 @@ impl Receiver for TcpStepStream {
 
 /*****************************************************************************/
 /*                                                                           */
-/* Handshake for TcpStepStream                                               */
+/* Handshake for TcpPipeStub                                                 */
 /*                                                                           */
 /*****************************************************************************/
 
-impl Handshake for TcpStepStream {
+impl Handshake for TcpPipeStub {
     fn send_handshake(&mut self, pids: (u16, u16)) -> io::Result<()> {
         send_and_check_handshake(&mut self.stream, pids)
     }
@@ -139,5 +139,5 @@ impl Handshake for TcpStepStream {
     }
 }
 
-impl StepStream for TcpStepStream {
+impl AsyncPipeStub for TcpPipeStub {
 }

@@ -4,63 +4,60 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::ops::Deref;
-use std::rc::Rc;
+use transport::async::stub::*;
+use transport::async::state::*;
+use transport::async::handshake::HandshakeTx; 
+use transport::async::dead::Dead; 
+use transport::pipe::Context;
 
-use mio;
-
-use transport::stream::handshake::HandshakeTx; 
-use transport::stream::dead::Dead; 
-use transport::stream::{ StepStream, PipeState, transition };
-use transport::{ Context, PipeEvt };
-use Message;
-
-pub struct Initial<T : StepStream + 'static> {
-    stream: T,
+pub struct Initial<S : AsyncPipeStub> {
+    stub: S,
     proto_ids: (u16, u16)
 }
 
-impl<T : StepStream> Initial<T> {
-    pub fn new(stream: T, pids: (u16, u16)) -> Initial<T> {
+impl<S : AsyncPipeStub> Initial<S> {
+    pub fn new(s: S, pids: (u16, u16)) -> Initial<S> {
         Initial {
-            stream: stream,
+            stub: s,
             proto_ids: pids
         }
     }
 }
 
-impl<T : StepStream> Into<HandshakeTx<T>> for Initial<T> {
-    fn into(self) -> HandshakeTx<T> {
-        HandshakeTx::new(self.stream, self.proto_ids)
+impl<S : AsyncPipeStub> Into<HandshakeTx<S>> for Initial<S> {
+    fn into(self) -> HandshakeTx<S> {
+        HandshakeTx::new(self.stub, self.proto_ids)
     }
 }
 
-impl<T : StepStream> PipeState<T> for Initial<T> {
+impl<S : AsyncPipeStub + 'static> PipeState<S> for Initial<S> {
+
     fn name(&self) -> &'static str {"Initial"}
     
-    fn open(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        transition::<Initial<T>, HandshakeTx<T>, T>(self, ctx)
+    fn open(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        transition::<Initial<S>, HandshakeTx<S>, S>(self, ctx)
     }
-    fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        ctx.deregister(self.stream.deref());
+    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        ctx.deregister(self.stub.deref());
 
         box Dead
     }
+
 }
 
 #[cfg(test)]
 mod tests {
     use transport::*;
     use transport::tests::*;
-    use transport::stream::*;
-    use transport::stream::tests::*;
-    use transport::stream::initial::*;
+    use transport::stub::*;
+    use transport::stub::tests::*;
+    use transport::stub::initial::*;
 
     #[test]
     fn open_should_cause_transition_to_handshake() {
-        let stream = TestStepStream::new();
-        let state = box Initial::new(stream, (1, 1));
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::new();
+        let state = box Initial::new(stub, (1, 1));
+        let mut ctx = TestContext::new();
         let new_state = state.open(&mut ctx);
 
         assert_eq!(1, ctx.get_registrations().len()); // this is caused by HandshakeTx::enter
@@ -72,9 +69,9 @@ mod tests {
 
     #[test]
     fn close_should_deregister_and_cause_a_transition_to_dead() {
-        let stream = TestStepStream::new();
-        let state = box Initial::new(stream, (1, 1));
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::new();
+        let state = box Initial::new(stub, (1, 1));
+        let mut ctx = TestContext::new();
         let new_state = state.close(&mut ctx);
 
         assert_eq!(0, ctx.get_registrations().len());

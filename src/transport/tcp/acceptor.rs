@@ -4,39 +4,29 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::io;
-
 use mio;
-use mio::tcp::{TcpListener, TcpStream, Shutdown};
+use mio::tcp::{TcpListener, TcpStream};
 
-use transport::{Endpoint, AcceptorCmd, AcceptorEvt, Context, PipeCmd, PipeEvt};
-use transport::tcp::step::*;
-use transport::stream::*;
+use transport::*;
+use transport::acceptor::*;
+use transport::async::AsyncPipe;
+use super::stub::TcpPipeStub;
 
-pub struct Acceptor {
+pub struct TcpAcceptor {
     listener: TcpListener,
-    pids: (u16, u16)
+    proto_ids: (u16, u16)
 }
 
-impl Acceptor {
-    pub fn new(listener: TcpListener, pids: (u16, u16)) -> Acceptor {
-        Acceptor {
-            listener: listener,
-            pids: pids
+impl TcpAcceptor {
+
+    pub fn new(l: TcpListener, pids: (u16, u16)) -> TcpAcceptor {
+        TcpAcceptor {
+            listener: l,
+            proto_ids: pids
         }
     }
 
-    fn open(&mut self, ctx: &mut Context<AcceptorEvt>) {
-        ctx.register(&self.listener, mio::EventSet::readable(), mio::PollOpt::edge()).expect("Acceptor.open failed");
-        ctx.raise(AcceptorEvt::Opened);
-    }
-
-    fn close(&mut self, ctx: &mut Context<AcceptorEvt>) {
-        ctx.deregister(&self.listener);
-        ctx.raise(AcceptorEvt::Closed);
-    }
-
-    fn accept(&mut self, ctx: &mut Context<AcceptorEvt>) {
+    fn accept(&mut self, ctx: &mut Context) {
         let mut pipes = Vec::new();
 
         loop {
@@ -48,31 +38,39 @@ impl Acceptor {
                     pipes.push(pipe);
                 },
                 Err(e) => {
-
+                    ctx.raise(Event::Error(e));
                 }
             }
         }
 
         if pipes.len() > 0 {
-            ctx.raise(AcceptorEvt::Accepted(pipes));
+            ctx.raise(Event::Accepted(pipes));
         }
     }
 
-    fn create_pipe(&self, stream: TcpStream) -> Box<Endpoint<PipeCmd, PipeEvt>> {
-        box Pipe::new(TcpStepStream::new(stream), self.pids)
+    fn create_pipe(&self, stream: TcpStream) -> Box<pipe::Pipe> {
+        let pids = self.proto_ids;
+        let stub = TcpPipeStub::new(stream);
+        let pipe = box AsyncPipe::new(stub, pids);
+
+        pipe
     }
 }
 
-impl Endpoint<AcceptorCmd, AcceptorEvt> for Acceptor {
-    fn ready(&mut self, ctx: &mut Context<AcceptorEvt>, events: mio::EventSet) {
+impl acceptor::Acceptor for TcpAcceptor {
+    fn ready(&mut self, ctx: &mut Context, events: mio::EventSet) {
         if events.is_readable() {
             self.accept(ctx);
         }
     }
-    fn process(&mut self, ctx: &mut Context<AcceptorEvt>, cmd: AcceptorCmd) {
-        match cmd {
-            AcceptorCmd::Open => self.open(ctx),
-            AcceptorCmd::Close => self.close(ctx)
-        }
+
+    fn open(&mut self, ctx: &mut Context) {
+        ctx.register(&self.listener, mio::EventSet::readable(), mio::PollOpt::edge()).expect("Acceptor.open failed");
+        ctx.raise(Event::Opened);
+    }
+
+    fn close(&mut self, ctx: &mut Context) {
+        ctx.deregister(&self.listener);
+        ctx.raise(Event::Closed);
     }
 }

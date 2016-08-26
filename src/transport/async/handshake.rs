@@ -4,110 +4,107 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::rc::Rc;
-use std::io;
+use std::io::Result;
 
-use mio;
+use mio::{EventSet, PollOpt};
 
-use transport::stream::dead::Dead; 
-use transport::stream::active::Active; 
-use transport::stream::{ 
-    StepStream, 
-    PipeState,
-    transition_if_ok };
-use transport::{ Context, PipeEvt };
-use Message;
+use transport::async::stub::*;
+use transport::async::state::*;
+use transport::async::active::Active; 
+use transport::async::dead::Dead; 
+use transport::pipe::Context;
 
-pub struct HandshakeTx<T : StepStream + 'static> {
-    stream: T,
+pub struct HandshakeTx<S : AsyncPipeStub + 'static> {
+    stub: S,
     proto_ids: (u16, u16)
 }
 
-impl<T : StepStream + 'static> HandshakeTx<T> {
-    pub fn new(stream: T, pids: (u16, u16)) -> HandshakeTx<T> {
-        HandshakeTx {
-            stream: stream,
+impl<S : AsyncPipeStub> HandshakeTx<S> {
+    pub fn new(s: S, pids: (u16, u16)) -> HandshakeTx<S> {
+        HandshakeTx { 
+            stub: s,
             proto_ids: pids
         }
     }
 
-    fn send_handshake(&mut self) -> io::Result<()> {
+    fn send_handshake(&mut self) -> Result<()> {
         let pids = self.proto_ids;
 
-        self.stream.send_handshake(pids)
+        self.stub.send_handshake(pids)
     }
 }
 
-impl<T : StepStream> Into<HandshakeRx<T>> for HandshakeTx<T> {
-    fn into(self) -> HandshakeRx<T> {
-        HandshakeRx::new(self.stream, self.proto_ids)
+impl<S : AsyncPipeStub> Into<HandshakeRx<S>> for HandshakeTx<S> {
+    fn into(self) -> HandshakeRx<S> {
+        HandshakeRx::new(self.stub, self.proto_ids)
     }
 }
 
-impl<T : StepStream> PipeState<T> for HandshakeTx<T> {
+impl<S : AsyncPipeStub> PipeState<S> for HandshakeTx<S> {
     fn name(&self) -> &'static str {"HandshakeTx"}
 
-    fn enter(&self, ctx: &mut Context<PipeEvt>) {
-        ctx.register(self.stream.deref(), mio::EventSet::writable(), mio::PollOpt::level());
+    fn enter(&self, ctx: &mut Context) {
+        ctx.register(self.stub.deref(), EventSet::writable(), PollOpt::level());
     }
-    fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        ctx.deregister(self.stream.deref());
+    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        ctx.deregister(self.stub.deref());
 
         box Dead
     }
-    fn ready(mut self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>> {
+    fn ready(mut self: Box<Self>, ctx: &mut Context, events: EventSet) -> Box<PipeState<S>> {
         if events.is_writable() {
             let res = self.send_handshake();
 
-            transition_if_ok::<HandshakeTx<T>, HandshakeRx<T>, T>(self, ctx, res)
+            transition_if_ok::<HandshakeTx<S>, HandshakeRx<S>, S>(self, ctx, res)
         } else {
             self
         }
     }
 }
 
-pub struct HandshakeRx<T : StepStream + 'static> {
-    stream: T,
+pub struct HandshakeRx<S> {
+    stub: S,
     proto_ids: (u16, u16)
 }
 
-impl<T : StepStream + 'static> HandshakeRx<T> {
-    pub fn new(stream: T, pids: (u16, u16)) -> HandshakeRx<T> {
+impl<S: AsyncPipeStub> HandshakeRx<S> {
+    pub fn new(s: S, pids: (u16, u16)) -> HandshakeRx<S> {
         HandshakeRx {
-            stream: stream,
+            stub: s,
             proto_ids: pids
         }
     }
 
-    fn recv_handshake(&mut self) -> io::Result<()> {
+    fn recv_handshake(&mut self) -> Result<()> {
         let pids = self.proto_ids;
 
-        self.stream.recv_handshake(pids)
+        self.stub.recv_handshake(pids)
     }
 }
 
-impl<T : StepStream> Into<Active<T>> for HandshakeRx<T> {
-    fn into(self) -> Active<T> {
-        Active::new(self.stream)
+impl<S : AsyncPipeStub> Into<Active<S>> for HandshakeRx<S> {
+    fn into(self) -> Active<S> {
+        Active::new(self.stub)
     }
 }
 
-impl<T : StepStream> PipeState<T> for HandshakeRx<T> {
+impl<S : AsyncPipeStub + 'static> PipeState<S> for HandshakeRx<S> {
+
     fn name(&self) -> &'static str {"HandshakeRx"}
 
-    fn enter(&self, ctx: &mut Context<PipeEvt>) {
-        ctx.reregister(self.stream.deref(), mio::EventSet::readable(), mio::PollOpt::level());
+    fn enter(&self, ctx: &mut Context) {
+        ctx.reregister(self.stub.deref(), EventSet::readable(), PollOpt::level());
     }
-    fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        ctx.deregister(self.stream.deref());
+    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        ctx.deregister(self.stub.deref());
 
         box Dead
     }
-    fn ready(mut self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>> {
+    fn ready(mut self: Box<Self>, ctx: &mut Context, events: EventSet) -> Box<PipeState<S>> {
         if events.is_readable() {
             let res = self.recv_handshake();
             
-            transition_if_ok::<HandshakeRx<T>, Active<T>, T>(self, ctx, res)
+            transition_if_ok::<HandshakeRx<S>, Active<S>, S>(self, ctx, res)
         } else {
             self
         }
@@ -123,15 +120,15 @@ mod tests {
 
     use transport::*;
     use transport::tests::*;
-    use transport::stream::*;
-    use transport::stream::tests::*;
-    use transport::stream::handshake::*;
+    use transport::stub::*;
+    use transport::stub::tests::*;
+    use transport::stub::handshake::*;
 
     #[test]
     fn on_enter_tx_should_register() {
-        let stream = TestStepStream::new();
-        let state = box HandshakeTx::new(stream, (4, 2));
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::new();
+        let state = box HandshakeTx::new(stub, (4, 2));
+        let mut ctx = TestContext::new();
 
         state.enter(&mut ctx);
 
@@ -149,9 +146,9 @@ mod tests {
 
     #[test]
     fn tx_close_should_deregister_and_cause_a_transition_to_dead() {
-        let stream = TestStepStream::new();
-        let state = box HandshakeTx::new(stream, (1, 1));
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::new();
+        let state = box HandshakeTx::new(stub, (1, 1));
+        let mut ctx = TestContext::new();
         let new_state = state.close(&mut ctx);
 
         assert_eq!(0, ctx.get_registrations().len());
@@ -165,10 +162,10 @@ mod tests {
     fn on_writable_the_handshake_should_be_sent() {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
-        let stream = TestStepStream::with_sensor(sensor.clone());
+        let stub = TestStepStream::with_sensor(sensor.clone());
         let pids = (4, 2);
-        let state = box HandshakeTx::new(stream, pids);
-        let mut ctx = TestPipeContext::new();
+        let state = box HandshakeTx::new(stub, pids);
+        let mut ctx = TestContext::new();
         let events = mio::EventSet::writable();
         let new_state = state.ready(&mut ctx, events);
 
@@ -180,9 +177,9 @@ mod tests {
 
     #[test]
     fn on_enter_rx_should_reregister() {
-        let stream = TestStepStream::new();
-        let state = box HandshakeRx::new(stream, (4, 2));
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::new();
+        let state = box HandshakeRx::new(stub, (4, 2));
+        let mut ctx = TestContext::new();
 
         state.enter(&mut ctx);
 
@@ -200,9 +197,9 @@ mod tests {
 
     #[test]
     fn rx_close_should_deregister_and_cause_a_transition_to_dead() {
-        let stream = TestStepStream::new();
-        let state = box HandshakeRx::new(stream, (1, 1));
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::new();
+        let state = box HandshakeRx::new(stub, (1, 1));
+        let mut ctx = TestContext::new();
         let new_state = state.close(&mut ctx);
 
         assert_eq!(0, ctx.get_registrations().len());
@@ -216,10 +213,10 @@ mod tests {
     fn readable_the_handshake_should_be_received() {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
-        let stream = TestStepStream::with_sensor(sensor.clone());
+        let stub = TestStepStream::with_sensor(sensor.clone());
         let pids = (6, 6);
-        let state = box HandshakeRx::new(stream, pids);
-        let mut ctx = TestPipeContext::new();
+        let state = box HandshakeRx::new(stub, pids);
+        let mut ctx = TestContext::new();
         let events = mio::EventSet::readable();
         let new_state = state.ready(&mut ctx, events);
 

@@ -58,7 +58,7 @@ impl SessionBuilder {
         let event_loop = try!(builder.build());
         let (reply_tx, reply_rx) = mpsc::channel();
         let signal_tx = Rc::new(event_loop.channel());
-        let request_tx = RequestSender {req_tx: signal_tx};
+        let request_tx = RequestSender::new(signal_tx);
         let session = Session::new(request_tx, reply_rx);
 
         thread::spawn(move || reactor::run_event_loop(event_loop, reply_tx));

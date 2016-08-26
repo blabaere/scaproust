@@ -10,7 +10,7 @@
 #![feature(box_syntax)]
 #![feature(unboxed_closures)]
 #![feature(fnbox)]
-#![feature(conservative_impl_trait)] 
+#![feature(associated_type_defaults)]
 
 //#![feature(plugin)]
 //#![plugin(clippy)]

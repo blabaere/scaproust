@@ -9,7 +9,7 @@ use std::io;
 
 use byteorder::{ BigEndian, ByteOrder };
 
-use transport::stream::*;
+use transport::async::*;
 use io_error::*;
 use Message;
 

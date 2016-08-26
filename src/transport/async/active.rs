@@ -5,44 +5,42 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::rc::Rc;
-use std::io;
+use std::io::Result;
 
-use mio;
+use mio::{EventSet, PollOpt};
 
-use transport::stream::dead::Dead; 
-use transport::stream::{ 
-    StepStream, 
-    PipeState,
-    no_transition_if_ok };
-use transport::{ Context, PipeEvt };
-use Message;
+use transport::async::stub::*;
+use transport::async::state::*;
+use transport::async::dead::Dead; 
+use transport::pipe::{Event, Context};
+use core::message::Message;
 
-pub struct Active<T : StepStream + 'static> {
-    stream: T
+pub struct Active<S> {
+    stub: S
 }
 
-impl<T : StepStream> Active<T> {
-    pub fn new(stream: T) -> Active<T> {
+impl<S : AsyncPipeStub> Active<S> {
+    pub fn new(s: S) -> Active<S> {
         Active {
-            stream: stream
+            stub: s
         }
     }
-    fn on_send_progress(&mut self, ctx: &mut Context<PipeEvt>, progress: io::Result<bool>) -> io::Result<()> {
+    fn on_send_progress(&mut self, ctx: &mut Context, progress: Result<bool>) -> Result<()> {
         progress.map(|sent| if sent { self.on_msg_sent(ctx) } )
     }
-    fn on_msg_sent(&mut self, ctx: &mut Context<PipeEvt>) {
-        ctx.raise(PipeEvt::Sent);
-        ctx.reregister(self.stream.deref(), mio::EventSet::all(), mio::PollOpt::edge());
+    fn on_msg_sent(&mut self, ctx: &mut Context) {
+        ctx.raise(Event::Sent);
+        ctx.reregister(self.stub.deref(), EventSet::all(), PollOpt::edge());
     }
 
-    fn writable_changed(&mut self, ctx: &mut Context<PipeEvt>, writable: bool) -> io::Result<()> {
+    fn writable_changed(&mut self, ctx: &mut Context, writable: bool) -> Result<()> {
         if writable {
-            if self.stream.has_pending_send() {
-                let progress = self.stream.resume_send();
+            if self.stub.has_pending_send() {
+                let progress = self.stub.resume_send();
 
                 self.on_send_progress(ctx, progress)
             } else {
-                ctx.raise(PipeEvt::CanSend);
+                ctx.raise(Event::CanSend);
 
                 Ok(())
             }
@@ -51,23 +49,23 @@ impl<T : StepStream> Active<T> {
         }
     }
 
-    fn on_recv_progress(&mut self, ctx: &mut Context<PipeEvt>, progress: io::Result<Option<Message>>) -> io::Result<()> {
+    fn on_recv_progress(&mut self, ctx: &mut Context, progress: Result<Option<Message>>) -> Result<()> {
         progress.map(|recv| if let Some(msg) = recv { self.on_msg_received(ctx, msg) } )
     }
 
-    fn on_msg_received(&mut self, ctx: &mut Context<PipeEvt>, msg: Message) {
-        ctx.raise(PipeEvt::Received(msg));
-        ctx.reregister(self.stream.deref(), mio::EventSet::all(), mio::PollOpt::edge());
+    fn on_msg_received(&mut self, ctx: &mut Context, msg: Message) {
+        ctx.raise(Event::Received(msg));
+        ctx.reregister(self.stub.deref(), EventSet::all(), PollOpt::edge());
     }
 
-    fn readable_changed(&mut self, ctx: &mut Context<PipeEvt>, readable: bool) -> io::Result<()> {
+    fn readable_changed(&mut self, ctx: &mut Context, readable: bool) -> Result<()> {
         if readable {
-            if self.stream.has_pending_recv() {
-                let progress = self.stream.resume_recv();
+            if self.stub.has_pending_recv() {
+                let progress = self.stub.resume_recv();
 
                 self.on_recv_progress(ctx, progress)
             } else {
-                ctx.raise(PipeEvt::CanRecv);
+                ctx.raise(Event::CanRecv);
                 
                 Ok(())
             }
@@ -77,31 +75,31 @@ impl<T : StepStream> Active<T> {
     }
 }
 
-impl<T : StepStream> PipeState<T> for Active<T> {
+impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
     fn name(&self) -> &'static str {"Active"}
 
-    fn enter(&self, ctx: &mut Context<PipeEvt>) {
-        ctx.reregister(self.stream.deref(), mio::EventSet::all(), mio::PollOpt::edge());
-        ctx.raise(PipeEvt::Opened);
+    fn enter(&self, ctx: &mut Context) {
+        ctx.reregister(self.stub.deref(), EventSet::all(), PollOpt::edge());
+        ctx.raise(Event::Opened);
     }
-    fn close(self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        ctx.deregister(self.stream.deref());
+    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        ctx.deregister(self.stub.deref());
 
         box Dead
     }
-    fn send(mut self: Box<Self>, ctx: &mut Context<PipeEvt>, msg: Rc<Message>) -> Box<PipeState<T>> {
-        let progress = self.stream.start_send(msg);
+    fn send(mut self: Box<Self>, ctx: &mut Context, msg: Rc<Message>) -> Box<PipeState<S>> {
+        let progress = self.stub.start_send(msg);
         let res = self.on_send_progress(ctx, progress);
 
         no_transition_if_ok(self, ctx, res)
     }
-    fn recv(mut self: Box<Self>, ctx: &mut Context<PipeEvt>) -> Box<PipeState<T>> {
-        let progress = self.stream.start_recv();
+    fn recv(mut self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        let progress = self.stub.start_recv();
         let res = self.on_recv_progress(ctx, progress);
 
         no_transition_if_ok(self, ctx, res)
     }
-    fn ready(mut self: Box<Self>, ctx: &mut Context<PipeEvt>, events: mio::EventSet) -> Box<PipeState<T>> {
+    fn ready(mut self: Box<Self>, ctx: &mut Context, events: EventSet) -> Box<PipeState<S>> {
         let res = 
             self.readable_changed(ctx, events.is_readable()).and_then(|_|
             self.writable_changed(ctx, events.is_writable()));
@@ -119,18 +117,18 @@ mod tests {
 
     use transport::*;
     use transport::tests::*;
-    use transport::stream::*;
-    use transport::stream::tests::*;
-    use transport::stream::active::*;
+    use transport::stub::*;
+    use transport::stub::tests::*;
+    use transport::stub::active::*;
     use Message;
 
     #[test]
-    fn on_enter_stream_is_reregistered_and_an_event_is_raised() {
+    fn on_enter_stub_is_reregistered_and_an_event_is_raised() {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
-        let stream = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stream);
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stub);
+        let mut ctx = TestContext::new();
 
         state.enter(&mut ctx);
 
@@ -157,9 +155,9 @@ mod tests {
 
     #[test]
     fn close_should_deregister_and_cause_a_transition_to_dead() {
-        let stream = TestStepStream::new();
-        let state = box Active::new(stream);
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::new();
+        let state = box Active::new(stub);
+        let mut ctx = TestContext::new();
         let new_state = state.close(&mut ctx);
 
         assert_eq!(0, ctx.get_registrations().len());
@@ -173,9 +171,9 @@ mod tests {
     fn send_with_immediate_success() {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
-        let stream = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stream);
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stub);
+        let mut ctx = TestContext::new();
         let payload = vec!(66, 65, 67);
         let msg = Rc::new(Message::from_body(payload));
         let new_state = state.send(&mut ctx, msg);
@@ -196,9 +194,9 @@ mod tests {
     fn send_with_postponed_success() {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
-        let stream = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stream);
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stub);
+        let mut ctx = TestContext::new();
 
         sensor.borrow_mut().set_start_send_result(Some(false));
         let payload = vec!(66, 65, 67);
@@ -228,9 +226,9 @@ mod tests {
     fn recv_with_immediate_success() {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
-        let stream = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stream);
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stub);
+        let mut ctx = TestContext::new();
         let payload = vec!(66, 65, 67);
         let msg = Message::from_body(payload);
 
@@ -252,9 +250,9 @@ mod tests {
     fn recv_with_postponed_success() {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
-        let stream = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stream);
-        let mut ctx = TestPipeContext::new();
+        let stub = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stub);
+        let mut ctx = TestContext::new();
         let payload = vec!(66, 65, 67);
         let msg = Message::from_body(payload);
 

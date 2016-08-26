@@ -11,7 +11,8 @@ use mio;
 
 use core::{session, socket, endpoint};
 
-use transport::{PipeCmd, PipeEvt, AcceptorCmd, AcceptorEvt};
+use transport::pipe;
+use transport::acceptor;
 
 use ctrl::signal::Signal;
 use ctrl::bus::EventLoopBus;
@@ -122,27 +123,27 @@ impl EventLoopHandler {
             Signal::AcceptorEvt(sid, eid, cmd) => self.process_acceptor_evt(sid, eid, cmd)
         }
     }
-    fn process_pipe_cmd(&mut self, event_loop: &mut EventLoop, eid: endpoint::EndpointId, cmd: PipeCmd) {
+    fn process_pipe_cmd(&mut self, event_loop: &mut EventLoop, eid: endpoint::EndpointId, cmd: pipe::Command) {
         if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
             pipe.process(event_loop, &mut self.signal_bus, cmd);
         }
     }
-    fn process_acceptor_cmd(&mut self, event_loop: &mut EventLoop, eid: endpoint::EndpointId, cmd: AcceptorCmd) {
+    fn process_acceptor_cmd(&mut self, event_loop: &mut EventLoop, eid: endpoint::EndpointId, cmd: acceptor::Command) {
         if let Some(acceptor) = self.endpoints.get_acceptor_mut(eid) {
             acceptor.process(event_loop, &mut self.signal_bus, cmd);
         }
     }
-    fn process_pipe_evt(&mut self, sid: socket::SocketId, eid: endpoint::EndpointId, evt: PipeEvt) {
+    fn process_pipe_evt(&mut self, sid: socket::SocketId, eid: endpoint::EndpointId, evt: pipe::Event) {
         match evt {
-            PipeEvt::Opened        => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
-            PipeEvt::Sent          => self.apply_on_socket(sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
-            PipeEvt::Received(msg) => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
+            pipe::Event::Opened        => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
+            pipe::Event::Sent          => self.apply_on_socket(sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
+            pipe::Event::Received(msg) => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
             _ => {}
         }
     }
-    fn process_acceptor_evt(&mut self, sid: socket::SocketId, _: endpoint::EndpointId, evt: AcceptorEvt) {
+    fn process_acceptor_evt(&mut self, sid: socket::SocketId, _: endpoint::EndpointId, evt: acceptor::Event) {
         match evt {
-            AcceptorEvt::Accepted(pipes) => {
+            acceptor::Event::Accepted(pipes) => {
                 for pipe in pipes {
                     let eid = self.endpoints.insert_pipe(sid, pipe);
 
