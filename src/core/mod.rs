@@ -5,6 +5,7 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 pub mod network;
+pub mod context;
 pub mod protocol;
 pub mod socket;
 pub mod session;

@@ -32,3 +32,7 @@ pub fn from_notify_error<T>(notify_error: mio::NotifyError<T>) -> io::Error {
         mio::NotifyError::Closed(_) => other_io_error("channel full")
     }
 }
+
+pub fn from_timer_error(timer_error: mio::TimerError) -> io::Error {
+    other_io_error(timer_error)
+}

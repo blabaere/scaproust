@@ -7,8 +7,9 @@
 use std::rc::Rc;
 use std::collections::HashMap;
 use std::io;
+use std::time::Duration;
 
-use mio::{Evented, Token, EventSet, PollOpt, EventLoop, Handler};
+use mio::{Evented, Token, EventSet, PollOpt, EventLoop, Handler, Timeout};
 
 use core::*;
 use transport::*;
@@ -22,6 +23,20 @@ pub trait Registrar {
     fn register(&mut self, io: &Evented, tok: Token, interest: EventSet, opt: PollOpt) -> io::Result<()>;
     fn reregister(&mut self, io: &Evented, tok: Token, interest: EventSet, opt: PollOpt) -> io::Result<()>;
     fn deregister(&mut self, io: &Evented) -> io::Result<()>;
+}
+
+pub enum Scheduled {
+    Socket(context::Scheduled)
+}
+
+pub trait Scheduler<T> {
+    fn schedule(&mut self, t: T, delay: Duration) -> io::Result<Timeout>;
+    fn cancel(&mut self, Timeout);
+}
+
+trait Scheduler2 {
+    fn schedule(&mut self, s: Scheduled, delay: Duration) -> io::Result<Timeout>;
+    fn cancel(&mut self, Timeout);
 }
 
 pub struct SocketEventLoopContext<'a> {
@@ -64,6 +79,25 @@ impl<T:Handler> Registrar for EventLoop<T> {
     }
     fn deregister(&mut self, io: &Evented) -> io::Result<()> {
         self.deregister(io)
+    }
+}
+
+
+impl<H:Handler> Scheduler<H::Timeout> for EventLoop<H> {
+    fn schedule(&mut self, scheduled: H::Timeout, delay: Duration) -> io::Result<Timeout> {
+        self.timeout(scheduled, delay).map_err(from_timer_error)
+    }
+    fn cancel(&mut self, t: Timeout) {
+        self.clear_timeout(&t);
+    }
+}
+
+impl<H:Handler<Timeout=Scheduled>> Scheduler2 for EventLoop<H> {
+    fn schedule(&mut self, scheduled: Scheduled, delay: Duration) -> io::Result<Timeout> {
+        self.timeout(scheduled, delay).map_err(from_timer_error)
+    }
+    fn cancel(&mut self, t: Timeout) {
+        self.clear_timeout(&t);
     }
 }
 
@@ -245,7 +279,20 @@ impl<'a> network::Network for SocketEventLoopContext<'a> {
     }
 
 }
+/*
+impl<'a> context::Context for SocketEventLoopContext<'a> {
+    type Scheduled = mio::Timeout;
+    fn schedule(&mut self, timeout: context::Timeout) -> Self::Scheduled {
 
+    }
+    fn cancel(&mut self, scheduled: Self::Scheduled) {
+
+    }
+    fn raise(&mut self, evt: context::SocketEvt) {
+        
+    }
+}
+*/
 impl<'a, 'b> Context<PipeEvt> for EndpointEventLoopContext<'a, 'b> {
     fn register(&mut self, io: &Evented, interest: EventSet, opt: PollOpt) -> io::Result<()> {
         self.registrar.register(io, self.endpoint_id.into(), interest, opt)
