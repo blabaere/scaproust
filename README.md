@@ -25,50 +25,50 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 
 ## Progress
 - [ ] Protocols
-  - [x] PAIR
-  - [x] BUS
+  - [ ] PAIR
+  - [ ] BUS
   - [ ] REQREP
-    - [x] REQ
+    - [ ] REQ
     - [ ] REQ resend
     - [ ] REQ prefetch replies
-    - [x] REP
-  - [x] PUBSUB
-    - [x] PUB
-    - [x] SUB
-    - [x] SUB subscription filter
-  - [x] PIPELINE
-    - [x] PUSH
-    - [x] PULL
-  - [x] SURVEY
-    - [x] SURVEYOR
-    - [x] SURVEYOR deadline
-    - [x] RESPONDENT  
+    - [ ] REP
+  - [ ] PUBSUB
+    - [ ] PUB
+    - [ ] SUB
+    - [ ] SUB subscription filter
+  - [ ] PIPELINE
+    - [ ] PUSH
+    - [ ] PULL
+  - [ ] SURVEY
+    - [ ] SURVEYOR
+    - [ ] SURVEYOR deadline
+    - [ ] RESPONDENT  
 
 - [ ] Transports
-  - [x] TCP
-  - [x] IPC (*nix only)
+  - [ ] TCP
+  - [ ] IPC (*nix only)
   - [ ] IPC (Windows)
 
 - [ ] Socket options
-  - [x] Linger
-  - [x] Recv buffer size max
-  - [x] Send timeout
-  - [x] Recv timeout
-  - [x] Reconnect interval
-  - [x] Reconnect interval max
-  - [x] Send priority
-  - [x] Recv priority
+  - [ ] Linger
+  - [ ] Recv buffer size max
+  - [ ] Send timeout
+  - [ ] Recv timeout
+  - [ ] Reconnect interval
+  - [ ] Reconnect interval max
+  - [ ] Send priority
+  - [ ] Recv priority
   - [ ] IPV4 only
   - [ ] Socket name
 
-- [x] Protocol options
-  - [x] REQ resend interval
-  - [x] SURVEYOR deadline
-  - [x] SUB subscribe
-  - [x] SUB unsubscribe
+- [ ] Protocol options
+  - [ ] REQ resend interval
+  - [ ] SURVEYOR deadline
+  - [ ] SUB subscribe
+  - [ ] SUB unsubscribe
 
-- [x] Transport options
-  - [x] TCP no delay
+- [ ] Transport options
+  - [ ] TCP no delay
 
 ## License
 
