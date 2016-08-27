@@ -4,7 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use core::{SocketId, EndpointId};
+use core::{SocketId, EndpointId, context};
 use transport::pipe;
 use transport::acceptor;
 
@@ -14,5 +14,6 @@ pub enum Signal {
     PipeCmd(SocketId, EndpointId, pipe::Command),
     PipeEvt(SocketId, EndpointId, pipe::Event),
     AcceptorCmd(SocketId, EndpointId, acceptor::Command),
-    AcceptorEvt(SocketId, EndpointId, acceptor::Event)
+    AcceptorEvt(SocketId, EndpointId, acceptor::Event),
+    SocketEvt(SocketId, context::Event)
 }

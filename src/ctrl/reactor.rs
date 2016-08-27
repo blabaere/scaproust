@@ -120,7 +120,8 @@ impl EventLoopHandler {
             Signal::PipeCmd(_, eid, cmd) => self.process_pipe_cmd(event_loop, eid, cmd),
             Signal::AcceptorCmd(_, eid, cmd) => self.process_acceptor_cmd(event_loop, eid, cmd),
             Signal::PipeEvt(sid, eid, cmd) => self.process_pipe_evt(sid, eid, cmd),
-            Signal::AcceptorEvt(sid, eid, cmd) => self.process_acceptor_evt(sid, eid, cmd)
+            Signal::AcceptorEvt(sid, eid, cmd) => self.process_acceptor_evt(sid, eid, cmd),
+            Signal::SocketEvt(_, _) => {}
         }
     }
     fn process_pipe_cmd(&mut self, event_loop: &mut EventLoop, eid: EndpointId, cmd: pipe::Command) {

@@ -11,8 +11,8 @@ use std::time::Duration;
 
 use mio::{Evented, Token, EventSet, PollOpt, EventLoop, Handler, Timeout};
 
-use core;
-use core::network::Network as Network;
+use core::context;
+use core::network::Network;
 use core::{SocketId, EndpointId, Message};
 use transport::Transport;
 use transport::endpoint::*;
@@ -29,20 +29,6 @@ pub trait Registrar {
     fn register(&mut self, io: &Evented, tok: Token, interest: EventSet, opt: PollOpt) -> io::Result<()>;
     fn reregister(&mut self, io: &Evented, tok: Token, interest: EventSet, opt: PollOpt) -> io::Result<()>;
     fn deregister(&mut self, io: &Evented) -> io::Result<()>;
-}
-
-pub enum Scheduled {
-    Socket(core::context::Scheduled)
-}
-
-pub trait Scheduler<T> {
-    fn schedule(&mut self, t: T, delay: Duration) -> io::Result<Timeout>;
-    fn cancel(&mut self, Timeout);
-}
-
-trait Scheduler2 {
-    fn schedule(&mut self, s: Scheduled, delay: Duration) -> io::Result<Timeout>;
-    fn cancel(&mut self, Timeout);
 }
 
 pub struct SocketEventLoopContext<'a> {
@@ -88,7 +74,7 @@ impl<T:Handler> Registrar for EventLoop<T> {
     }
 }
 
-
+/*
 impl<H:Handler> Scheduler<H::Timeout> for EventLoop<H> {
     fn schedule(&mut self, scheduled: H::Timeout, delay: Duration) -> io::Result<Timeout> {
         self.timeout(scheduled, delay).map_err(from_timer_error)
@@ -97,7 +83,8 @@ impl<H:Handler> Scheduler<H::Timeout> for EventLoop<H> {
         self.clear_timeout(&t);
     }
 }
-
+*/
+/*
 impl<H:Handler<Timeout=Scheduled>> Scheduler2 for EventLoop<H> {
     fn schedule(&mut self, scheduled: Scheduled, delay: Duration) -> io::Result<Timeout> {
         self.timeout(scheduled, delay).map_err(from_timer_error)
@@ -106,7 +93,7 @@ impl<H:Handler<Timeout=Scheduled>> Scheduler2 for EventLoop<H> {
         self.clear_timeout(&t);
     }
 }
-
+*/
 impl PipeController {
     pub fn ready<'a, 'b>(&mut self, registrar: &'a mut Registrar, signal_bus: &'b mut EventLoopBus<Signal>, events: EventSet) {
         let mut ctx = self.create_context(registrar, signal_bus);
@@ -233,6 +220,12 @@ impl<'a> SocketEventLoopContext<'a> {
         self.send_signal(signal);
     }
 
+    fn send_socket_evt(&mut self, evt: context::Event) {
+        let signal = Signal::SocketEvt(self.socket_id, evt);
+
+        self.send_signal(signal);
+    }
+
     fn get_transport(&self, scheme: &str) -> io::Result<Box<Transport>> {
         match scheme {
             "tcp" => Ok(Box::new(Tcp)),
@@ -293,20 +286,13 @@ impl<'a> Network for SocketEventLoopContext<'a> {
     }
 
 }
-/*
+
 impl<'a> context::Context for SocketEventLoopContext<'a> {
-    type Scheduled = mio::Timeout;
-    fn schedule(&mut self, timeout: context::Timeout) -> Self::Scheduled {
-
-    }
-    fn cancel(&mut self, scheduled: Self::Scheduled) {
-
-    }
-    fn raise(&mut self, evt: context::SocketEvt) {
-        
+    fn raise(&mut self, evt: context::Event) {
+        self.send_socket_evt(evt);
     }
 }
-*/
+
 impl<'a, 'b> EndpointRegistrar for EndpointEventLoopContext<'a, 'b> {
     fn register(&mut self, io: &Evented, interest: EventSet, opt: PollOpt) -> io::Result<()> {
         self.registrar.register(io, self.endpoint_id.into(), interest, opt)
