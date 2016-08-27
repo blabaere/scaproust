@@ -153,7 +153,13 @@ impl Socket {
         self.pipes.insert(eid, pipe);
     }
 
-    pub fn set_opt(&mut self, ctx: &mut Context, opt: ConfigOption) {
+    pub fn set_opt(&mut self, _: &mut Context, opt: ConfigOption) {
+        let reply = match self.config.set(opt) {
+            Ok(()) => Reply::SetOption,
+            Err(e) => Reply::Err(e)
+        };
+
+        self.send_reply(reply);
     }
 
 }

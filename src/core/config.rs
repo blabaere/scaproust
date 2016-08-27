@@ -33,11 +33,11 @@ impl Config {
             recv_timeout: None,
             recv_priority: 8,
             retry_ivl: Duration::from_millis(100),
-            retry_ivl_max: Duration::from_millis(100)
+            retry_ivl_max: Duration::from_millis(0)
         }
     }
 
-    fn set(&mut self, cfg_opt: ConfigOption) -> Result<()> {
+    pub fn set(&mut self, cfg_opt: ConfigOption) -> Result<()> {
         Ok(())
     }
 

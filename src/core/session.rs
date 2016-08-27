@@ -8,8 +8,7 @@ use std::collections::HashMap;
 use std::sync::mpsc;
 use std::io;
 
-use core::SocketId;
-use core::socket;
+use core::{SocketId, socket};
 use sequence::Sequence;
 
 pub enum Request {
