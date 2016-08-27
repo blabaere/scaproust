@@ -7,8 +7,9 @@
 use std::boxed::FnBox;
 use std::sync::mpsc::Sender;
 
+use core::EndpointId;
 use core::socket::Reply;
-use core::endpoint::{ Pipe, EndpointId };
+use core::endpoint::Pipe;
 use core::network::Network;
 use core::message::Message;
 

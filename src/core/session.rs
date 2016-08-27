@@ -7,6 +7,7 @@
 use std::sync::mpsc;
 use std::io;
 
+use core::SocketId;
 use core::protocol::ProtocolCtor;
 use core::socket;
 use sequence::Sequence;
@@ -19,7 +20,7 @@ pub enum Request {
 
 pub enum Reply {
     Err(io::Error),
-    SocketCreated(socket::SocketId, mpsc::Receiver<socket::Reply>),
+    SocketCreated(SocketId, mpsc::Receiver<socket::Reply>),
     DeviceCreated,
     Shutdown
 }
@@ -50,7 +51,7 @@ impl Session {
         self.send_reply(Reply::SocketCreated(id, rx));
     }
 
-    pub fn get_socket_mut<'a>(&'a mut self, id: socket::SocketId) -> Option<&'a mut socket::Socket> {
+    pub fn get_socket_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut socket::Socket> {
         self.sockets.get_socket_mut(id)
     }
 

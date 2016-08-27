@@ -9,7 +9,8 @@ use std::io;
 
 use super::*;
 use ctrl::reactor;
-use core::socket::{SocketId, Request, Reply};
+use core::SocketId;
+use core::socket::{Request, Reply};
 use core;
 use io_error::*;
 use Message;
@@ -28,7 +29,7 @@ impl RequestSender {
             socket_id: id
         }
     }
-    fn child_sender(&self, eid: core::endpoint::EndpointId) -> endpoint::RequestSender {
+    fn child_sender(&self, eid: core::EndpointId) -> endpoint::RequestSender {
         endpoint::RequestSender::new(self.req_tx.clone(), self.socket_id, eid)
     }
 }

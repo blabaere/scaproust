@@ -9,7 +9,7 @@ use std::io;
 
 use mio;
 
-use core::{session, socket, endpoint};
+use core::{SocketId, EndpointId, session, socket, endpoint};
 
 use transport::pipe;
 use transport::acceptor;
@@ -25,8 +25,8 @@ use sequence::Sequence;
 /// Requests flowing to core components via the controller
 pub enum Request {
     Session(session::Request),
-    Socket(socket::SocketId, socket::Request),
-    Endpoint(socket::SocketId, endpoint::EndpointId, endpoint::Request)
+    Socket(SocketId, socket::Request),
+    Endpoint(SocketId, EndpointId, endpoint::Request)
 }
 
 const BUS_TOKEN: mio::Token = mio::Token(::std::usize::MAX - 3);
@@ -78,7 +78,7 @@ impl EventLoopHandler {
             _ => {}
         }
     }
-    fn process_socket_request(&mut self, id: socket::SocketId, request: socket::Request) {
+    fn process_socket_request(&mut self, id: SocketId, request: socket::Request) {
         match request {
             socket::Request::Connect(url) => self.apply_on_socket(id, |socket, network| socket.connect(network, url)),
             socket::Request::Bind(url)    => self.apply_on_socket(id, |socket, network| socket.bind(network, url)),
@@ -87,7 +87,7 @@ impl EventLoopHandler {
             _ => {}
         }
     }
-    fn apply_on_socket<F>(&mut self, id: socket::SocketId, f: F) 
+    fn apply_on_socket<F>(&mut self, id: SocketId, f: F) 
     where F : FnOnce(&mut socket::Socket, &mut SocketEventLoopContext) {
         if let Some(socket) = self.session.get_socket_mut(id) {
             let mut ctx = SocketEventLoopContext::new(id, &mut self.signal_bus, &mut self.endpoints);
@@ -96,7 +96,7 @@ impl EventLoopHandler {
         }
     }
     fn process_endpoint_readiness(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        let eid = endpoint::EndpointId::from(tok);
+        let eid = EndpointId::from(tok);
         {
             if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
                 pipe.ready(event_loop, &mut self.signal_bus, events);
@@ -123,17 +123,17 @@ impl EventLoopHandler {
             Signal::AcceptorEvt(sid, eid, cmd) => self.process_acceptor_evt(sid, eid, cmd)
         }
     }
-    fn process_pipe_cmd(&mut self, event_loop: &mut EventLoop, eid: endpoint::EndpointId, cmd: pipe::Command) {
+    fn process_pipe_cmd(&mut self, event_loop: &mut EventLoop, eid: EndpointId, cmd: pipe::Command) {
         if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
             pipe.process(event_loop, &mut self.signal_bus, cmd);
         }
     }
-    fn process_acceptor_cmd(&mut self, event_loop: &mut EventLoop, eid: endpoint::EndpointId, cmd: acceptor::Command) {
+    fn process_acceptor_cmd(&mut self, event_loop: &mut EventLoop, eid: EndpointId, cmd: acceptor::Command) {
         if let Some(acceptor) = self.endpoints.get_acceptor_mut(eid) {
             acceptor.process(event_loop, &mut self.signal_bus, cmd);
         }
     }
-    fn process_pipe_evt(&mut self, sid: socket::SocketId, eid: endpoint::EndpointId, evt: pipe::Event) {
+    fn process_pipe_evt(&mut self, sid: SocketId, eid: EndpointId, evt: pipe::Event) {
         match evt {
             pipe::Event::Opened        => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
             pipe::Event::Sent          => self.apply_on_socket(sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
@@ -141,7 +141,7 @@ impl EventLoopHandler {
             _ => {}
         }
     }
-    fn process_acceptor_evt(&mut self, sid: socket::SocketId, _: endpoint::EndpointId, evt: acceptor::Event) {
+    fn process_acceptor_evt(&mut self, sid: SocketId, _: EndpointId, evt: acceptor::Event) {
         match evt {
             acceptor::Event::Accepted(pipes) => {
                 for pipe in pipes {

@@ -9,7 +9,7 @@ use std::io;
 
 use core::network::Network;
 
-pub enum SocketEvt {
+pub enum Event {
     CanSend,
     CanRecv
 }
@@ -30,7 +30,7 @@ pub trait Scheduler {
 }
 
 pub trait Context /* : Network + Scheduler */{
-    fn raise(&mut self, evt: SocketEvt);
+    fn raise(&mut self, evt: Event);
 }
 
 impl fmt::Debug for Scheduled {

@@ -35,7 +35,7 @@ impl RequestSender {
     fn new(tx: EventLoopRequestSender) -> RequestSender {
         RequestSender { req_tx: tx }
     }
-    fn child_sender(&self, socket_id: core::socket::SocketId) -> socket::RequestSender {
+    fn child_sender(&self, socket_id: core::SocketId) -> socket::RequestSender {
         socket::RequestSender::new(self.req_tx.clone(), socket_id)
     }
 }

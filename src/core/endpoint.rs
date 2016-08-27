@@ -5,17 +5,14 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::rc::Rc;
-use std::fmt;
 
+use super::EndpointId;
 use super::network::Network;
 use super::message::Message;
 
 pub enum Request {
     Close(bool)
 }
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct EndpointId(usize);
 
 pub struct Endpoint {
     id: EndpointId,
@@ -87,29 +84,5 @@ impl Acceptor {
     }
     pub fn close(&self, network: &mut Network) {
         self.0.close(network, false)
-    }
-}
-
-impl fmt::Debug for EndpointId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<usize> for EndpointId {
-    fn from(value: usize) -> EndpointId {
-        EndpointId(value)
-    }
-}
-
-impl Into<usize> for EndpointId {
-    fn into(self) -> usize {
-        self.0
-    }
-}
-
-impl<'x> Into<usize> for &'x EndpointId {
-    fn into(self) -> usize {
-        self.0
     }
 }

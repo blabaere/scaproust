@@ -5,15 +5,15 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::rc::Rc;
-use std::io;
+use std::io::Result;
 
-use super::socket::SocketId;
-use super::endpoint::EndpointId;
-use super::message::Message;
+use core::SocketId;
+use core::EndpointId;
+use core::message::Message;
 
 pub trait Network {
-    fn connect(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId>;
-    fn bind(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId>;
+    fn connect(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> Result<EndpointId>;
+    fn bind(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> Result<EndpointId>;
     fn open(&mut self, endpoint_id: EndpointId, remote: bool);
     fn close(&mut self, endpoint_id: EndpointId, remote: bool);
     fn send(&mut self, endpoint_id: EndpointId, msg: Rc<Message>);

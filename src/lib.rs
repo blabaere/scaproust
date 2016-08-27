@@ -8,9 +8,7 @@
 #![doc(html_root_url = "https://blabaere.github.io/scaproust/")]
 
 #![feature(box_syntax)]
-#![feature(unboxed_closures)]
 #![feature(fnbox)]
-#![feature(associated_type_defaults)]
 
 //#![feature(plugin)]
 //#![plugin(clippy)]
@@ -37,7 +35,7 @@ pub use facade::socket::Socket;
 
 pub use core::socket::Reply as SocketReply;
 pub use core::protocol::Protocol;
-pub use core::endpoint::EndpointId;
+pub use core::EndpointId;
 pub use core::endpoint::Pipe;
 pub use core::network::Network;
 pub use core::message::Message;

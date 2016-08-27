@@ -7,28 +7,13 @@
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::io;
-use std::fmt;
 
 use sequence::Sequence;
+use super::{SocketId, EndpointId};
 use super::message::Message;
 use super::protocol::Protocol;
-use super::endpoint::{EndpointId, Pipe, Acceptor};
+use super::endpoint::{Pipe, Acceptor};
 use super::network::Network;
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct SocketId(usize);
-
-impl fmt::Debug for SocketId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<usize> for SocketId {
-    fn from(value: usize) -> SocketId {
-        SocketId(value)
-    }
-}
 
 pub enum Request {
     Connect(String),
@@ -53,6 +38,11 @@ pub struct Socket {
     protocol: Box<Protocol>,
     pipes: HashMap<EndpointId, Pipe>,
     acceptors: HashMap<EndpointId, Acceptor>,
+}
+
+pub struct SocketCollection {
+    ids: Sequence,
+    sockets: HashMap<SocketId, Socket>
 }
 
 impl Socket {
@@ -153,11 +143,6 @@ impl Socket {
 
 }
 
-pub struct SocketCollection {
-    ids: Sequence,
-    sockets: HashMap<SocketId, Socket>
-}
-
 impl SocketCollection {
     pub fn new(seq: Sequence) -> SocketCollection {
         SocketCollection {
@@ -189,7 +174,8 @@ mod tests {
     use super::*;
     use core::protocol::Protocol;
     use core::network::Network;
-    use core::endpoint::{EndpointId, Pipe};
+    use core::{SocketId, EndpointId};
+    use core::endpoint::Pipe;
     use io_error::*;
     use Message;
 

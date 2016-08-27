@@ -8,8 +8,8 @@ use std::io;
 
 use super::*;
 use ctrl::reactor;
-use core::socket::SocketId;
-use core::endpoint::{EndpointId, Request};
+use core::{SocketId, EndpointId};
+use core::endpoint::Request;
 
 pub struct RequestSender {
     req_tx: EventLoopRequestSender,
