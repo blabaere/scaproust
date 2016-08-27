@@ -33,12 +33,12 @@ pub enum Request {
 const BUS_TOKEN: mio::Token = mio::Token(::std::usize::MAX - 3);
 
 #[doc(hidden)]
-pub type EventLoop = mio::EventLoop<EventLoopHandler>;
+pub type EventLoop = mio::EventLoop<Reactor>;
 
 pub fn run_event_loop(mut event_loop: EventLoop, reply_tx: mpsc::Sender<session::Reply>) {
     let signal_bus = EventLoopBus::new();
     let signal_bus_reg = register_signal_bus(&mut event_loop, &signal_bus);
-    let mut handler = EventLoopHandler::new(signal_bus, reply_tx);
+    let mut handler = Reactor::new(signal_bus, reply_tx);
     let exec = signal_bus_reg.and_then(|_| event_loop.run(&mut handler));
 
     match exec {
@@ -51,17 +51,17 @@ fn register_signal_bus(event_loop: &mut EventLoop, signal_bus: &EventLoopBus<Sig
     event_loop.register(signal_bus, BUS_TOKEN, mio::EventSet::readable(), mio::PollOpt::edge())
 }
 
-pub struct EventLoopHandler {
+pub struct Reactor {
     signal_bus: EventLoopBus<Signal>,
     session: session::Session,
     endpoints: EndpointCollection,
     schedule: Schedule
 }
 
-impl EventLoopHandler {
-    fn new(bus: EventLoopBus<Signal>, reply_tx: mpsc::Sender<session::Reply>) -> EventLoopHandler {
+impl Reactor {
+    fn new(bus: EventLoopBus<Signal>, reply_tx: mpsc::Sender<session::Reply>) -> Reactor {
         let seq = Sequence::new();
-        EventLoopHandler {
+        Reactor {
             signal_bus: bus,
             session: session::Session::new(seq.clone(), reply_tx),
             endpoints: EndpointCollection::new(seq.clone()),
@@ -90,13 +90,12 @@ impl EventLoopHandler {
             socket::Request::SetOption(x) => self.apply_on_socket(event_loop, id, |socket, ctx| socket.set_opt(ctx, x))
         }
     }
-    fn apply_on_socket<F>(&mut self, event_loop: &mut EventLoop, id: SocketId, f: F) 
-    where F : FnOnce(&mut socket::Socket, &mut SocketEventLoopContext) {
-        if let Some(socket) = self.session.get_socket_mut(id) {
-            let mut ctx = SocketEventLoopContext::new(id, &mut self.signal_bus, &mut self.endpoints, &mut self.schedule, event_loop);
-
-            f(socket, &mut ctx);
+    fn process_timeout(&mut self, event_loop: &mut EventLoop, task: context::Schedulable) {
+        match task {
+            context::Schedulable::Reconnect(sid, eid, url) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.reconnect(ctx, url, eid)),
+            _ => {},
         }
+
     }
     fn process_endpoint_readiness(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
         let eid = EndpointId::from(tok);
@@ -142,6 +141,7 @@ impl EventLoopHandler {
             pipe::Event::Opened        => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
             pipe::Event::Sent          => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
             pipe::Event::Received(msg) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
+            pipe::Event::Error(err)    => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_error(ctx, eid, err)),
             _ => {}
         }
     }
@@ -157,9 +157,17 @@ impl EventLoopHandler {
             _ => {}
         }
     }
+    fn apply_on_socket<F>(&mut self, event_loop: &mut EventLoop, id: SocketId, f: F) 
+    where F : FnOnce(&mut socket::Socket, &mut SocketEventLoopContext) {
+        if let Some(socket) = self.session.get_socket_mut(id) {
+            let mut ctx = SocketEventLoopContext::new(id, &mut self.signal_bus, &mut self.endpoints, &mut self.schedule, event_loop);
+
+            f(socket, &mut ctx);
+        }
+    }
 }
 
-impl mio::Handler for EventLoopHandler {
+impl mio::Handler for Reactor {
     type Timeout = context::Schedulable;
     type Message = Request;
 
@@ -176,6 +184,7 @@ impl mio::Handler for EventLoopHandler {
     }
 
     fn timeout(&mut self, event_loop: &mut EventLoop, timeout: Self::Timeout) {
+        self.process_timeout(event_loop, timeout);
     }
 
     fn interrupted(&mut self, _: &mut EventLoop) {

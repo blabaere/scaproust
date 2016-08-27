@@ -10,10 +10,11 @@ use std::io::Result;
 use core::{SocketId, EndpointId, Message};
 
 pub trait Network {
-    fn connect(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> Result<EndpointId>;
-    fn bind(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> Result<EndpointId>;
-    fn open(&mut self, endpoint_id: EndpointId, remote: bool);
-    fn close(&mut self, endpoint_id: EndpointId, remote: bool);
-    fn send(&mut self, endpoint_id: EndpointId, msg: Rc<Message>);
-    fn recv(&mut self, endpoint_id: EndpointId);
+    fn connect(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> Result<EndpointId>;
+    fn reconnect(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> Result<()>;
+    fn bind(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> Result<EndpointId>;
+    fn open(&mut self, eid: EndpointId, remote: bool);
+    fn close(&mut self, eid: EndpointId, remote: bool);
+    fn send(&mut self, eid: EndpointId, msg: Rc<Message>);
+    fn recv(&mut self, eid: EndpointId);
 }

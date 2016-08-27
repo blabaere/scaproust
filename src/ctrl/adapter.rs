@@ -161,19 +161,27 @@ impl EndpointCollection {
         self.pipes.get_mut(&eid)
     }
 
-    pub fn insert_pipe(&mut self, sid: SocketId, ep: Box<pipe::Pipe>) -> EndpointId {
+    pub fn insert_pipe(&mut self, sid: SocketId, pipe: Box<pipe::Pipe>) -> EndpointId {
         let eid = EndpointId::from(self.ids.next());
-        let controller = PipeController {
-            socket_id: sid,
-            endpoint_id: eid,
-            pipe: ep
-        };
-
-        self.pipes.insert(eid, controller);
+        
+        self.insert_pipe_controller(sid, eid, pipe);
 
         eid
     }
 
+    pub fn reinsert_pipe(&mut self, sid: SocketId, eid: EndpointId, pipe: Box<pipe::Pipe>) {
+        self.insert_pipe_controller(sid, eid, pipe);
+    }
+
+    fn insert_pipe_controller(&mut self, sid: SocketId, eid: EndpointId, pipe: Box<pipe::Pipe>) {
+        let controller = PipeController {
+            socket_id: sid,
+            endpoint_id: eid,
+            pipe: pipe
+        };
+
+        self.pipes.insert(eid, controller);
+    }
 
     pub fn get_acceptor_mut<'a>(&'a mut self, eid: EndpointId) -> Option<&'a mut AcceptorController> {
         self.acceptors.get_mut(&eid)
@@ -254,11 +262,8 @@ impl<'a, 'b> SocketEventLoopContext<'a, 'b> {
             _ => Err(invalid_input_io_error(scheme.to_owned()))
         }
     }
-}
 
-impl<'a, 'b> Network for SocketEventLoopContext<'a, 'b> {
-
-    fn connect(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
+    fn connect(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> io::Result<Box<pipe::Pipe>> {
         let index = match url.find("://") {
             Some(x) => x,
             None => return Err(invalid_input_io_error(url.to_owned()))
@@ -267,10 +272,24 @@ impl<'a, 'b> Network for SocketEventLoopContext<'a, 'b> {
         let (scheme, remainder) = url.split_at(index);
         let addr = &remainder[3..];
         let transport = try!(self.get_transport(scheme));
-        let endpoint = try!(transport.connect(addr, pids));
-        let id = self.endpoints.insert_pipe(socket_id, endpoint);
 
-        Ok(id)
+        transport.connect(addr, pids)
+    }
+}
+
+impl<'a, 'b> Network for SocketEventLoopContext<'a, 'b> {
+
+    fn connect(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
+        let pipe = try!(self.connect(sid, url, pids));
+        let eid = self.endpoints.insert_pipe(sid, pipe);
+
+        Ok(eid)
+    }
+    fn reconnect(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> io::Result<()> {
+        let pipe = try!(self.connect(sid, url, pids));
+        let void = self.endpoints.reinsert_pipe(sid, eid, pipe);
+        
+        Ok(void)
     }
     fn bind(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
         let index = match url.find("://") {
@@ -322,19 +341,7 @@ impl<'a, 'b> context::Scheduler for SocketEventLoopContext<'a, 'b> {
         }
     }
 }
-/*
-impl<'a, 'b, 'x> AsRef<Network> for SocketEventLoopContext<'a, 'b> {
-    fn as_ref(&'x self) -> &'x Network {
-        self
-    }
-}
 
-impl<'a, 'b> AsRef<context::Scheduler> for SocketEventLoopContext<'a, 'b> {
-    fn as_ref(&self) -> &context::Scheduler {
-        self
-    }
-}
-*/
 impl<'a, 'b> context::Context for SocketEventLoopContext<'a, 'b> {
     fn raise(&mut self, evt: context::Event) {
         self.send_socket_evt(evt);

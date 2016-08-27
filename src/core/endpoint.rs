@@ -49,6 +49,9 @@ impl Endpoint {
     fn recv(&self, network: &mut Context) {
         network.recv(self.id)
     }
+    pub fn discard(mut self) -> Option<String> {
+        self.url.take()
+    }
 }
 
 impl Pipe {
@@ -72,6 +75,9 @@ impl Pipe {
     pub fn recv(&self, network: &mut Context) {
         self.0.recv(network)
     }
+    pub fn discard(mut self) -> Option<String> {
+        self.0.discard()
+    }
 }
 
 impl Acceptor {
@@ -83,5 +89,8 @@ impl Acceptor {
     }
     pub fn close(&self, network: &mut Context) {
         self.0.close(network, false)
+    }
+    pub fn discard(mut self) -> Option<String> {
+        self.0.discard()
     }
 }
