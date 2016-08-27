@@ -30,7 +30,7 @@ pub trait Scheduler {
     fn cancel(&mut self, scheduled: Scheduled);
 }
 
-pub trait Context : Network /* + Scheduler */{
+pub trait Context : Network + Scheduler {
     fn raise(&mut self, evt: Event);
 }
 
