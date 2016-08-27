@@ -24,17 +24,21 @@ use ctrl::signal::Signal;
 use sequence::Sequence;
 use io_error::*;
 
-
 pub trait Registrar {
     fn register(&mut self, io: &Evented, tok: Token, interest: EventSet, opt: PollOpt) -> io::Result<()>;
     fn reregister(&mut self, io: &Evented, tok: Token, interest: EventSet, opt: PollOpt) -> io::Result<()>;
     fn deregister(&mut self, io: &Evented) -> io::Result<()>;
 }
 
+pub trait Timer {
+
+}
+
 pub struct SocketEventLoopContext<'a> {
     socket_id: SocketId,
     signal_tx: &'a mut EventLoopBus<Signal>,
-    endpoints: &'a mut EndpointCollection
+    endpoints: &'a mut EndpointCollection,
+    schedule: &'a mut Schedule
 }
 
 pub struct EndpointEventLoopContext<'a, 'b> {
@@ -62,6 +66,10 @@ pub struct EndpointCollection {
     acceptors: HashMap<EndpointId, AcceptorController>
 }
 
+pub struct Schedule {
+    items: HashMap<context::Scheduled, Timeout>
+}
+
 impl<T:Handler> Registrar for EventLoop<T> {
     fn register(&mut self, io: &Evented, tok: Token, interest: EventSet, opt: PollOpt) -> io::Result<()> {
         self.register(io, tok, interest, opt)
@@ -74,26 +82,6 @@ impl<T:Handler> Registrar for EventLoop<T> {
     }
 }
 
-/*
-impl<H:Handler> Scheduler<H::Timeout> for EventLoop<H> {
-    fn schedule(&mut self, scheduled: H::Timeout, delay: Duration) -> io::Result<Timeout> {
-        self.timeout(scheduled, delay).map_err(from_timer_error)
-    }
-    fn cancel(&mut self, t: Timeout) {
-        self.clear_timeout(&t);
-    }
-}
-*/
-/*
-impl<H:Handler<Timeout=Scheduled>> Scheduler2 for EventLoop<H> {
-    fn schedule(&mut self, scheduled: Scheduled, delay: Duration) -> io::Result<Timeout> {
-        self.timeout(scheduled, delay).map_err(from_timer_error)
-    }
-    fn cancel(&mut self, t: Timeout) {
-        self.clear_timeout(&t);
-    }
-}
-*/
 impl PipeController {
     pub fn ready<'a, 'b>(&mut self, registrar: &'a mut Registrar, signal_bus: &'b mut EventLoopBus<Signal>, events: EventSet) {
         let mut ctx = self.create_context(registrar, signal_bus);
@@ -147,6 +135,7 @@ impl AcceptorController {
         }
     }
 }
+
 impl EndpointCollection {
     pub fn new(seq: Sequence) -> EndpointCollection {
         EndpointCollection {
@@ -192,15 +181,29 @@ impl EndpointCollection {
     }
 }
 
+impl Schedule {
+    pub fn new() -> Schedule {
+        Schedule { items: HashMap::new() }
+    }
+    fn insert(&mut self, scheduled: context::Scheduled, handle: Timeout) {
+        self.items.insert(scheduled, handle);
+    }
+    fn remove(&mut self, scheduled: context::Scheduled) -> Option<Timeout> {
+        self.items.remove(&scheduled)
+    }
+}
+
 impl<'a> SocketEventLoopContext<'a> {
     pub fn new(
         sid: SocketId,
         tx: &'a mut EventLoopBus<Signal>,
-        eps: &'a mut EndpointCollection) -> SocketEventLoopContext<'a> {
+        eps: &'a mut EndpointCollection,
+        sched: &'a mut Schedule) -> SocketEventLoopContext<'a> {
         SocketEventLoopContext {
             socket_id: sid,
             signal_tx: tx,
             endpoints: eps,
+            schedule: sched,
         }
     }
 

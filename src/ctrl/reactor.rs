@@ -18,6 +18,7 @@ use ctrl::signal::Signal;
 use ctrl::bus::EventLoopBus;
 use ctrl::adapter::{
     EndpointCollection,
+    Schedule,
     SocketEventLoopContext
 };
 use sequence::Sequence;
@@ -53,7 +54,8 @@ fn register_signal_bus(event_loop: &mut EventLoop, signal_bus: &EventLoopBus<Sig
 pub struct EventLoopHandler {
     signal_bus: EventLoopBus<Signal>,
     session: session::Session,
-    endpoints: EndpointCollection
+    endpoints: EndpointCollection,
+    schedule: Schedule
 }
 
 impl EventLoopHandler {
@@ -62,7 +64,8 @@ impl EventLoopHandler {
         EventLoopHandler {
             signal_bus: bus,
             session: session::Session::new(seq.clone(), reply_tx),
-            endpoints: EndpointCollection::new(seq.clone())
+            endpoints: EndpointCollection::new(seq.clone()),
+            schedule: Schedule::new()
         }
     }
     fn process_request(&mut self, request: Request) {
@@ -90,7 +93,7 @@ impl EventLoopHandler {
     fn apply_on_socket<F>(&mut self, id: SocketId, f: F) 
     where F : FnOnce(&mut socket::Socket, &mut SocketEventLoopContext) {
         if let Some(socket) = self.session.get_socket_mut(id) {
-            let mut ctx = SocketEventLoopContext::new(id, &mut self.signal_bus, &mut self.endpoints);
+            let mut ctx = SocketEventLoopContext::new(id, &mut self.signal_bus, &mut self.endpoints, &mut self.schedule);
 
             f(socket, &mut ctx);
         }
