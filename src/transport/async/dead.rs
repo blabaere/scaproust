@@ -8,10 +8,10 @@ use std::rc::Rc;
 
 use mio::EventSet;
 
+use core::Message;
 use transport::async::stub::*;
 use transport::async::state::*;
 use transport::pipe::{Event, Context};
-use core::message::Message;
 
 pub struct Dead;
 

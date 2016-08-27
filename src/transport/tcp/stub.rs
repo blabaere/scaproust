@@ -11,11 +11,11 @@ use std::io;
 use mio;
 use mio::tcp::{TcpStream, Shutdown};
 
+use core::Message;
 use transport::DEFAULT_RECV_MAX_SIZE;
 use transport::tcp::send::SendOperation;
 use transport::tcp::recv::RecvOperation;
 use transport::async::stub::*;
-use core::message::Message;
 use io_error::*;
 
 /*****************************************************************************/

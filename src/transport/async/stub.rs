@@ -12,7 +12,7 @@ use byteorder::{ BigEndian, ByteOrder };
 
 use mio::Evented;
 
-use core::message::Message;
+use core::Message;
 use io_error::*;
 
 pub trait AsyncPipeStub : Sender + Receiver + Handshake + Deref<Target=Evented> {

@@ -13,8 +13,7 @@ use mio::{Evented, Token, EventSet, PollOpt, EventLoop, Handler, Timeout};
 
 use core;
 use core::network::Network as Network;
-use core::{SocketId, EndpointId};
-use core::message::Message as Message;
+use core::{SocketId, EndpointId, Message};
 use transport::Transport;
 use transport::endpoint::*;
 use transport::pipe;

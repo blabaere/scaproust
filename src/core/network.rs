@@ -7,9 +7,7 @@
 use std::rc::Rc;
 use std::io::Result;
 
-use core::SocketId;
-use core::EndpointId;
-use core::message::Message;
+use core::{SocketId, EndpointId, Message};
 
 pub trait Network {
     fn connect(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> Result<EndpointId>;

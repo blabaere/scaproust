@@ -10,8 +10,7 @@ use std::io;
 use std::boxed::FnBox;
 
 use sequence::Sequence;
-use super::{SocketId, EndpointId};
-use super::message::Message;
+use super::{SocketId, EndpointId, Message};
 use super::endpoint::{Pipe, Acceptor};
 use super::network::Network;
 

@@ -9,10 +9,10 @@ use std::io::{Result, Error};
 
 use mio::EventSet;
 
+use core::Message;
 use transport::async::stub::*;
 use transport::async::dead::*;
 use transport::pipe::{Event, Context};
-use core::message::Message;
 
 pub trait PipeState<S : AsyncPipeStub + 'static> {
 

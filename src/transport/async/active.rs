@@ -9,11 +9,11 @@ use std::io::Result;
 
 use mio::{EventSet, PollOpt};
 
+use core::Message;
 use transport::async::stub::*;
 use transport::async::state::*;
 use transport::async::dead::Dead; 
 use transport::pipe::{Event, Context};
-use core::message::Message;
 
 pub struct Active<S> {
     stub: S

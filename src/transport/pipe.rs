@@ -9,7 +9,7 @@ use std::io;
 
 use mio::EventSet;
 
-use core::message::Message;
+use core::Message;
 use transport::endpoint::*;
 
 pub enum Command {

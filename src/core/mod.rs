@@ -6,11 +6,9 @@
 
 pub mod network;
 pub mod context;
-pub mod protocol;
 pub mod socket;
 pub mod session;
 pub mod endpoint;
-pub mod message;
 
 use std::fmt;
 
@@ -65,5 +63,57 @@ impl fmt::Debug for SocketId {
 impl From<usize> for SocketId {
     fn from(value: usize) -> SocketId {
         SocketId(value)
+    }
+}
+
+/*****************************************************************************/
+/*                                                                           */
+/* Message                                                                   */
+/*                                                                           */
+/*****************************************************************************/
+
+pub struct Message {
+    header: Vec<u8>,
+    body: Vec<u8>
+}
+
+impl Message {
+    pub fn new() -> Message {
+        Message {
+            header: Vec::new(),
+            body: Vec::new()
+        }
+    }
+
+    pub fn from_body(body: Vec<u8>) -> Message {
+        Message {
+            header: Vec::new(),
+            body: body
+        }
+    }
+
+    pub fn from_header_and_body(header: Vec<u8>, body: Vec<u8>) -> Message {
+        Message {
+            header: header,
+            body: body
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.header.len() + self.body.len()
+    }
+
+    pub fn get_header(&self) -> &[u8] {
+        &self.header
+    }
+
+    pub fn get_body(&self) -> &[u8] {
+        &self.body
+    }
+}
+
+impl Into<Vec<u8>> for Message {
+    fn into(self) -> Vec<u8> {
+        self.body
     }
 }

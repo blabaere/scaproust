@@ -6,9 +6,8 @@
 
 use std::rc::Rc;
 
-use super::EndpointId;
+use super::{EndpointId, Message};
 use super::network::Network;
-use super::message::Message;
 
 pub enum Request {
     Close(bool)

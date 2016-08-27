@@ -40,7 +40,7 @@ pub use core::socket::Protocol;
 pub use core::EndpointId;
 pub use core::endpoint::Pipe;
 pub use core::network::Network;
-pub use core::message::Message;
+pub use core::Message;
 
 #[cfg(test)]
 mod tests {
