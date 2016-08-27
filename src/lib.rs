@@ -33,8 +33,10 @@ pub use facade::session::SessionBuilder;
 pub use facade::session::Session;
 pub use facade::socket::Socket;
 
+// does this really have to be re-exported by default ?
+// It seems to be used by protocol implementors only
 pub use core::socket::Reply as SocketReply;
-pub use core::protocol::Protocol;
+pub use core::socket::Protocol;
 pub use core::EndpointId;
 pub use core::endpoint::Pipe;
 pub use core::network::Network;

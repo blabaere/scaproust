@@ -7,11 +7,11 @@
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::io;
+use std::boxed::FnBox;
 
 use sequence::Sequence;
 use super::{SocketId, EndpointId};
 use super::message::Message;
-use super::protocol::Protocol;
 use super::endpoint::{Pipe, Acceptor};
 use super::network::Network;
 
@@ -44,6 +44,22 @@ pub struct SocketCollection {
     ids: Sequence,
     sockets: HashMap<SocketId, Socket>
 }
+
+pub trait Protocol {
+    fn id(&self) -> u16;
+    fn peer_id(&self) -> u16;
+
+    fn add_pipe(&mut self, network: &mut Network, eid: EndpointId, pipe: Pipe);
+    fn remove_pipe(&mut self, network: &mut Network, eid: EndpointId) -> Option<Pipe>;
+
+    fn send(&mut self, network: &mut Network, msg: Message);
+    fn on_send_ack(&mut self, network: &mut Network, eid: EndpointId);
+    
+    fn recv(&mut self, network: &mut Network);
+    fn on_recv_ack(&mut self, network: &mut Network, eid: EndpointId, msg: Message);
+}
+
+pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
 
 impl Socket {
     pub fn new(id: SocketId, reply_tx: Sender<Reply>, proto: Box<Protocol>) -> Socket {
@@ -172,7 +188,6 @@ mod tests {
     use std::io;
 
     use super::*;
-    use core::protocol::Protocol;
     use core::network::Network;
     use core::{SocketId, EndpointId};
     use core::endpoint::Pipe;

@@ -5,7 +5,7 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::fmt;
-use std::io;
+use std::io::Result;
 
 use core::network::Network;
 
@@ -25,7 +25,7 @@ pub enum Schedulable {
 pub struct Scheduled(usize);
 
 pub trait Scheduler {
-    fn schedule(&mut self, schedulable: Schedulable) -> io::Result<Scheduled>;
+    fn schedule(&mut self, schedulable: Schedulable) -> Result<Scheduled>;
     fn cancel(&mut self, scheduled: Scheduled);
 }
 

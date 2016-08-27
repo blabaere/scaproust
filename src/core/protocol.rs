@@ -12,19 +12,3 @@ use core::socket::Reply;
 use core::endpoint::Pipe;
 use core::network::Network;
 use core::message::Message;
-
-pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
-
-pub trait Protocol {
-    fn id(&self) -> u16;
-    fn peer_id(&self) -> u16;
-
-    fn add_pipe(&mut self, network: &mut Network, eid: EndpointId, pipe: Pipe);
-    fn remove_pipe(&mut self, network: &mut Network, eid: EndpointId) -> Option<Pipe>;
-
-    fn send(&mut self, network: &mut Network, msg: Message);
-    fn on_send_ack(&mut self, network: &mut Network, eid: EndpointId);
-    
-    fn recv(&mut self, network: &mut Network);
-    fn on_recv_ack(&mut self, network: &mut Network, eid: EndpointId, msg: Message);
-}

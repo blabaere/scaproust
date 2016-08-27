@@ -8,12 +8,11 @@ use std::sync::mpsc;
 use std::io;
 
 use core::SocketId;
-use core::protocol::ProtocolCtor;
 use core::socket;
 use sequence::Sequence;
 
 pub enum Request {
-    CreateSocket(ProtocolCtor),
+    CreateSocket(socket::ProtocolCtor),
     CreateDevice,
     Shutdown
 }
@@ -42,7 +41,7 @@ impl Session {
         let _ = self.reply_sender.send(reply);
     }
 
-    pub fn add_socket(&mut self, protocol_ctor: ProtocolCtor) {
+    pub fn add_socket(&mut self, protocol_ctor: socket::ProtocolCtor) {
         let (tx, rx) = mpsc::channel();
         let protocol_ctor_args = (tx.clone(),);
         let protocol = protocol_ctor.call_box(protocol_ctor_args);

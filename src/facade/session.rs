@@ -15,7 +15,7 @@ use mio;
 use super::*;
 use ctrl::reactor;
 use core::session::{Request, Reply};
-use core::protocol::{Protocol, ProtocolCtor};
+use core::socket::{Protocol, ProtocolCtor};
 use core;
 use io_error::*;
 
