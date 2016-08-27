@@ -9,9 +9,9 @@ use std::io;
 
 use byteorder::{ BigEndian, ByteOrder };
 
+use core::Message;
 use transport::async::stub::*;
 use io_error::*;
-use Message;
 
 pub struct SendOperation {
     step: Option<SendOperationStep>
@@ -124,7 +124,7 @@ mod tests {
     use std::rc::Rc;
     use std::io;
 
-    use Message;
+    use core::Message;
     use super::*;
 
     #[test]

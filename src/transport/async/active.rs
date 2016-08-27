@@ -115,12 +115,12 @@ mod tests {
 
     use mio;
 
+    use core::Message;
     use transport::*;
     use transport::tests::*;
     use transport::async::state::*;
     use transport::async::tests::*;
     use transport::async::active::*;
-    use Message;
 
     #[test]
     fn on_enter_stub_is_reregistered_and_an_event_is_raised() {

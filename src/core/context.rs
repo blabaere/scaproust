@@ -10,6 +10,15 @@ use std::time::Duration;
 
 use core::network::Network;
 
+pub trait Context : Network + Scheduler {
+    fn raise(&mut self, evt: Event);
+}
+
+pub trait Scheduler {
+    fn schedule(&mut self, schedulable: Schedulable, delay: Duration) -> Result<Scheduled>;
+    fn cancel(&mut self, scheduled: Scheduled);
+}
+
 pub enum Event {
     CanSend,
     CanRecv
@@ -24,15 +33,6 @@ pub enum Schedulable {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Scheduled(usize);
-
-pub trait Scheduler {
-    fn schedule(&mut self, schedulable: Schedulable, delay: Duration) -> Result<Scheduled>;
-    fn cancel(&mut self, scheduled: Scheduled);
-}
-
-pub trait Context : Network + Scheduler {
-    fn raise(&mut self, evt: Event);
-}
 
 impl fmt::Debug for Scheduled {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

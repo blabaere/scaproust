@@ -10,6 +10,10 @@ use std::rc::Rc;
 use std::sync::mpsc;
 
 use scaproust::*;
+use scaproust::core::context::Context;
+use scaproust::core::socket::{Protocol, Reply};
+use scaproust::core::{Message, EndpointId};
+use scaproust::core::endpoint::Pipe;
 
 #[test]
 fn can_create_socket() {
@@ -19,34 +23,34 @@ fn can_create_socket() {
 }
 
 pub struct Push {
-    sender: mpsc::Sender<SocketReply>,
+    sender: mpsc::Sender<Reply>,
     pipe_id: Option<EndpointId>,
     pipe: Option<Pipe>
 }
 impl Protocol for Push {
     fn id(&self) -> u16 { (5 * 16) }
     fn peer_id(&self) -> u16 { (5 * 16) + 1 }
-    fn add_pipe(&mut self, network: &mut Network, eid: EndpointId, pipe: Pipe) {
+    fn add_pipe(&mut self, ctx: &mut Context, eid: EndpointId, pipe: Pipe) {
         self.pipe_id = Some(eid);
         self.pipe = Some(pipe);
     }
-    fn remove_pipe(&mut self, network: &mut Network, eid: EndpointId) -> Option<Pipe> {
+    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe> {
         let (_, pipe) = (self.pipe_id.take(), self.pipe.take());
 
         pipe
     }
-    fn send(&mut self, network: &mut Network, msg: Message) {
-        self.pipe_id.map(|eid| network.send(eid, Rc::new(msg)));
+    fn send(&mut self, ctx: &mut Context, msg: Message) {
+        self.pipe_id.map(|eid| ctx.send(eid, Rc::new(msg)));
     }
-    fn on_send_ack(&mut self, network: &mut Network, eid: EndpointId) {}
-    fn recv(&mut self, network: &mut Network) {
+    fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {}
+    fn recv(&mut self, ctx: &mut Context) {
 
     }
-    fn on_recv_ack(&mut self, network: &mut Network, eid: EndpointId, msg: Message) {}
+    fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message) {}
 }
 
-impl From<mpsc::Sender<SocketReply>> for Push {
-    fn from(tx: mpsc::Sender<SocketReply>) -> Push {
+impl From<mpsc::Sender<Reply>> for Push {
+    fn from(tx: mpsc::Sender<Reply>) -> Push {
         Push {
             sender: tx,
             pipe_id: None,

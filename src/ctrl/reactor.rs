@@ -14,7 +14,7 @@ use core::{SocketId, EndpointId, session, socket, endpoint, context};
 use transport::pipe;
 use transport::acceptor;
 
-use ctrl::signal::Signal;
+use ctrl::Signal;
 use ctrl::bus::EventLoopBus;
 use ctrl::adapter::{
     EndpointCollection,
@@ -83,11 +83,11 @@ impl EventLoopHandler {
     }
     fn process_socket_request(&mut self, event_loop: &mut EventLoop, id: SocketId, request: socket::Request) {
         match request {
-            socket::Request::Connect(url) => self.apply_on_socket(event_loop, id, |socket, network| socket.connect(network, url)),
-            socket::Request::Bind(url)    => self.apply_on_socket(event_loop, id, |socket, network| socket.bind(network, url)),
-            socket::Request::Send(msg)    => self.apply_on_socket(event_loop, id, |socket, network| socket.send(network, msg)),
-            socket::Request::Recv         => self.apply_on_socket(event_loop, id, |socket, network| socket.recv(network)),
-            _ => {}
+            socket::Request::Connect(url) => self.apply_on_socket(event_loop, id, |socket, ctx| socket.connect(ctx, url)),
+            socket::Request::Bind(url)    => self.apply_on_socket(event_loop, id, |socket, ctx| socket.bind(ctx, url)),
+            socket::Request::Send(msg)    => self.apply_on_socket(event_loop, id, |socket, ctx| socket.send(ctx, msg)),
+            socket::Request::Recv         => self.apply_on_socket(event_loop, id, |socket, ctx| socket.recv(ctx)),
+            socket::Request::SetOption(x) => self.apply_on_socket(event_loop, id, |socket, ctx| socket.set_opt(ctx, x))
         }
     }
     fn apply_on_socket<F>(&mut self, event_loop: &mut EventLoop, id: SocketId, f: F) 

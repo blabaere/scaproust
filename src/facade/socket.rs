@@ -6,14 +6,15 @@
 
 use std::sync::mpsc;
 use std::io;
+use std::time::Duration;
 
 use super::*;
 use ctrl::reactor;
-use core::SocketId;
+use core::{SocketId, Message};
 use core::socket::{Request, Reply};
+use core::config::ConfigOption;
 use core;
 use io_error::*;
-use Message;
 
 pub type ReplyReceiver = mpsc::Receiver<Reply>;
 
@@ -53,6 +54,12 @@ impl Socket {
         }
     }
 
+/*****************************************************************************/
+/*                                                                           */
+/* connect                                                                   */
+/*                                                                           */
+/*****************************************************************************/
+
     pub fn connect(&mut self, url: &str) -> io::Result<endpoint::Endpoint> {
         let request = Request::Connect(From::from(url));
 
@@ -71,6 +78,12 @@ impl Socket {
             _ => self.unexpected_reply()
         }
     }
+
+/*****************************************************************************/
+/*                                                                           */
+/* bind                                                                      */
+/*                                                                           */
+/*****************************************************************************/
 
     pub fn bind(&mut self, url: &str) -> io::Result<endpoint::Endpoint> {
         let request = Request::Bind(From::from(url));
@@ -91,6 +104,12 @@ impl Socket {
         }
     }
 
+/*****************************************************************************/
+/*                                                                           */
+/* send                                                                      */
+/*                                                                           */
+/*****************************************************************************/
+
     pub fn send(&mut self, buffer: Vec<u8>) -> io::Result<()> {
         let msg = Message::from_body(buffer);
         let request = Request::Send(msg);
@@ -106,6 +125,12 @@ impl Socket {
         }
     }
 
+/*****************************************************************************/
+/*                                                                           */
+/* recv                                                                      */
+/*                                                                           */
+/*****************************************************************************/
+
     pub fn recv(&mut self) -> io::Result<Vec<u8>> {
         let request = Request::Recv;
 
@@ -119,6 +144,37 @@ impl Socket {
             _ => self.unexpected_reply()
         }
     }
+
+/*****************************************************************************/
+/*                                                                           */
+/* options                                                                   */
+/*                                                                           */
+/*****************************************************************************/
+
+    // TODO move this to a trait ?
+    pub fn set_send_timeout(&mut self, timeout: Duration) -> io::Result<()> {
+        self.set_option(ConfigOption::SendTimeout(timeout))
+    }
+
+    pub fn set_option(&mut self, cfg_opt: ConfigOption) -> io::Result<()> {
+        let request = Request::SetOption(cfg_opt);
+
+        self.call(request, |reply| self.on_set_option_reply(reply))
+    }
+
+    fn on_set_option_reply(&self, reply: Reply) -> io::Result<()> {
+        match reply {
+            Reply::SetOption => Ok(()),
+            Reply::Err(e)    => Err(e),
+            _ => self.unexpected_reply()
+        }
+    }
+
+/*****************************************************************************/
+/*                                                                           */
+/* backend                                                                   */
+/*                                                                           */
+/*****************************************************************************/
 
     fn call<T, F : FnOnce(Reply) -> io::Result<T>>(&self, request: Request, process: F) -> io::Result<T> {
         self.execute_request(request).and_then(process)

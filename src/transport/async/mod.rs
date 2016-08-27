@@ -20,9 +20,9 @@ use std::rc::Rc;
 
 use mio;
 
+use core::Message;
 use transport::*;
 use transport::pipe::*;
-use Message;
 
 use self::stub::AsyncPipeStub;
 use self::state::PipeState;

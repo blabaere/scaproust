@@ -80,7 +80,7 @@ impl Session {
         }
     }
 
-    pub fn create_socket<T>(&self) -> io::Result<socket::Socket>
+    pub fn create_socket<T>(&mut self) -> io::Result<socket::Socket>
     where T : Protocol + From<mpsc::Sender<core::socket::Reply>> + 'static
     {
         let protocol_ctor = Session::create_protocol_ctor::<T>();

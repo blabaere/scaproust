@@ -4,6 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::collections::HashMap;
 use std::sync::mpsc;
 use std::io;
 
@@ -26,14 +27,19 @@ pub enum Reply {
 
 pub struct Session {
     reply_sender: mpsc::Sender<Reply>,
-    sockets: socket::SocketCollection
+    sockets: SocketCollection
+}
+
+struct SocketCollection {
+    ids: Sequence,
+    sockets: HashMap<SocketId, socket::Socket>
 }
 
 impl Session {
     pub fn new(seq: Sequence, reply_tx: mpsc::Sender<Reply>) -> Session {
         Session {
             reply_sender: reply_tx,
-            sockets: socket::SocketCollection::new(seq)
+            sockets: SocketCollection::new(seq)
         }
     }
 
@@ -53,5 +59,26 @@ impl Session {
     pub fn get_socket_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut socket::Socket> {
         self.sockets.get_socket_mut(id)
     }
+}
 
+impl SocketCollection {
+    pub fn new(seq: Sequence) -> SocketCollection {
+        SocketCollection {
+            ids: seq,
+            sockets: HashMap::new()
+        }
+    }
+
+    pub fn add(&mut self, reply_tx: mpsc::Sender<socket::Reply>, proto: Box<socket::Protocol>) -> SocketId {
+        let id = SocketId::from(self.ids.next());
+        let socket = socket::Socket::new(id, reply_tx, proto);
+
+        self.sockets.insert(id, socket);
+
+        id
+    }
+
+    pub fn get_socket_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut socket::Socket> {
+        self.sockets.get_mut(&id)
+    }
 }

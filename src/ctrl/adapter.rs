@@ -20,7 +20,7 @@ use transport::pipe;
 use transport::acceptor;
 use transport::tcp::Tcp;
 use ctrl::bus::EventLoopBus;
-use ctrl::signal::Signal;
+use ctrl::Signal;
 use sequence::Sequence;
 use io_error::*;
 
@@ -322,7 +322,19 @@ impl<'a, 'b> context::Scheduler for SocketEventLoopContext<'a, 'b> {
         }
     }
 }
+/*
+impl<'a, 'b, 'x> AsRef<Network> for SocketEventLoopContext<'a, 'b> {
+    fn as_ref(&'x self) -> &'x Network {
+        self
+    }
+}
 
+impl<'a, 'b> AsRef<context::Scheduler> for SocketEventLoopContext<'a, 'b> {
+    fn as_ref(&self) -> &context::Scheduler {
+        self
+    }
+}
+*/
 impl<'a, 'b> context::Context for SocketEventLoopContext<'a, 'b> {
     fn raise(&mut self, evt: context::Event) {
         self.send_socket_evt(evt);

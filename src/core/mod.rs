@@ -6,6 +6,7 @@
 
 pub mod network;
 pub mod context;
+pub mod config;
 pub mod socket;
 pub mod session;
 pub mod endpoint;

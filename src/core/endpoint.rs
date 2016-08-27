@@ -7,7 +7,7 @@
 use std::rc::Rc;
 
 use super::{EndpointId, Message};
-use super::network::Network;
+use super::context::Context;
 
 pub enum Request {
     Close(bool)
@@ -37,16 +37,16 @@ impl Endpoint {
         }
     }
 
-    fn open(&self, network: &mut Network, remote: bool) {
+    fn open(&self, network: &mut Context, remote: bool) {
         network.open(self.id, remote)
     }
-    fn close(&self, network: &mut Network, remote: bool) {
+    fn close(&self, network: &mut Context, remote: bool) {
         network.close(self.id, remote)
     }
-    fn send(&self, network: &mut Network, msg: Rc<Message>) {
+    fn send(&self, network: &mut Context, msg: Rc<Message>) {
         network.send(self.id, msg)
     }
-    fn recv(&self, network: &mut Network) {
+    fn recv(&self, network: &mut Context) {
         network.recv(self.id)
     }
 }
@@ -60,16 +60,16 @@ impl Pipe {
         Pipe(Endpoint::new_accepted(id))
     }
 
-    pub fn open(&self, network: &mut Network) {
+    pub fn open(&self, network: &mut Context) {
         self.0.open(network, true)
     }
-    pub fn close(&self, network: &mut Network) {
+    pub fn close(&self, network: &mut Context) {
         self.0.close(network, true)
     }
-    pub fn send(&self, network: &mut Network, msg: Rc<Message>) {
+    pub fn send(&self, network: &mut Context, msg: Rc<Message>) {
         self.0.send(network, msg)
     }
-    pub fn recv(&self, network: &mut Network) {
+    pub fn recv(&self, network: &mut Context) {
         self.0.recv(network)
     }
 }
@@ -78,10 +78,10 @@ impl Acceptor {
     pub fn new(id: EndpointId, url: String) -> Acceptor {
         Acceptor(Endpoint::new_created(id, url))
     }
-    pub fn open(&self, network: &mut Network) {
+    pub fn open(&self, network: &mut Context) {
         self.0.open(network, false)
     }
-    pub fn close(&self, network: &mut Network) {
+    pub fn close(&self, network: &mut Context) {
         self.0.close(network, false)
     }
 }

@@ -8,8 +8,8 @@ use std::io;
 
 use byteorder::{ BigEndian, ByteOrder };
 
+use core::Message;
 use io_error::*;
-use Message;
 
 pub struct RecvOperation {
     step: Option<RecvOperationStep>

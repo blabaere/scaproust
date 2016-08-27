@@ -11,9 +11,9 @@ use std::io;
 
 use mio;
 
+use core::Message;
 use transport::async::*;
 use io_error::*;
-use Message;
 
 pub struct TestStepStreamSensor {
     sent_handshakes: Vec<(u16, u16)>,

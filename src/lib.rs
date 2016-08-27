@@ -23,7 +23,7 @@ extern crate mio;
 extern crate time;
 
 mod sequence;
-mod core;
+pub mod core;
 mod ctrl;
 mod facade;
 mod transport;
@@ -35,12 +35,13 @@ pub use facade::socket::Socket;
 
 // does this really have to be re-exported by default ?
 // It seems to be used by protocol implementors only
-pub use core::socket::Reply as SocketReply;
+/*pub use core::socket::Reply as SocketReply;
 pub use core::socket::Protocol;
 pub use core::EndpointId;
 pub use core::endpoint::Pipe;
 pub use core::network::Network;
-pub use core::Message;
+pub use core::context::*;
+pub use core::Message;*/
 
 #[cfg(test)]
 mod tests {

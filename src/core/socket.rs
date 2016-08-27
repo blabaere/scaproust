@@ -9,17 +9,17 @@ use std::sync::mpsc::Sender;
 use std::io;
 use std::boxed::FnBox;
 
-use sequence::Sequence;
 use super::{SocketId, EndpointId, Message};
 use super::endpoint::{Pipe, Acceptor};
-use super::network::Network;
+use super::config::{Config, ConfigOption};
+use super::context::Context;
 
 pub enum Request {
     Connect(String),
     Bind(String),
     Send(Message),
     Recv,
-    SetOption,
+    SetOption(ConfigOption),
 }
 
 pub enum Reply {
@@ -37,25 +37,21 @@ pub struct Socket {
     protocol: Box<Protocol>,
     pipes: HashMap<EndpointId, Pipe>,
     acceptors: HashMap<EndpointId, Acceptor>,
-}
-
-pub struct SocketCollection {
-    ids: Sequence,
-    sockets: HashMap<SocketId, Socket>
+    config: Config
 }
 
 pub trait Protocol {
     fn id(&self) -> u16;
     fn peer_id(&self) -> u16;
 
-    fn add_pipe(&mut self, network: &mut Network, eid: EndpointId, pipe: Pipe);
-    fn remove_pipe(&mut self, network: &mut Network, eid: EndpointId) -> Option<Pipe>;
+    fn add_pipe(&mut self, ctx: &mut Context, eid: EndpointId, pipe: Pipe);
+    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe>;
 
-    fn send(&mut self, network: &mut Network, msg: Message);
-    fn on_send_ack(&mut self, network: &mut Network, eid: EndpointId);
+    fn send(&mut self, ctx: &mut Context, msg: Message);
+    fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId);
     
-    fn recv(&mut self, network: &mut Network);
-    fn on_recv_ack(&mut self, network: &mut Network, eid: EndpointId, msg: Message);
+    fn recv(&mut self, ctx: &mut Context);
+    fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message);
 }
 
 pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
@@ -67,7 +63,8 @@ impl Socket {
             reply_sender: reply_tx,
             protocol: proto,
             pipes: HashMap::new(),
-            acceptors: HashMap::new()
+            acceptors: HashMap::new(),
+            config: Config::new()
         }
     }
 
@@ -82,19 +79,19 @@ impl Socket {
         let _ = self.reply_sender.send(reply);
     }
 
-    pub fn connect(&mut self, network: &mut Network, url: String) {
+    pub fn connect(&mut self, ctx: &mut Context, url: String) {
         let pids = self.get_protocol_ids();
 
-        match network.connect(self.id, &url, pids) {
-            Ok(id) => self.on_connect_success(network, url, id),
+        match ctx.connect(self.id, &url, pids) {
+            Ok(id) => self.on_connect_success(ctx, url, id),
             Err(e) => self.on_connect_error(e)
         };
     }
 
-    fn on_connect_success(&mut self, network: &mut Network, url: String, eid: EndpointId) {
+    fn on_connect_success(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
         let pipe = Pipe::new_created(eid, url);
 
-        pipe.open(network);
+        pipe.open(ctx);
 
         self.pipes.insert(eid, pipe);
         self.send_reply(Reply::Connect(eid));
@@ -104,19 +101,19 @@ impl Socket {
         self.send_reply(Reply::Err(err));
     }
 
-    pub fn bind(&mut self, network: &mut Network, url: String) {
+    pub fn bind(&mut self, ctx: &mut Context, url: String) {
         let pids = self.get_protocol_ids();
 
-        match network.bind(self.id, &url, pids) {
-            Ok(id) => self.on_bind_success(network, url, id),
+        match ctx.bind(self.id, &url, pids) {
+            Ok(id) => self.on_bind_success(ctx, url, id),
             Err(e) => self.on_bind_error(e)
         };
     }
 
-    fn on_bind_success(&mut self, network: &mut Network, url: String, eid: EndpointId) {
+    fn on_bind_success(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
         let acceptor = Acceptor::new(eid, url);
 
-        acceptor.open(network);
+        acceptor.open(ctx);
 
         self.acceptors.insert(eid, acceptor);
         self.send_reply(Reply::Bind(eid));
@@ -126,58 +123,39 @@ impl Socket {
         self.send_reply(Reply::Err(err));
     }
 
-    pub fn send(&mut self, network: &mut Network, msg: Message) {
-        self.protocol.send(network, msg);
+    pub fn send(&mut self, ctx: &mut Context, msg: Message) {
+        self.protocol.send(ctx, msg);
     }
 
-    pub fn on_send_ack(&mut self, network: &mut Network, eid: EndpointId) {
-        self.protocol.on_send_ack(network, eid);
+    pub fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.protocol.on_send_ack(ctx, eid);
     }
 
-    pub fn recv(&mut self, network: &mut Network) {
-        self.protocol.recv(network);
+    pub fn recv(&mut self, ctx: &mut Context) {
+        self.protocol.recv(ctx);
     }
 
-    pub fn on_recv_ack(&mut self, network: &mut Network, eid: EndpointId, msg: Message) {
-        self.protocol.on_recv_ack(network, eid, msg);
+    pub fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message) {
+        self.protocol.on_recv_ack(ctx, eid, msg);
     }
 
-    pub fn on_pipe_opened(&mut self, network: &mut Network, eid: EndpointId) {
+    pub fn on_pipe_opened(&mut self, ctx: &mut Context, eid: EndpointId) {
         if let Some(pipe) = self.pipes.remove(&eid) {
-            self.protocol.add_pipe(network, eid, pipe);
+            self.protocol.add_pipe(ctx, eid, pipe);
         }
     }
 
-    pub fn on_pipe_accepted(&mut self, network: &mut Network, eid: EndpointId) {
+    pub fn on_pipe_accepted(&mut self, ctx: &mut Context, eid: EndpointId) {
         let pipe = Pipe::new_accepted(eid);
 
-        pipe.open(network);
+        pipe.open(ctx);
 
         self.pipes.insert(eid, pipe);
     }
 
-}
-
-impl SocketCollection {
-    pub fn new(seq: Sequence) -> SocketCollection {
-        SocketCollection {
-            ids: seq,
-            sockets: HashMap::new()
-        }
+    pub fn set_opt(&mut self, ctx: &mut Context, opt: ConfigOption) {
     }
 
-    pub fn add(&mut self, reply_tx: Sender<Reply>, proto: Box<Protocol>) -> SocketId {
-        let id = SocketId::from(self.ids.next());
-        let socket = Socket::new(id, reply_tx, proto);
-
-        self.sockets.insert(id, socket);
-
-        id
-    }
-
-    pub fn get_socket_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut Socket> {
-        self.sockets.get_mut(&id)
-    }
 }
 
 #[cfg(test)]
@@ -185,25 +163,26 @@ mod tests {
     use std::rc::Rc;
     use std::sync::mpsc;
     use std::io;
+    use std::time::Duration;
 
     use super::*;
     use core::network::Network;
-    use core::{SocketId, EndpointId};
+    use core::context::*;
+    use core::{SocketId, EndpointId, Message};
     use core::endpoint::Pipe;
     use io_error::*;
-    use Message;
 
     struct TestProto;
 
     impl Protocol for TestProto {
         fn id(&self) -> u16 {0}
         fn peer_id(&self) -> u16 {0}
-        fn add_pipe(&mut self, _: &mut Network, _: EndpointId, _: Pipe) {}
-        fn remove_pipe(&mut self, _: &mut Network, _: EndpointId) -> Option<Pipe> {None}
-        fn send(&mut self, _: &mut Network, _: Message) {}
-        fn on_send_ack(&mut self, _: &mut Network, _: EndpointId) {}
-        fn recv(&mut self, _: &mut Network) {}
-        fn on_recv_ack(&mut self, _: &mut Network, _: EndpointId, _: Message) {}
+        fn add_pipe(&mut self, _: &mut Context, _: EndpointId, _: Pipe) {}
+        fn remove_pipe(&mut self, _: &mut Context, _: EndpointId) -> Option<Pipe> {None}
+        fn send(&mut self, _: &mut Context, _: Message) {}
+        fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {}
+        fn recv(&mut self, _: &mut Context) {}
+        fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
     }
 
     struct FailingNetwork;
@@ -222,6 +201,20 @@ mod tests {
         fn send(&mut self, _: EndpointId, _: Rc<Message>) {
         }
         fn recv(&mut self, _: EndpointId) {
+        }
+    }
+
+    impl Scheduler for FailingNetwork {
+        fn schedule(&mut self, schedulable: Schedulable, delay: Duration) -> io::Result<Scheduled> {
+            Err(other_io_error("FailingNetwork can only fail"))
+        }
+        fn cancel(&mut self, scheduled: Scheduled){
+        }
+    }
+
+    impl Context for FailingNetwork {
+        fn raise(&mut self, evt: Event) {
+
         }
     }
 
@@ -258,6 +251,20 @@ mod tests {
         fn close(&mut self, endpoint_id: EndpointId, _: bool) {}
         fn send(&mut self, endpoint_id: EndpointId, msg: Rc<Message>) {}
         fn recv(&mut self, endpoint_id: EndpointId) {}
+    }
+
+    impl Scheduler for WorkingNetwork {
+        fn schedule(&mut self, schedulable: Schedulable, delay: Duration) -> io::Result<Scheduled> {
+            Ok(Scheduled::from(0))
+        }
+        fn cancel(&mut self, scheduled: Scheduled){
+        }
+    }
+
+    impl Context for WorkingNetwork {
+        fn raise(&mut self, evt: Event) {
+
+        }
     }
 
     #[test]
