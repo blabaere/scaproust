@@ -156,6 +156,9 @@ impl Socket {
         self.send_reply(Reply::Err(err));
     }
 
+    fn schedule_rebind(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
+    }
+
 /*****************************************************************************/
 /*                                                                           */
 /* pipe                                                                      */
@@ -196,6 +199,26 @@ impl Socket {
             return pipe.discard()
         }
         None
+    }
+
+/*****************************************************************************/
+/*                                                                           */
+/* acceptor                                                                  */
+/*                                                                           */
+/*****************************************************************************/
+
+    pub fn on_acceptor_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
+        if let Some(url) = self.remove_acceptor(ctx, eid) {
+            self.schedule_rebind(ctx, url, eid);
+        }
+    }
+
+    fn remove_acceptor(&mut self, _: &mut Context, eid: EndpointId) -> Option<String> {
+        if let Some(acceptor) = self.acceptors.remove(&eid) {
+            acceptor.discard()
+        } else {
+            None
+        }
     }
 
 /*****************************************************************************/
