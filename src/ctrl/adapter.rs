@@ -31,14 +31,16 @@ pub trait Registrar {
 }
 
 pub trait Timer {
-
+    fn schedule(&mut self, task: context::Schedulable, delay: Duration) -> io::Result<Timeout>;
+    fn cancel(&mut self, timeout: &Timeout);
 }
 
-pub struct SocketEventLoopContext<'a> {
+pub struct SocketEventLoopContext<'a, 'b> {
     socket_id: SocketId,
     signal_tx: &'a mut EventLoopBus<Signal>,
     endpoints: &'a mut EndpointCollection,
-    schedule: &'a mut Schedule
+    schedule: &'a mut Schedule,
+    timer: &'b mut Timer
 }
 
 pub struct EndpointEventLoopContext<'a, 'b> {
@@ -67,6 +69,7 @@ pub struct EndpointCollection {
 }
 
 pub struct Schedule {
+    ids: Sequence,
     items: HashMap<context::Scheduled, Timeout>
 }
 
@@ -79,6 +82,15 @@ impl<T:Handler> Registrar for EventLoop<T> {
     }
     fn deregister(&mut self, io: &Evented) -> io::Result<()> {
         self.deregister(io)
+    }
+}
+
+impl<T:Handler<Timeout=context::Schedulable>> Timer for EventLoop<T> {
+    fn schedule(&mut self, task: context::Schedulable, delay: Duration) -> io::Result<Timeout> {
+        self.timeout(task, delay).map_err(from_timer_error)
+    }
+    fn cancel(&mut self, timeout: &Timeout) {
+        self.clear_timeout(timeout);
     }
 }
 
@@ -182,28 +194,35 @@ impl EndpointCollection {
 }
 
 impl Schedule {
-    pub fn new() -> Schedule {
-        Schedule { items: HashMap::new() }
+    pub fn new(seq: Sequence) -> Schedule {
+        Schedule { 
+            ids: seq,
+            items: HashMap::new() 
+        }
     }
-    fn insert(&mut self, scheduled: context::Scheduled, handle: Timeout) {
+    fn insert(&mut self, handle: Timeout) -> context::Scheduled {
+        let scheduled = context::Scheduled::from(self.ids.next()); 
         self.items.insert(scheduled, handle);
+        scheduled
     }
     fn remove(&mut self, scheduled: context::Scheduled) -> Option<Timeout> {
         self.items.remove(&scheduled)
     }
 }
 
-impl<'a> SocketEventLoopContext<'a> {
+impl<'a, 'b> SocketEventLoopContext<'a, 'b> {
     pub fn new(
         sid: SocketId,
         tx: &'a mut EventLoopBus<Signal>,
         eps: &'a mut EndpointCollection,
-        sched: &'a mut Schedule) -> SocketEventLoopContext<'a> {
+        sched: &'a mut Schedule,
+        timer: &'b mut Timer) -> SocketEventLoopContext<'a, 'b> {
         SocketEventLoopContext {
             socket_id: sid,
             signal_tx: tx,
             endpoints: eps,
             schedule: sched,
+            timer: timer
         }
     }
 
@@ -237,7 +256,7 @@ impl<'a> SocketEventLoopContext<'a> {
     }
 }
 
-impl<'a> Network for SocketEventLoopContext<'a> {
+impl<'a, 'b> Network for SocketEventLoopContext<'a, 'b> {
 
     fn connect(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
         let index = match url.find("://") {
@@ -290,7 +309,21 @@ impl<'a> Network for SocketEventLoopContext<'a> {
 
 }
 
-impl<'a> context::Context for SocketEventLoopContext<'a> {
+impl<'a, 'b> context::Scheduler for SocketEventLoopContext<'a, 'b> {
+    fn schedule(&mut self, schedulable: context::Schedulable, delay: Duration) -> io::Result<context::Scheduled> {
+        let handle = try!(self.timer.schedule(schedulable, delay));
+        let scheduled = self.schedule.insert(handle);
+        
+        Ok(scheduled)
+    }
+    fn cancel(&mut self, scheduled: context::Scheduled) {
+        if let Some(handle) = self.schedule.remove(scheduled) {
+            self.timer.cancel(&handle);
+        }
+    }
+}
+
+impl<'a, 'b> context::Context for SocketEventLoopContext<'a, 'b> {
     fn raise(&mut self, evt: context::Event) {
         self.send_socket_evt(evt);
     }

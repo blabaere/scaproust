@@ -6,6 +6,7 @@
 
 use std::fmt;
 use std::io::Result;
+use std::time::Duration;
 
 use core::network::Network;
 
@@ -25,7 +26,7 @@ pub enum Schedulable {
 pub struct Scheduled(usize);
 
 pub trait Scheduler {
-    fn schedule(&mut self, schedulable: Schedulable) -> Result<Scheduled>;
+    fn schedule(&mut self, schedulable: Schedulable, delay: Duration) -> Result<Scheduled>;
     fn cancel(&mut self, scheduled: Scheduled);
 }
 

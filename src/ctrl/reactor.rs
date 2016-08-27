@@ -9,7 +9,7 @@ use std::io;
 
 use mio;
 
-use core::{SocketId, EndpointId, session, socket, endpoint};
+use core::{SocketId, EndpointId, session, socket, endpoint, context};
 
 use transport::pipe;
 use transport::acceptor;
@@ -65,13 +65,13 @@ impl EventLoopHandler {
             signal_bus: bus,
             session: session::Session::new(seq.clone(), reply_tx),
             endpoints: EndpointCollection::new(seq.clone()),
-            schedule: Schedule::new()
+            schedule: Schedule::new(seq.clone())
         }
     }
-    fn process_request(&mut self, request: Request) {
+    fn process_request(&mut self, event_loop: &mut EventLoop, request: Request) {
         match request {
             Request::Session(req) => self.process_session_request(req),
-            Request::Socket(id, req) => self.process_socket_request(id, req),
+            Request::Socket(id, req) => self.process_socket_request(event_loop, id, req),
             _ => {}
         }
     }
@@ -81,19 +81,19 @@ impl EventLoopHandler {
             _ => {}
         }
     }
-    fn process_socket_request(&mut self, id: SocketId, request: socket::Request) {
+    fn process_socket_request(&mut self, event_loop: &mut EventLoop, id: SocketId, request: socket::Request) {
         match request {
-            socket::Request::Connect(url) => self.apply_on_socket(id, |socket, network| socket.connect(network, url)),
-            socket::Request::Bind(url)    => self.apply_on_socket(id, |socket, network| socket.bind(network, url)),
-            socket::Request::Send(msg)    => self.apply_on_socket(id, |socket, network| socket.send(network, msg)),
-            socket::Request::Recv         => self.apply_on_socket(id, |socket, network| socket.recv(network)),
+            socket::Request::Connect(url) => self.apply_on_socket(event_loop, id, |socket, network| socket.connect(network, url)),
+            socket::Request::Bind(url)    => self.apply_on_socket(event_loop, id, |socket, network| socket.bind(network, url)),
+            socket::Request::Send(msg)    => self.apply_on_socket(event_loop, id, |socket, network| socket.send(network, msg)),
+            socket::Request::Recv         => self.apply_on_socket(event_loop, id, |socket, network| socket.recv(network)),
             _ => {}
         }
     }
-    fn apply_on_socket<F>(&mut self, id: SocketId, f: F) 
+    fn apply_on_socket<F>(&mut self, event_loop: &mut EventLoop, id: SocketId, f: F) 
     where F : FnOnce(&mut socket::Socket, &mut SocketEventLoopContext) {
         if let Some(socket) = self.session.get_socket_mut(id) {
-            let mut ctx = SocketEventLoopContext::new(id, &mut self.signal_bus, &mut self.endpoints, &mut self.schedule);
+            let mut ctx = SocketEventLoopContext::new(id, &mut self.signal_bus, &mut self.endpoints, &mut self.schedule, event_loop);
 
             f(socket, &mut ctx);
         }
@@ -120,10 +120,10 @@ impl EventLoopHandler {
     }
     fn process_signal(&mut self, event_loop: &mut EventLoop, signal: Signal) {
         match signal {
-            Signal::PipeCmd(_, eid, cmd) => self.process_pipe_cmd(event_loop, eid, cmd),
-            Signal::AcceptorCmd(_, eid, cmd) => self.process_acceptor_cmd(event_loop, eid, cmd),
-            Signal::PipeEvt(sid, eid, cmd) => self.process_pipe_evt(sid, eid, cmd),
-            Signal::AcceptorEvt(sid, eid, cmd) => self.process_acceptor_evt(sid, eid, cmd),
+            Signal::PipeCmd(_, eid, cmd)       => self.process_pipe_cmd(event_loop, eid, cmd),
+            Signal::AcceptorCmd(_, eid, cmd)   => self.process_acceptor_cmd(event_loop, eid, cmd),
+            Signal::PipeEvt(sid, eid, evt)     => self.process_pipe_evt(event_loop, sid, eid, evt),
+            Signal::AcceptorEvt(sid, eid, evt) => self.process_acceptor_evt(event_loop, sid, eid, evt),
             Signal::SocketEvt(_, _) => {}
         }
     }
@@ -137,21 +137,21 @@ impl EventLoopHandler {
             acceptor.process(event_loop, &mut self.signal_bus, cmd);
         }
     }
-    fn process_pipe_evt(&mut self, sid: SocketId, eid: EndpointId, evt: pipe::Event) {
+    fn process_pipe_evt(&mut self, event_loop: &mut EventLoop, sid: SocketId, eid: EndpointId, evt: pipe::Event) {
         match evt {
-            pipe::Event::Opened        => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
-            pipe::Event::Sent          => self.apply_on_socket(sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
-            pipe::Event::Received(msg) => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
+            pipe::Event::Opened        => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
+            pipe::Event::Sent          => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
+            pipe::Event::Received(msg) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
             _ => {}
         }
     }
-    fn process_acceptor_evt(&mut self, sid: SocketId, _: EndpointId, evt: acceptor::Event) {
+    fn process_acceptor_evt(&mut self, event_loop: &mut EventLoop, sid: SocketId, _: EndpointId, evt: acceptor::Event) {
         match evt {
             acceptor::Event::Accepted(pipes) => {
                 for pipe in pipes {
                     let eid = self.endpoints.insert_pipe(sid, pipe);
 
-                    self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_accepted(ctx, eid));
+                    self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_accepted(ctx, eid));
                 }
             },
             _ => {}
@@ -160,11 +160,11 @@ impl EventLoopHandler {
 }
 
 impl mio::Handler for EventLoopHandler {
-    type Timeout = ();
+    type Timeout = context::Schedulable;
     type Message = Request;
 
     fn notify(&mut self, event_loop: &mut EventLoop, request: Self::Message) {
-        self.process_request(request);
+        self.process_request(event_loop, request);
     }
 
     fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
