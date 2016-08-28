@@ -20,6 +20,8 @@ fn can_create_socket() {
     let mut session = SessionBuilder::build().unwrap();
     let mut socket = session.create_socket::<Push>().unwrap();
     let ep = socket.connect("tcp://127.0.0.1:5454").unwrap();
+
+    let _ = ep.close();
 }
 
 pub struct Push {
@@ -30,11 +32,11 @@ pub struct Push {
 impl Protocol for Push {
     fn id(&self) -> u16 { (5 * 16) }
     fn peer_id(&self) -> u16 { (5 * 16) + 1 }
-    fn add_pipe(&mut self, ctx: &mut Context, eid: EndpointId, pipe: Pipe) {
+    fn add_pipe(&mut self, _: &mut Context, eid: EndpointId, pipe: Pipe) {
         self.pipe_id = Some(eid);
         self.pipe = Some(pipe);
     }
-    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe> {
+    fn remove_pipe(&mut self, _: &mut Context, _: EndpointId) -> Option<Pipe> {
         let (_, pipe) = (self.pipe_id.take(), self.pipe.take());
 
         pipe
@@ -42,11 +44,12 @@ impl Protocol for Push {
     fn send(&mut self, ctx: &mut Context, msg: Message, _: Option<Scheduled>) {
         self.pipe_id.map(|eid| ctx.send(eid, Rc::new(msg)));
     }
-    fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {}
-    fn recv(&mut self, ctx: &mut Context) {
+    fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {}
+    fn on_send_timeout(&mut self, _: &mut Context) {}
+    fn recv(&mut self, _: &mut Context) {
 
     }
-    fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message) {}
+    fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
 }
 
 impl From<mpsc::Sender<Reply>> for Push {
