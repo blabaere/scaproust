@@ -7,7 +7,6 @@
 use transport::async::stub::*;
 use transport::async::state::*;
 use transport::async::handshake::HandshakeTx; 
-use transport::async::dead::Dead; 
 use transport::pipe::Context;
 
 pub struct Initial<S : AsyncPipeStub> {
@@ -37,11 +36,6 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Initial<S> {
     fn open(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         transition::<Initial<S>, HandshakeTx<S>, S>(self, ctx)
     }
-    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
-        ctx.deregister(self.stub.deref());
-
-        box Dead
-    }
 
 }
 
@@ -67,7 +61,7 @@ mod tests {
     }
 
     #[test]
-    fn close_should_deregister_and_cause_a_transition_to_dead() {
+    fn close_should_cause_a_transition_to_dead() {
         let stub = TestStepStream::new();
         let state = box Initial::new(stub, (1, 1));
         let mut ctx = TestPipeContext::new();
@@ -75,7 +69,7 @@ mod tests {
 
         assert_eq!(0, ctx.get_registrations().len());
         assert_eq!(0, ctx.get_reregistrations().len());
-        assert_eq!(1, ctx.get_deregistrations());
+        assert_eq!(0, ctx.get_deregistrations());
 
         assert_eq!("Dead", new_state.name());
     }
