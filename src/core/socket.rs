@@ -8,11 +8,12 @@ use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::io;
 use std::boxed::FnBox;
+use std::time::Duration;
 
 use super::{SocketId, EndpointId, Message};
 use super::endpoint::{Pipe, Acceptor};
 use super::config::{Config, ConfigOption};
-use super::context::{Context, Schedulable};
+use super::context::{Context, Schedulable, Scheduled};
 
 pub enum Request {
     Connect(String),
@@ -47,7 +48,7 @@ pub trait Protocol {
     fn add_pipe(&mut self, ctx: &mut Context, eid: EndpointId, pipe: Pipe);
     fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe>;
 
-    fn send(&mut self, ctx: &mut Context, msg: Message);
+    fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Option<Scheduled>);
     fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId);
     
     fn recv(&mut self, ctx: &mut Context);
@@ -228,11 +229,24 @@ impl Socket {
 /*****************************************************************************/
 
     pub fn send(&mut self, ctx: &mut Context, msg: Message) {
-        self.protocol.send(ctx, msg);
+        if let Some(delay) = self.get_send_timeout() {
+            let task = Schedulable::SendTimeout(self.id);
+
+            match ctx.schedule(task, delay) {
+                Ok(timeout) => self.protocol.send(ctx, msg, Some(timeout)),
+                Err(e) => self.send_reply(Reply::Err(e))
+            }
+        } else {
+            self.protocol.send(ctx, msg, None);
+        }
     }
 
     pub fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.protocol.on_send_ack(ctx, eid);
+    }
+
+    fn get_send_timeout(&self) -> Option<Duration> {
+        self.config.send_timeout.as_ref().map(|d| d.clone())
     }
 
 /*****************************************************************************/
@@ -287,7 +301,7 @@ mod tests {
         fn peer_id(&self) -> u16 {0}
         fn add_pipe(&mut self, _: &mut Context, _: EndpointId, _: Pipe) {}
         fn remove_pipe(&mut self, _: &mut Context, _: EndpointId) -> Option<Pipe> {None}
-        fn send(&mut self, _: &mut Context, _: Message) {}
+        fn send(&mut self, _: &mut Context, _: Message, _: Option<Scheduled>) {}
         fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {}
         fn recv(&mut self, _: &mut Context) {}
         fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}

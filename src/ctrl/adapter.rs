@@ -263,7 +263,7 @@ impl<'a, 'b> SocketEventLoopContext<'a, 'b> {
         }
     }
 
-    fn connect(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> io::Result<Box<pipe::Pipe>> {
+    fn connect(&mut self, url: &str, pids: (u16, u16)) -> io::Result<Box<pipe::Pipe>> {
         let index = match url.find("://") {
             Some(x) => x,
             None => return Err(invalid_input_io_error(url.to_owned()))
@@ -280,13 +280,13 @@ impl<'a, 'b> SocketEventLoopContext<'a, 'b> {
 impl<'a, 'b> Network for SocketEventLoopContext<'a, 'b> {
 
     fn connect(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
-        let pipe = try!(self.connect(sid, url, pids));
+        let pipe = try!(self.connect(url, pids));
         let eid = self.endpoints.insert_pipe(sid, pipe);
 
         Ok(eid)
     }
     fn reconnect(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> io::Result<()> {
-        let pipe = try!(self.connect(sid, url, pids));
+        let pipe = try!(self.connect(url, pids));
         let void = self.endpoints.insert_pipe_controller(sid, eid, pipe);
         
         Ok(void)

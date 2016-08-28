@@ -10,7 +10,7 @@ use std::rc::Rc;
 use std::sync::mpsc;
 
 use scaproust::*;
-use scaproust::core::context::Context;
+use scaproust::core::context::{Context, Scheduled};
 use scaproust::core::socket::{Protocol, Reply};
 use scaproust::core::{Message, EndpointId};
 use scaproust::core::endpoint::Pipe;
@@ -39,7 +39,7 @@ impl Protocol for Push {
 
         pipe
     }
-    fn send(&mut self, ctx: &mut Context, msg: Message) {
+    fn send(&mut self, ctx: &mut Context, msg: Message, _: Option<Scheduled>) {
         self.pipe_id.map(|eid| ctx.send(eid, Rc::new(msg)));
     }
     fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {}
