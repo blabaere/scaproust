@@ -50,6 +50,7 @@ pub trait Protocol {
 
     fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Option<Scheduled>);
     fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId);
+    fn on_send_timeout(&mut self, ctx: &mut Context);
     
     fn recv(&mut self, ctx: &mut Context);
     fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message);
@@ -160,6 +161,9 @@ impl Socket {
     fn schedule_rebind(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
     }
 
+    pub fn rebind(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
+    }
+
 /*****************************************************************************/
 /*                                                                           */
 /* pipe                                                                      */
@@ -249,6 +253,10 @@ impl Socket {
         self.config.send_timeout.as_ref().map(|d| d.clone())
     }
 
+    pub fn on_send_timeout(&mut self, ctx: &mut Context) {
+        self.protocol.on_send_timeout(ctx);
+    }
+
 /*****************************************************************************/
 /*                                                                           */
 /* recv                                                                      */
@@ -303,6 +311,7 @@ mod tests {
         fn remove_pipe(&mut self, _: &mut Context, _: EndpointId) -> Option<Pipe> {None}
         fn send(&mut self, _: &mut Context, _: Message, _: Option<Scheduled>) {}
         fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {}
+        fn on_send_timeout(&mut self, _: &mut Context) {}
         fn recv(&mut self, _: &mut Context) {}
         fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
     }

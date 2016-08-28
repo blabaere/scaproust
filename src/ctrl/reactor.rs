@@ -93,6 +93,8 @@ impl Reactor {
     fn process_timeout(&mut self, event_loop: &mut EventLoop, task: context::Schedulable) {
         match task {
             context::Schedulable::Reconnect(sid, eid, url) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.reconnect(ctx, url, eid)),
+            context::Schedulable::Rebind(sid, eid, url)    => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.rebind(ctx, url, eid)),
+            context::Schedulable::SendTimeout(sid)         => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_timeout(ctx)),
             _ => {},
         }
 
