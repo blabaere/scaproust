@@ -141,8 +141,8 @@ impl Reactor {
             pipe::Event::Opened        => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
             pipe::Event::Sent          => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
             pipe::Event::Received(msg) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
-            // Maybe the controller should be removed from the endpoint collection
             pipe::Event::Error(err)    => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_error(ctx, eid, err)),
+            pipe::Event::Closed        => self.endpoints.remove_pipe(eid),
             _ => {}
         }
     }

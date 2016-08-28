@@ -40,16 +40,15 @@ impl Endpoint {
     fn open(&self, network: &mut Context, remote: bool) {
         network.open(self.id, remote)
     }
-    fn close(&self, network: &mut Context, remote: bool) {
-        network.close(self.id, remote)
-    }
     fn send(&self, network: &mut Context, msg: Rc<Message>) {
         network.send(self.id, msg)
     }
     fn recv(&self, network: &mut Context) {
         network.recv(self.id)
     }
-    pub fn discard(mut self) -> Option<String> {
+    fn close(mut self, network: &mut Context, remote: bool) -> Option<String> {
+        network.close(self.id, remote);
+        
         self.url.take()
     }
 }
@@ -66,17 +65,14 @@ impl Pipe {
     pub fn open(&self, network: &mut Context) {
         self.0.open(network, true)
     }
-    pub fn close(&self, network: &mut Context) {
-        self.0.close(network, true)
-    }
     pub fn send(&self, network: &mut Context, msg: Rc<Message>) {
         self.0.send(network, msg)
     }
     pub fn recv(&self, network: &mut Context) {
         self.0.recv(network)
     }
-    pub fn discard(mut self) -> Option<String> {
-        self.0.discard()
+    pub fn close(mut self, network: &mut Context) -> Option<String> {
+        self.0.close(network, true)
     }
 }
 
@@ -87,10 +83,7 @@ impl Acceptor {
     pub fn open(&self, network: &mut Context) {
         self.0.open(network, false)
     }
-    pub fn close(&self, network: &mut Context) {
+    pub fn close(mut self, network: &mut Context) -> Option<String> {
         self.0.close(network, false)
-    }
-    pub fn discard(mut self) -> Option<String> {
-        self.0.discard()
     }
 }

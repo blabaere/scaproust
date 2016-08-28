@@ -169,10 +169,6 @@ impl EndpointCollection {
         eid
     }
 
-    pub fn reinsert_pipe(&mut self, sid: SocketId, eid: EndpointId, pipe: Box<pipe::Pipe>) {
-        self.insert_pipe_controller(sid, eid, pipe);
-    }
-
     fn insert_pipe_controller(&mut self, sid: SocketId, eid: EndpointId, pipe: Box<pipe::Pipe>) {
         let controller = PipeController {
             socket_id: sid,
@@ -181,6 +177,10 @@ impl EndpointCollection {
         };
 
         self.pipes.insert(eid, controller);
+    }
+
+    pub fn remove_pipe(&mut self, eid: EndpointId) {
+        self.pipes.remove(&eid);
     }
 
     pub fn get_acceptor_mut<'a>(&'a mut self, eid: EndpointId) -> Option<&'a mut AcceptorController> {
@@ -287,7 +287,7 @@ impl<'a, 'b> Network for SocketEventLoopContext<'a, 'b> {
     }
     fn reconnect(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> io::Result<()> {
         let pipe = try!(self.connect(sid, url, pids));
-        let void = self.endpoints.reinsert_pipe(sid, eid, pipe);
+        let void = self.endpoints.insert_pipe_controller(sid, eid, pipe);
         
         Ok(void)
     }

@@ -193,10 +193,10 @@ impl Socket {
 
     fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<String> {
         if let Some(pipe) = self.pipes.remove(&eid) {
-            return pipe.discard()
+            return pipe.close(ctx)
         }
         if let Some(pipe) = self.protocol.remove_pipe(ctx, eid) {
-            return pipe.discard()
+            return pipe.close(ctx)
         }
         None
     }
@@ -213,9 +213,9 @@ impl Socket {
         }
     }
 
-    fn remove_acceptor(&mut self, _: &mut Context, eid: EndpointId) -> Option<String> {
+    fn remove_acceptor(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<String> {
         if let Some(acceptor) = self.acceptors.remove(&eid) {
-            acceptor.discard()
+            acceptor.close(ctx)
         } else {
             None
         }
