@@ -10,7 +10,7 @@ use std::io;
 use std::boxed::FnBox;
 use std::time::Duration;
 
-use super::{SocketId, EndpointId, Message};
+use super::{SocketId, EndpointId, Message, EndpointSpec};
 use super::endpoint::{Pipe, Acceptor};
 use super::config::{Config, ConfigOption};
 use super::context::{Context, Schedulable, Scheduled};
@@ -52,8 +52,9 @@ pub trait Protocol {
     fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId);
     fn on_send_timeout(&mut self, ctx: &mut Context);
     
-    fn recv(&mut self, ctx: &mut Context);
+    fn recv(&mut self, ctx: &mut Context, timeout: Option<Scheduled>);
     fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message);
+    fn on_recv_timeout(&mut self, ctx: &mut Context);
 }
 
 pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
@@ -97,7 +98,9 @@ impl Socket {
     }
 
     fn on_connect_success(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
-        self.insert_pipe(ctx, eid, Pipe::new_created(eid, url));
+        let pipe = self.connect_pipe(eid, url);
+
+        self.insert_pipe(ctx, eid, pipe);
         self.send_reply(Reply::Connect(eid));
     }
 
@@ -105,29 +108,29 @@ impl Socket {
         self.send_reply(Reply::Err(err));
     }
 
-    fn schedule_reconnect(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
-        let task = Schedulable::Reconnect(self.id, eid, url);
+    fn schedule_reconnect(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        let task = Schedulable::Reconnect(self.id, spec);
         let delay = self.config.retry_ivl;
         let _ = ctx.schedule(task, delay); 
         // TODO maybe we should keep track of the scheduled reconnection
-        // In case the facade wants to close the pipe somewhere between the error and the timeout
+        // In case the facade wants to close the ep somewhere between the error and the timeout
     }
 
-    pub fn reconnect(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
+    pub fn reconnect(&mut self, ctx: &mut Context, spec: EndpointSpec) {
         let pids = self.get_protocol_ids();
 
-        match ctx.reconnect(self.id, eid, &url, pids) {
-            Ok(_)  => self.on_reconnect_success(ctx, url, eid),
-            Err(_) => self.on_reconnect_error(ctx, url, eid)
+        match ctx.reconnect(self.id, spec.id, &spec.url, pids) {
+            Ok(_)  => self.on_reconnect_success(ctx, spec),
+            Err(_) => self.on_reconnect_error(ctx, spec)
         }
     }
 
-    fn on_reconnect_success(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
-        self.insert_pipe(ctx, eid, Pipe::new_created(eid, url));
+    fn on_reconnect_success(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        self.insert_pipe(ctx, spec.id, Pipe::from(spec));
     }
 
-    fn on_reconnect_error(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
-        self.schedule_reconnect(ctx, url, eid);
+    fn on_reconnect_error(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        self.schedule_reconnect(ctx, spec);
     }
 
 /*****************************************************************************/
@@ -146,7 +149,7 @@ impl Socket {
     }
 
     fn on_bind_success(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
-        let acceptor = Acceptor::new(eid, url);
+        let acceptor = self.connect_acceptor(eid, url);
 
         acceptor.open(ctx);
 
@@ -158,10 +161,29 @@ impl Socket {
         self.send_reply(Reply::Err(err));
     }
 
-    fn schedule_rebind(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
+    fn schedule_rebind(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        let task = Schedulable::Rebind(self.id, spec);
+        let delay = self.config.retry_ivl;
+        let _ = ctx.schedule(task, delay); 
+        // TODO maybe we should keep track of the scheduled reconnection
+        // In case the facade wants to close the ep somewhere between the error and the timeout
     }
 
-    pub fn rebind(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
+    pub fn rebind(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        let pids = self.get_protocol_ids();
+
+        match ctx.rebind(self.id, spec.id, &spec.url, pids) {
+            Ok(_)  => self.on_rebind_success(ctx, spec),
+            Err(_) => self.on_rebind_error(ctx, spec)
+        };
+    }
+
+    fn on_rebind_success(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        self.insert_acceptor(ctx, spec.id, Acceptor::from(spec))
+    }
+
+    fn on_rebind_error(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        self.schedule_rebind(ctx, spec);
     }
 
 /*****************************************************************************/
@@ -176,17 +198,15 @@ impl Socket {
         }
     }
 
-    pub fn on_pipe_accepted(&mut self, ctx: &mut Context, eid: EndpointId) {
-        let pipe = Pipe::new_accepted(eid);
+    pub fn on_pipe_accepted(&mut self, ctx: &mut Context, aid: EndpointId, eid: EndpointId) {
+        let pipe = self.accept_pipe(aid, eid);
 
-        pipe.open(ctx);
-
-        self.pipes.insert(eid, pipe);
+        self.insert_pipe(ctx, eid, pipe);
     }
 
     pub fn on_pipe_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
-        if let Some(url) = self.remove_pipe(ctx, eid) {
-            self.schedule_reconnect(ctx, url, eid);
+        if let Some(spec) = self.remove_pipe(ctx, eid) {
+            self.schedule_reconnect(ctx, spec);
         }
     }
 
@@ -196,7 +216,7 @@ impl Socket {
         self.pipes.insert(eid, pipe);
     }
 
-    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<String> {
+    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointSpec> {
         if let Some(pipe) = self.pipes.remove(&eid) {
             return pipe.close(ctx)
         }
@@ -206,24 +226,52 @@ impl Socket {
         None
     }
 
+    fn connect_pipe(&self, eid: EndpointId, url: String) -> Pipe {
+        Pipe::new_connected(eid, url, self.config.send_priority, self.config.recv_priority)
+    }
+
+    fn accept_pipe(&self, aid: EndpointId, eid: EndpointId) -> Pipe {
+        let (send_prio, recv_prio) = if let Some(acceptor) = self.acceptors.get(&aid) {
+            (acceptor.get_send_priority(), acceptor.get_recv_priority())
+        } else {
+            (self.config.send_priority, self.config.recv_priority)
+        };
+
+        Pipe::new_accepted(eid, send_prio, recv_prio)
+    }
+
 /*****************************************************************************/
 /*                                                                           */
 /* acceptor                                                                  */
 /*                                                                           */
 /*****************************************************************************/
 
-    pub fn on_acceptor_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
-        if let Some(url) = self.remove_acceptor(ctx, eid) {
-            self.schedule_rebind(ctx, url, eid);
+    pub fn on_acceptor_error(&mut self, ctx: &mut Context, aid: EndpointId, _: io::Error) {
+        if let Some(spec) = self.remove_acceptor(ctx, aid) {
+            self.schedule_rebind(ctx, spec);
         }
     }
 
-    fn remove_acceptor(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<String> {
+    fn insert_acceptor(&mut self, ctx: &mut Context, eid: EndpointId, acceptor: Acceptor) {
+        acceptor.open(ctx);
+
+        self.acceptors.insert(eid, acceptor);
+    }
+
+    fn remove_acceptor(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointSpec> {
         if let Some(acceptor) = self.acceptors.remove(&eid) {
             acceptor.close(ctx)
         } else {
             None
         }
+    }
+
+    fn connect_acceptor(&self, eid: EndpointId, url: String) -> Acceptor {
+        Acceptor::new(
+            eid,
+            url,
+            self.config.send_priority,
+            self.config.recv_priority)
     }
 
 /*****************************************************************************/
@@ -249,12 +297,12 @@ impl Socket {
         self.protocol.on_send_ack(ctx, eid);
     }
 
-    fn get_send_timeout(&self) -> Option<Duration> {
-        self.config.send_timeout.as_ref().map(|d| d.clone())
-    }
-
     pub fn on_send_timeout(&mut self, ctx: &mut Context) {
         self.protocol.on_send_timeout(ctx);
+    }
+
+    fn get_send_timeout(&self) -> Option<Duration> {
+        self.config.send_timeout.as_ref().map(|d| d.clone())
     }
 
 /*****************************************************************************/
@@ -264,11 +312,28 @@ impl Socket {
 /*****************************************************************************/
 
     pub fn recv(&mut self, ctx: &mut Context) {
-        self.protocol.recv(ctx);
+        if let Some(delay) = self.get_recv_timeout() {
+            let task = Schedulable::RecvTimeout(self.id);
+
+            match ctx.schedule(task, delay) {
+                Ok(timeout) => self.protocol.recv(ctx, Some(timeout)),
+                Err(e) => self.send_reply(Reply::Err(e))
+            }
+        } else {
+            self.protocol.recv(ctx, None);
+        }
     }
 
     pub fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message) {
         self.protocol.on_recv_ack(ctx, eid, msg);
+    }
+
+    pub fn on_recv_timeout(&mut self, ctx: &mut Context) {
+        self.protocol.on_recv_timeout(ctx);
+    }
+
+    fn get_recv_timeout(&self) -> Option<Duration> {
+        self.config.recv_timeout.clone()
     }
 
 /*****************************************************************************/
@@ -287,6 +352,12 @@ impl Socket {
     }
 
 }
+
+/*****************************************************************************/
+/*                                                                           */
+/* tests                                                                     */
+/*                                                                           */
+/*****************************************************************************/
 
 #[cfg(test)]
 mod tests {
@@ -312,8 +383,9 @@ mod tests {
         fn send(&mut self, _: &mut Context, _: Message, _: Option<Scheduled>) {}
         fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {}
         fn on_send_timeout(&mut self, _: &mut Context) {}
-        fn recv(&mut self, _: &mut Context) {}
+        fn recv(&mut self, _: &mut Context, _: Option<Scheduled>) {}
         fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
+        fn on_recv_timeout(&mut self, ctx: &mut Context) {}
     }
 
     struct FailingNetwork;
@@ -326,6 +398,9 @@ mod tests {
             Err(other_io_error("FailingNetwork can only fail"))
         }
         fn bind(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
+            Err(other_io_error("FailingNetwork can only fail"))
+        }
+        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &str, _: (u16, u16)) -> io::Result<()> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
         fn open(&mut self, _: EndpointId, _: bool) {
@@ -383,6 +458,9 @@ mod tests {
         }
         fn bind(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
             Ok(self.0)
+        }
+        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &str, _: (u16, u16)) -> io::Result<()> {
+            Ok(())
         }
         fn open(&mut self, _: EndpointId, _: bool) {}
         fn close(&mut self, _: EndpointId, _: bool) {}

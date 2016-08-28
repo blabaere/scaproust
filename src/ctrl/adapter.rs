@@ -187,17 +187,22 @@ impl EndpointCollection {
         self.acceptors.get_mut(&eid)
     }
 
-    fn insert_acceptor(&mut self, sid: SocketId, ep: Box<acceptor::Acceptor>) -> EndpointId {
+    fn insert_acceptor(&mut self, sid: SocketId, acceptor: Box<acceptor::Acceptor>) -> EndpointId {
         let eid = EndpointId::from(self.ids.next());
+
+        self.insert_acceptor_controller(sid, eid, acceptor);
+
+        eid
+    }
+
+    fn insert_acceptor_controller(&mut self, sid: SocketId, eid: EndpointId, acceptor: Box<acceptor::Acceptor>) {
         let controller = AcceptorController {
             socket_id: sid,
             endpoint_id: eid,
-            acceptor: ep
+            acceptor: acceptor
         };
 
         self.acceptors.insert(eid, controller);
-
-        eid
     }
 }
 
@@ -275,6 +280,19 @@ impl<'a, 'b> SocketEventLoopContext<'a, 'b> {
 
         transport.connect(addr, pids)
     }
+
+    fn bind(&mut self, url: &str, pids: (u16, u16)) -> io::Result<Box<acceptor::Acceptor>> {
+        let index = match url.find("://") {
+            Some(x) => x,
+            None => return Err(invalid_input_io_error(url.to_owned()))
+        };
+
+        let (scheme, remainder) = url.split_at(index);
+        let addr = &remainder[3..];
+        let transport = try!(self.get_transport(scheme));
+
+        transport.bind(addr, pids)
+    }
 }
 
 impl<'a, 'b> Network for SocketEventLoopContext<'a, 'b> {
@@ -291,19 +309,17 @@ impl<'a, 'b> Network for SocketEventLoopContext<'a, 'b> {
         
         Ok(void)
     }
-    fn bind(&mut self, socket_id: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
-        let index = match url.find("://") {
-            Some(x) => x,
-            None => return Err(invalid_input_io_error(url.to_owned()))
-        };
+    fn bind(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
+        let acceptor = try!(self.bind(url, pids));
+        let eid = self.endpoints.insert_acceptor(sid, acceptor);
 
-        let (scheme, remainder) = url.split_at(index);
-        let addr = &remainder[3..];
-        let transport = try!(self.get_transport(scheme));
-        let endpoint = try!(transport.bind(addr, pids));
-        let id = self.endpoints.insert_acceptor(socket_id, endpoint);
+        Ok(eid)
+    }
+    fn rebind(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> io::Result<()> {
+        let acceptor = try!(self.bind(url, pids));
+        let void = self.endpoints.insert_acceptor_controller(sid, eid, acceptor);
 
-        Ok(id)
+        Ok(void)
     }
     fn open(&mut self, endpoint_id: EndpointId, remote: bool) {
         if remote {

@@ -46,10 +46,9 @@ impl Protocol for Push {
     }
     fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {}
     fn on_send_timeout(&mut self, _: &mut Context) {}
-    fn recv(&mut self, _: &mut Context) {
-
-    }
+    fn recv(&mut self, _: &mut Context, _: Option<Scheduled>) {}
     fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
+    fn on_recv_timeout(&mut self, _: &mut Context) {}
 }
 
 impl From<mpsc::Sender<Reply>> for Push {

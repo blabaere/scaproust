@@ -92,9 +92,9 @@ impl Reactor {
     }
     fn process_timeout(&mut self, event_loop: &mut EventLoop, task: context::Schedulable) {
         match task {
-            context::Schedulable::Reconnect(sid, eid, url) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.reconnect(ctx, url, eid)),
-            context::Schedulable::Rebind(sid, eid, url)    => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.rebind(ctx, url, eid)),
-            context::Schedulable::SendTimeout(sid)         => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_timeout(ctx)),
+            context::Schedulable::Reconnect(sid, spec) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.reconnect(ctx, spec)),
+            context::Schedulable::Rebind(sid, spec)    => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.rebind(ctx, spec)),
+            context::Schedulable::SendTimeout(sid)     => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_timeout(ctx)),
             _ => {},
         }
 
@@ -148,15 +148,15 @@ impl Reactor {
             _ => {}
         }
     }
-    fn process_acceptor_evt(&mut self, event_loop: &mut EventLoop, sid: SocketId, eid: EndpointId, evt: acceptor::Event) {
+    fn process_acceptor_evt(&mut self, event_loop: &mut EventLoop, sid: SocketId, aid: EndpointId, evt: acceptor::Event) {
         match evt {
             // Maybe the controller should be removed from the endpoint collection
-            acceptor::Event::Error(e) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_acceptor_error(ctx, eid, e)),
+            acceptor::Event::Error(e) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_acceptor_error(ctx, aid, e)),
             acceptor::Event::Accepted(pipes) => {
                 for pipe in pipes {
                     let pipe_id = self.endpoints.insert_pipe(sid, pipe);
 
-                    self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_accepted(ctx, pipe_id));
+                    self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_accepted(ctx, aid, pipe_id));
                 }
             },
             _ => {}

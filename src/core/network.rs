@@ -13,6 +13,7 @@ pub trait Network {
     fn connect(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> Result<EndpointId>;
     fn reconnect(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> Result<()>;
     fn bind(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> Result<EndpointId>;
+    fn rebind(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> Result<()>;
     fn open(&mut self, eid: EndpointId, remote: bool);
     fn close(&mut self, eid: EndpointId, remote: bool);
     fn send(&mut self, eid: EndpointId, msg: Rc<Message>);
