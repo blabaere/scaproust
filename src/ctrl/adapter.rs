@@ -94,6 +94,12 @@ impl<T:Handler<Timeout=context::Schedulable>> Timer for EventLoop<T> {
     }
 }
 
+/*****************************************************************************/
+/*                                                                           */
+/* Endpoint collection                                                       */
+/*                                                                           */
+/*****************************************************************************/
+
 impl PipeController {
     pub fn ready<'a, 'b>(&mut self, registrar: &'a mut Registrar, signal_bus: &'b mut EventLoopBus<Signal>, events: EventSet) {
         let mut ctx = self.create_context(registrar, signal_bus);
@@ -222,6 +228,12 @@ impl Schedule {
         self.items.remove(&scheduled)
     }
 }
+
+/*****************************************************************************/
+/*                                                                           */
+/* Socket context                                                            */
+/*                                                                           */
+/*****************************************************************************/
 
 impl<'a, 'b> SocketEventLoopContext<'a, 'b> {
     pub fn new(
@@ -363,6 +375,12 @@ impl<'a, 'b> context::Context for SocketEventLoopContext<'a, 'b> {
         self.send_socket_evt(evt);
     }
 }
+
+/*****************************************************************************/
+/*                                                                           */
+/* Endpoint context                                                          */
+/*                                                                           */
+/*****************************************************************************/
 
 impl<'a, 'b> EndpointRegistrar for EndpointEventLoopContext<'a, 'b> {
     fn register(&mut self, io: &Evented, interest: EventSet, opt: PollOpt) -> io::Result<()> {

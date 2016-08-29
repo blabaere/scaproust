@@ -41,6 +41,12 @@ pub struct Socket {
     config: Config
 }
 
+/*****************************************************************************/
+/*                                                                           */
+/* Protocol                                                                  */
+/*                                                                           */
+/*****************************************************************************/
+
 pub trait Protocol {
     fn id(&self) -> u16;
     fn peer_id(&self) -> u16;
@@ -60,6 +66,12 @@ pub trait Protocol {
 }
 
 pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
+
+/*****************************************************************************/
+/*                                                                           */
+/* Socket                                                                    */
+/*                                                                           */
+/*****************************************************************************/
 
 impl Socket {
     pub fn new(id: SocketId, reply_tx: Sender<Reply>, proto: Box<Protocol>) -> Socket {
