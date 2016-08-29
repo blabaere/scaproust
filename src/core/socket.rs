@@ -51,10 +51,12 @@ pub trait Protocol {
     fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Option<Scheduled>);
     fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId);
     fn on_send_timeout(&mut self, ctx: &mut Context);
+    fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId);
     
     fn recv(&mut self, ctx: &mut Context, timeout: Option<Scheduled>);
     fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message);
     fn on_recv_timeout(&mut self, ctx: &mut Context);
+    fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId);
 }
 
 pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
@@ -302,7 +304,11 @@ impl Socket {
     }
 
     fn get_send_timeout(&self) -> Option<Duration> {
-        self.config.send_timeout.as_ref().map(|d| d.clone())
+        self.config.send_timeout.clone()
+    }
+
+    pub fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.protocol.on_send_ready(ctx, eid)
     }
 
 /*****************************************************************************/
@@ -334,6 +340,10 @@ impl Socket {
 
     fn get_recv_timeout(&self) -> Option<Duration> {
         self.config.recv_timeout.clone()
+    }
+
+    pub fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.protocol.on_recv_ready(ctx, eid)
     }
 
 /*****************************************************************************/
@@ -383,9 +393,11 @@ mod tests {
         fn send(&mut self, _: &mut Context, _: Message, _: Option<Scheduled>) {}
         fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {}
         fn on_send_timeout(&mut self, _: &mut Context) {}
+        fn on_send_ready(&mut self, _: &mut Context, _: EndpointId) {}
         fn recv(&mut self, _: &mut Context, _: Option<Scheduled>) {}
         fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
         fn on_recv_timeout(&mut self, ctx: &mut Context) {}
+        fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {}
     }
 
     struct FailingNetwork;

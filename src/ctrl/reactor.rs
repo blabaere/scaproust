@@ -141,11 +141,12 @@ impl Reactor {
     fn process_pipe_evt(&mut self, event_loop: &mut EventLoop, sid: SocketId, eid: EndpointId, evt: pipe::Event) {
         match evt {
             pipe::Event::Opened        => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
+            pipe::Event::CanSend       => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_ready(ctx, eid)),
+            pipe::Event::CanRecv       => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_recv_ready(ctx, eid)),
             pipe::Event::Sent          => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
             pipe::Event::Received(msg) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
             pipe::Event::Error(err)    => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_error(ctx, eid, err)),
-            pipe::Event::Closed        => self.endpoints.remove_pipe(eid),
-            _ => {}
+            pipe::Event::Closed        => self.endpoints.remove_pipe(eid)
         }
     }
     fn process_acceptor_evt(&mut self, event_loop: &mut EventLoop, sid: SocketId, aid: EndpointId, evt: acceptor::Event) {
