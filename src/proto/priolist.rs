@@ -67,7 +67,7 @@ Priolist needs to support:
 
 ### REMOVE 
  - Remove from storage
- - if removed item is current, select another item to be the current
+ - if removed item was current, select another item to be the current
 
 */
 
@@ -101,12 +101,16 @@ impl Priolist {
 
     pub fn remove(&mut self, id: &EndpointId) {
         if let Some(index) = self.find_by_id_in_all(id) {
-            let item = self.items.swap_remove(index);
-            let priority = item.priority;
+            self.remove_at_index(index);
+        }
+    }
 
-            if self.current == Some((index, priority)) {
-                self.compute_next(index, priority);
-            }
+    fn remove_at_index(&mut self, index: usize) {
+        let item = self.items.swap_remove(index);
+        let priority = item.priority;
+
+        if self.current == Some((index, priority)) {
+            self.compute_next(index, priority);
         }
     }
 
@@ -144,12 +148,12 @@ impl Priolist {
         self.items[index].active = active;
     }
 
-    pub fn next<'a>(&'a mut self) -> Option<&'a EndpointId> {
+    pub fn next(&mut self) -> Option<EndpointId> {
         if let Some((index, priority)) = self.current.take() {
             self.set_index_active(index, false);
             self.compute_next(index, priority);
 
-            Some(&self.items[index].value)
+            Some(self.items[index].value)
         } else {
             None
         }
@@ -172,14 +176,14 @@ impl Priolist {
             }
         }
 
-        self.unset_cur_idx();
+        self.unset_current();
     }
 
     fn set_current(&mut self, index: usize, priority: u8) {
         self.current = Some((index, priority));
     }
 
-    fn unset_cur_idx(&mut self) {
+    fn unset_current(&mut self) {
         self.current = None;
     }
 
@@ -258,7 +262,7 @@ mod tests {
 
         priolist.insert(eid, 8);
         priolist.activate(&eid);
-        assert_eq!(Some(&eid), priolist.next());
+        assert_eq!(Some(eid), priolist.next());
     }
 
     #[test]
@@ -271,7 +275,7 @@ mod tests {
         priolist.insert(second, 8);
         priolist.activate(&first);
         priolist.activate(&second);
-        assert_eq!(Some(&first), priolist.next());
+        assert_eq!(Some(first), priolist.next());
     }
 
     #[test]
@@ -284,8 +288,8 @@ mod tests {
         priolist.insert(second, 8);
         priolist.activate(&first);
         priolist.activate(&second);
-        assert_eq!(Some(&first), priolist.next());
-        assert_eq!(Some(&second), priolist.next());
+        assert_eq!(Some(first), priolist.next());
+        assert_eq!(Some(second), priolist.next());
     }
 
     #[test]
@@ -305,10 +309,10 @@ mod tests {
         priolist.activate(&four);
         priolist.activate(&one);
         priolist.activate(&two);
-        assert_eq!(Some(&three), priolist.next());
-        assert_eq!(Some(&four), priolist.next());
-        assert_eq!(Some(&one), priolist.next());
-        assert_eq!(Some(&two), priolist.next());
+        assert_eq!(Some(three), priolist.next());
+        assert_eq!(Some(four), priolist.next());
+        assert_eq!(Some(one), priolist.next());
+        assert_eq!(Some(two), priolist.next());
     }
 
     #[test]
@@ -318,7 +322,7 @@ mod tests {
 
         priolist.insert(eid, 8);
         priolist.activate(&eid);
-        assert_eq!(Some(&eid), priolist.next());
+        assert_eq!(Some(eid), priolist.next());
         assert_eq!(None, priolist.next());
     }
 
@@ -340,8 +344,8 @@ mod tests {
         priolist.activate(&one);
         priolist.activate(&two);
 
-        assert_eq!(Some(&three), priolist.next());
-        assert_eq!(Some(&one), priolist.next());
+        assert_eq!(Some(three), priolist.next());
+        assert_eq!(Some(one), priolist.next());
     }
 
     #[test]
@@ -378,7 +382,7 @@ mod tests {
         priolist.activate(&three);
         priolist.activate(&four);
         priolist.remove(&three);
-        assert_eq!(Some(&four), priolist.next());
+        assert_eq!(Some(four), priolist.next());
     }
 
     #[test]
@@ -397,7 +401,7 @@ mod tests {
         priolist.activate(&three);
         priolist.activate(&two);
         priolist.remove(&three);
-        assert_eq!(Some(&two), priolist.next());
+        assert_eq!(Some(two), priolist.next());
     }
 
     #[test]
@@ -418,12 +422,7 @@ mod tests {
         priolist.activate(&two);
         priolist.activate(&four);
         priolist.remove(&three);
-        assert_eq!(Some(&one), priolist.next());
-
-        priolist.activate(&three);
-        priolist.activate(&four);
-        priolist.activate(&one);
-        priolist.activate(&two);
+        assert_eq!(Some(one), priolist.next());
     }
 
     #[test]
@@ -441,13 +440,13 @@ mod tests {
 
         priolist.activate(&one);
         priolist.activate(&four);
-        assert_eq!(Some(&one), priolist.next());
+        assert_eq!(Some(one), priolist.next());
 
         priolist.activate(&two);
-        assert_eq!(Some(&two), priolist.next());
+        assert_eq!(Some(two), priolist.next());
 
         priolist.activate(&three);
-        assert_eq!(Some(&three), priolist.next());
+        assert_eq!(Some(three), priolist.next());
     }
 
     #[test]

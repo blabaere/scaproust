@@ -25,6 +25,10 @@ pub fn invalid_input_io_error<E>(msg: E) -> io::Error where E: Into<Box<error::E
     io::Error::new(io::ErrorKind::InvalidInput, msg)
 }
 
+pub fn timedout_io_error<E>(msg: E) -> io::Error where E: Into<Box<error::Error + Send + Sync>> {
+    io::Error::new(io::ErrorKind::TimedOut, msg)
+}
+
 pub fn from_notify_error<T>(notify_error: mio::NotifyError<T>) -> io::Error {
     match notify_error {
         mio::NotifyError::Io(e) => e,

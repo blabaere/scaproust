@@ -6,6 +6,7 @@
 
 use std::rc::Rc;
 use std::io;
+use std::fmt;
 
 use mio::EventSet;
 
@@ -39,4 +40,24 @@ pub trait Pipe {
 
 pub trait Context : EndpointRegistrar {
     fn raise(&mut self, evt: Event);
+}
+
+impl fmt::Debug for Event {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl Event {
+    fn name(&self) -> &'static str {
+        match *self {
+            Event::Opened      => "Opened",
+            Event::Closed      => "Closed",
+            Event::CanSend     => "CanSend",
+            Event::CanRecv     => "CanRecv",
+            Event::Sent        => "Sent",
+            Event::Received(_) => "Received",
+            Event::Error(_)    => "Error",
+        }
+    }
 }

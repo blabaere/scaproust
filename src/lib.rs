@@ -23,10 +23,10 @@ extern crate mio;
 extern crate time;
 
 pub mod core;
+pub mod proto;
 mod ctrl;
 mod facade;
 mod transport;
-mod proto;
 
 mod sequence;
 mod io_error;
@@ -34,6 +34,8 @@ mod io_error;
 pub use facade::session::SessionBuilder;
 pub use facade::session::Session;
 pub use facade::socket::Socket;
+
+pub use proto::push::Push;
 
 #[cfg(test)]
 mod tests {

@@ -18,18 +18,18 @@ use scaproust::core::endpoint::Pipe;
 #[test]
 fn can_create_socket() {
     let mut session = SessionBuilder::build().unwrap();
-    let mut socket = session.create_socket::<Push>().unwrap();
+    let mut socket = session.create_socket::<Plush>().unwrap();
     let ep = socket.connect("tcp://127.0.0.1:5454").unwrap();
 
     let _ = ep.close();
 }
 
-pub struct Push {
+pub struct Plush {
     sender: mpsc::Sender<Reply>,
     pipe_id: Option<EndpointId>,
     pipe: Option<Pipe>
 }
-impl Protocol for Push {
+impl Protocol for Plush {
     fn id(&self) -> u16 { (5 * 16) }
     fn peer_id(&self) -> u16 { (5 * 16) + 1 }
     fn add_pipe(&mut self, _: &mut Context, eid: EndpointId, pipe: Pipe) {
@@ -53,9 +53,9 @@ impl Protocol for Push {
     fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {}
 }
 
-impl From<mpsc::Sender<Reply>> for Push {
-    fn from(tx: mpsc::Sender<Reply>) -> Push {
-        Push {
+impl From<mpsc::Sender<Reply>> for Plush {
+    fn from(tx: mpsc::Sender<Reply>) -> Plush {
+        Plush {
             sender: tx,
             pipe_id: None,
             pipe: None

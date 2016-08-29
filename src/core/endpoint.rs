@@ -90,6 +90,12 @@ impl Pipe {
     pub fn close(mut self, network: &mut Context) -> Option<EndpointSpec> {
         self.0.close(network, true)
     }
+    pub fn get_send_priority(&self) -> u8 {
+        self.0.send_priority
+    }
+    pub fn get_recv_priority(&self) -> u8 {
+        self.0.recv_priority
+    }
 }
 
 impl Acceptor {
