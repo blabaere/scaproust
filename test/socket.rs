@@ -16,6 +16,7 @@ pub use super::{sleep_some, make_timeout};
 describe! send {
 
     before_each {
+        let _ = ::env_logger::init();
         let mut session = SessionBuilder::build().expect("Failed to create session !");
         let url = urls::tcp::get();
     }

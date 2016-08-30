@@ -41,13 +41,15 @@ struct Inner {
 
 impl Push {
 
-    fn apply<F>(&mut self, transition: F) where F : FnOnce(State, &mut Inner) -> State {
+    fn apply<F>(&mut self, ctx: &mut Context, transition: F) where F : FnOnce(State, &mut Context, &mut Inner) -> State {
         if let Some(old_state) = self.state.take() {
             let old_name = old_state.name();
-            let new_state = transition(old_state, &mut self.inner);
+            let new_state = transition(old_state, ctx, &mut self.inner);
             let new_name = new_state.name();
 
             self.state = Some(new_state);
+
+            debug!("[{:?}] switch from {} to {}", ctx, old_name, new_name);
         }
     }
 
@@ -83,34 +85,34 @@ impl Protocol for Push {
         let pipe = self.inner.remove_pipe(eid);
 
         if pipe.is_some() {
-            self.apply(|s, inner| s.on_pipe_removed(ctx, inner, eid));
+            self.apply(ctx, |s, ctx, inner| s.on_pipe_removed(ctx, inner, eid));
         }
 
         pipe
     }
     fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Timeout) {
-        self.apply(|s, inner| s.send(ctx, inner, Rc::new(msg), timeout))
+        self.apply(ctx, |s, ctx, inner| s.send(ctx, inner, Rc::new(msg), timeout))
     }
     fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
-        self.apply(|s, inner| s.on_send_ack(ctx, inner, eid))
+        self.apply(ctx, |s, ctx, inner| s.on_send_ack(ctx, inner, eid))
     }
     fn on_send_timeout(&mut self, ctx: &mut Context) {
-        self.apply(|s, inner| s.on_send_timeout(ctx, inner))
+        self.apply(ctx, |s, ctx, inner| s.on_send_timeout(ctx, inner))
     }
     fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
-        self.apply(|s, inner| s.on_send_ready(ctx, inner, eid))
+        self.apply(ctx, |s, ctx, inner| s.on_send_ready(ctx, inner, eid))
     }
     fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
-        self.apply(|s, inner| s.recv(ctx, inner, timeout))
+        self.apply(ctx, |s, ctx, inner| s.recv(ctx, inner, timeout))
     }
     fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message) {
-        self.apply(|s, inner| s.on_recv_ack(ctx, inner, eid, msg))
+        self.apply(ctx, |s, ctx, inner| s.on_recv_ack(ctx, inner, eid, msg))
     }
     fn on_recv_timeout(&mut self, ctx: &mut Context) {
-        self.apply(|s, inner| s.on_recv_timeout(ctx, inner))
+        self.apply(ctx, |s, ctx, inner| s.on_recv_timeout(ctx, inner))
     }
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
-        self.apply(|s, inner| s.on_recv_ready(ctx, inner, eid))
+        self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
     }
 }
 

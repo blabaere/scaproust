@@ -40,15 +40,15 @@ impl<S : AsyncPipeStub + 'static> AsyncPipe<S> {
         AsyncPipe { state: Some(initial_state) }
     }
 
-    fn apply<F>(&mut self, transition: F) where F : FnOnce(Box<PipeState<S>>) -> Box<PipeState<S>> {
+    fn apply<F>(&mut self, ctx: &mut Context, transition: F) where F : FnOnce(Box<PipeState<S>>, &mut Context) -> Box<PipeState<S>> {
         if let Some(old_state) = self.state.take() {
-            //let old_name = old_state.name();
-            let new_state = transition(old_state);
-            //let new_name = new_state.name();
+            let old_name = old_state.name();
+            let new_state = transition(old_state, ctx);
+            let new_name = new_state.name();
 
             self.state = Some(new_state);
 
-            //println!("AsyncPipe::apply switch from {} to {}", old_name, new_name);
+            debug!("[{:?}] switch from {} to {}", ctx, old_name, new_name);
         }
     }
 }
@@ -56,22 +56,22 @@ impl<S : AsyncPipeStub + 'static> AsyncPipe<S> {
 impl<S : AsyncPipeStub> pipe::Pipe for AsyncPipe<S> {
 
     fn ready(&mut self, ctx: &mut Context, events: mio::Ready) {
-        self.apply(|s| s.ready(ctx, events))
+        self.apply(ctx, |s, ctx| s.ready(ctx, events))
     }
 
     fn open(&mut self, ctx: &mut Context) {
-        self.apply(|s| s.open(ctx))
+        self.apply(ctx, |s, ctx| s.open(ctx))
     }
 
     fn close(&mut self, ctx: &mut Context) {
-        self.apply(|s| s.close(ctx))
+        self.apply(ctx, |s, ctx| s.close(ctx))
     }
 
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>) {
-        self.apply(|s| s.send(ctx, msg))
+        self.apply(ctx, |s, ctx| s.send(ctx, msg))
     }
 
     fn recv(&mut self, ctx: &mut Context) {
-        self.apply(|s| s.recv(ctx))
+        self.apply(ctx, |s, ctx| s.recv(ctx))
     }
 }

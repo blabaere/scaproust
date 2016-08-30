@@ -375,7 +375,7 @@ impl<'a, 'b> context::Scheduler for SocketEventLoopContext<'a, 'b> {
 
 impl<'a, 'b> fmt::Debug for SocketEventLoopContext<'a, 'b> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Socket {:?}", self.socket_id)
+        write!(f, "Socket:{:?}", self.socket_id)
     }
 }
 
@@ -409,6 +409,12 @@ impl<'a, 'b> pipe::Context for EndpointEventLoopContext<'a, 'b> {
         let signal = Signal::PipeEvt(self.socket_id, self.endpoint_id, evt);
 
         self.signal_tx.send(signal);
+    }
+}
+
+impl<'a, 'b> fmt::Debug for EndpointEventLoopContext<'a, 'b> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Socket:{:?} Pipe:{:?}", self.socket_id, self.endpoint_id)
     }
 }
 

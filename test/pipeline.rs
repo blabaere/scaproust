@@ -16,6 +16,7 @@ pub use super::{sleep_some, make_timeout};
 describe! can {
 
     before_each {
+        let _ = ::env_logger::init();
         let mut session = SessionBuilder::build().expect("Failed to create session !");
         let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
         let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");

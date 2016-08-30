@@ -38,7 +38,7 @@ pub trait Pipe {
     fn recv(&mut self, ctx: &mut Context);
 }
 
-pub trait Context : EndpointRegistrar {
+pub trait Context : EndpointRegistrar + fmt::Debug {
     fn raise(&mut self, evt: Event);
 }
 

@@ -21,6 +21,7 @@ pub trait Transport {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt;
     use std::io;
 
     use mio;
@@ -71,6 +72,12 @@ mod tests {
         fn deregister(&mut self, io: &mio::Evented) -> io::Result<()> {
             self.deregistrations += 1;
             if self.deregistration_ok { Ok(()) } else { Err(other_io_error("test")) }
+        }
+    }
+
+    impl fmt::Debug for TestPipeContext {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "TestPipeContext")
         }
     }
 

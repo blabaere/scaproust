@@ -7,6 +7,9 @@
 #![feature(plugin)]
 #![cfg_attr(test, plugin(stainless))]
 
+#[macro_use]
+extern crate log;
+extern crate env_logger;
 extern crate scaproust;
 
 mod socket;
@@ -16,6 +19,8 @@ mod pipeline;
 pub use std::time::Duration;
 pub use std::thread;
 pub use std::io;
+
+pub use env_logger::*;
 
 pub use scaproust::*;
 
