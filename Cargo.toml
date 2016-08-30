@@ -23,7 +23,7 @@ time = "0.1.35"
 clippy = "*"
 #mio = "0.5.1"
 #mio = { git = "https://github.com/carllerche/mio" }
-mio = { git = "https://github.com/carllerche/mio", rev = "4184a9d69be927e58ebf3fcc4ce2635c6ed9583e" }
+mio = { git = "https://github.com/carllerche/mio", rev = "ce5d4fb5cde330c8486ddf3d91142ac03134c6d7" }
 
 [dev-dependencies]
 env_logger = "0.3.4"
