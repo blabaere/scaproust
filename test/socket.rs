@@ -62,6 +62,30 @@ describe! recv {
         let url = urls::tcp::get();
     }
 
+    it "can complete when initiated before any connection" {
+        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+        let push_url = url.clone();
+
+        pull.set_recv_timeout(make_timeout()).unwrap();
+        pull.bind(&url).unwrap();
+
+        let push_thread = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(50));
+
+            push.set_send_timeout(make_timeout()).unwrap();
+            push.connect(&push_url).unwrap();
+            push.send(vec![65, 66, 67]).unwrap();
+
+            thread::sleep(Duration::from_millis(50));
+        });
+
+        let received = pull.recv().unwrap();
+        assert_eq!(vec![65, 66, 67], received);
+
+        push_thread.join().unwrap();
+    }
+
     it "should return an error when timed out" {
         let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
         let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");

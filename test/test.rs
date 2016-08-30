@@ -10,6 +10,7 @@
 extern crate scaproust;
 
 mod socket;
+mod fair_queue;
 mod pipeline;
 
 pub use std::time::Duration;
