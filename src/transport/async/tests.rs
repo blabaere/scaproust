@@ -116,10 +116,10 @@ impl stub::AsyncPipeStub for TestStepStream {
 }
 
 impl mio::Evented for TestStepStream {
-    fn register(&self, poll: &mio::Poll, token: mio::Token, interest: mio::EventSet, opts: mio::PollOpt) -> io::Result<()> {
+    fn register(&self, poll: &mio::Poll, token: mio::Token, interest: mio::Ready, opts: mio::PollOpt) -> io::Result<()> {
         unimplemented!();
     }
-    fn reregister(&self, poll: &mio::Poll, token: mio::Token, interest: mio::EventSet, opts: mio::PollOpt) -> io::Result<()> {
+    fn reregister(&self, poll: &mio::Poll, token: mio::Token, interest: mio::Ready, opts: mio::PollOpt) -> io::Result<()> {
         unimplemented!();
     }
     fn deregister(&self, poll: &mio::Poll) -> io::Result<()> {

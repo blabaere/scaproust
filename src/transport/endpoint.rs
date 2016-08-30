@@ -6,10 +6,10 @@
 
 use std::io::Result;
 
-use mio::{Evented, EventSet, PollOpt};
+use mio::{Evented, Ready, PollOpt};
 
 pub trait EndpointRegistrar {
-    fn register(&mut self, io: &Evented, interest: EventSet, opt: PollOpt) -> Result<()>;
-    fn reregister(&mut self, io: &Evented, interest: EventSet, opt: PollOpt) -> Result<()>;
+    fn register(&mut self, io: &Evented, interest: Ready, opt: PollOpt) -> Result<()>;
+    fn reregister(&mut self, io: &Evented, interest: Ready, opt: PollOpt) -> Result<()>;
     fn deregister(&mut self, io: &Evented) -> Result<()>;
 }

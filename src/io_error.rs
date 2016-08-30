@@ -29,14 +29,14 @@ pub fn timedout_io_error<E>(msg: E) -> io::Error where E: Into<Box<error::Error 
     io::Error::new(io::ErrorKind::TimedOut, msg)
 }
 
-pub fn from_notify_error<T>(notify_error: mio::NotifyError<T>) -> io::Error {
+pub fn from_notify_error<T>(notify_error: mio::deprecated::NotifyError<T>) -> io::Error {
     match notify_error {
-        mio::NotifyError::Io(e) => e,
-        mio::NotifyError::Full(_) => other_io_error("channel closed"),
-        mio::NotifyError::Closed(_) => other_io_error("channel full")
+        mio::deprecated::NotifyError::Io(e) => e,
+        mio::deprecated::NotifyError::Full(_) => other_io_error("channel closed"),
+        mio::deprecated::NotifyError::Closed(_) => other_io_error("channel full")
     }
 }
 
-pub fn from_timer_error(timer_error: mio::TimerError) -> io::Error {
+pub fn from_timer_error(timer_error: mio::timer::TimerError) -> io::Error {
     other_io_error(timer_error)
 }

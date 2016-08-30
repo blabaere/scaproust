@@ -32,8 +32,8 @@ mod tests {
         registration_ok: bool,
         reregistration_ok: bool,
         deregistration_ok: bool,
-        registrations: Vec<(mio::EventSet, mio::PollOpt)>,
-        reregistrations: Vec<(mio::EventSet, mio::PollOpt)>,
+        registrations: Vec<(mio::Ready, mio::PollOpt)>,
+        reregistrations: Vec<(mio::Ready, mio::PollOpt)>,
         deregistrations: usize,
         raised_events: Vec<pipe::Event>
     }
@@ -53,18 +53,18 @@ mod tests {
         pub fn set_registration_ok(&mut self, registration_ok: bool) { self.registration_ok = registration_ok; }
         pub fn set_reregistration_ok(&mut self, reregistration_ok: bool) { self.reregistration_ok = reregistration_ok; }
         pub fn set_deregistration_ok(&mut self, deregistration_ok: bool) { self.deregistration_ok = deregistration_ok; }
-        pub fn get_registrations(&self) -> &[(mio::EventSet, mio::PollOpt)] { &self.registrations }
-        pub fn get_reregistrations(&self) -> &[(mio::EventSet, mio::PollOpt)] { &self.reregistrations }
+        pub fn get_registrations(&self) -> &[(mio::Ready, mio::PollOpt)] { &self.registrations }
+        pub fn get_reregistrations(&self) -> &[(mio::Ready, mio::PollOpt)] { &self.reregistrations }
         pub fn get_deregistrations(&self) -> usize { self.deregistrations }
         pub fn get_raised_events(&self) -> &[pipe::Event] { &self.raised_events }
     }
 
     impl endpoint::EndpointRegistrar for TestPipeContext {
-        fn register(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()> {
+        fn register(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::Ready, opt: mio::PollOpt) -> io::Result<()> {
             self.registrations.push((interest, opt));
             if self.registration_ok { Ok(()) } else { Err(other_io_error("test")) }
         }
-        fn reregister(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::EventSet, opt: mio::PollOpt) -> io::Result<()> {
+        fn reregister(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::Ready, opt: mio::PollOpt) -> io::Result<()> {
             self.reregistrations.push((interest, opt));
             if self.reregistration_ok { Ok(()) } else { Err(other_io_error("test")) }
         }

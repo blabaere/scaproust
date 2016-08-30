@@ -6,7 +6,7 @@
 
 use std::io::Result;
 
-use mio::{EventSet, PollOpt};
+use mio::{Ready, PollOpt};
 
 use transport::async::stub::*;
 use transport::async::state::*;
@@ -44,14 +44,14 @@ impl<S : AsyncPipeStub> PipeState<S> for HandshakeTx<S> {
     fn name(&self) -> &'static str {"HandshakeTx"}
 
     fn enter(&self, ctx: &mut Context) {
-        ctx.register(self.stub.deref(), EventSet::writable(), PollOpt::level());
+        ctx.register(self.stub.deref(), Ready::writable(), PollOpt::level());
     }
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         ctx.deregister(self.stub.deref());
 
         box Dead
     }
-    fn ready(mut self: Box<Self>, ctx: &mut Context, events: EventSet) -> Box<PipeState<S>> {
+    fn ready(mut self: Box<Self>, ctx: &mut Context, events: Ready) -> Box<PipeState<S>> {
         if events.is_writable() {
             let res = self.send_handshake();
 
@@ -93,14 +93,14 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for HandshakeRx<S> {
     fn name(&self) -> &'static str {"HandshakeRx"}
 
     fn enter(&self, ctx: &mut Context) {
-        ctx.reregister(self.stub.deref(), EventSet::readable(), PollOpt::level());
+        ctx.reregister(self.stub.deref(), Ready::readable(), PollOpt::level());
     }
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         ctx.deregister(self.stub.deref());
 
         box Dead
     }
-    fn ready(mut self: Box<Self>, ctx: &mut Context, events: EventSet) -> Box<PipeState<S>> {
+    fn ready(mut self: Box<Self>, ctx: &mut Context, events: Ready) -> Box<PipeState<S>> {
         if events.is_readable() {
             let res = self.recv_handshake();
             
@@ -136,7 +136,7 @@ mod tests {
         assert_eq!(0, ctx.get_deregistrations());
 
         let (ref interest, ref poll_opt) = ctx.get_registrations()[0];
-        let all = mio::EventSet::writable();
+        let all = mio::Ready::writable();
         let edge = mio::PollOpt::level();
 
         assert_eq!(&all, interest);
@@ -165,7 +165,7 @@ mod tests {
         let pids = (4, 2);
         let state = box HandshakeTx::new(stub, pids);
         let mut ctx = TestPipeContext::new();
-        let events = mio::EventSet::writable();
+        let events = mio::Ready::writable();
         let new_state = state.ready(&mut ctx, events);
 
         assert_eq!(1, sensor.borrow().get_sent_handshakes().len());
@@ -187,7 +187,7 @@ mod tests {
         assert_eq!(0, ctx.get_deregistrations());
 
         let (ref interest, ref poll_opt) = ctx.get_reregistrations()[0];
-        let all = mio::EventSet::readable();
+        let all = mio::Ready::readable();
         let edge = mio::PollOpt::level();
 
         assert_eq!(&all, interest);
@@ -216,7 +216,7 @@ mod tests {
         let pids = (6, 6);
         let state = box HandshakeRx::new(stub, pids);
         let mut ctx = TestPipeContext::new();
-        let events = mio::EventSet::readable();
+        let events = mio::Ready::readable();
         let new_state = state.ready(&mut ctx, events);
 
         assert_eq!(1, sensor.borrow().get_received_handshakes());

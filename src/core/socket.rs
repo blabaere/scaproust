@@ -207,24 +207,28 @@ impl Socket {
 /*****************************************************************************/
 
     pub fn on_pipe_opened(&mut self, ctx: &mut Context, eid: EndpointId) {
+        println!("Socket::on_pipe_opened {:?}", eid);
         if let Some(pipe) = self.pipes.remove(&eid) {
             self.protocol.add_pipe(ctx, eid, pipe);
         }
     }
 
     pub fn on_pipe_accepted(&mut self, ctx: &mut Context, aid: EndpointId, eid: EndpointId) {
+        println!("Socket::on_pipe_accepted {:?}", eid);
         let pipe = self.accept_pipe(aid, eid);
 
         self.insert_pipe(ctx, eid, pipe);
     }
 
     pub fn on_pipe_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
+        println!("Socket::on_pipe_error {:?}", eid);
         if let Some(spec) = self.remove_pipe(ctx, eid) {
             self.schedule_reconnect(ctx, spec);
         }
     }
 
     fn insert_pipe(&mut self, ctx: &mut Context, eid: EndpointId, pipe: Pipe) {
+        println!("Socket::insert_pipe {:?}", eid);
         pipe.open(ctx);
 
         self.pipes.insert(eid, pipe);
@@ -260,19 +264,22 @@ impl Socket {
 /*                                                                           */
 /*****************************************************************************/
 
-    pub fn on_acceptor_error(&mut self, ctx: &mut Context, aid: EndpointId, _: io::Error) {
-        if let Some(spec) = self.remove_acceptor(ctx, aid) {
+    pub fn on_acceptor_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
+        println!("Socket::on_acceptor_error {:?}", eid);
+        if let Some(spec) = self.remove_acceptor(ctx, eid) {
             self.schedule_rebind(ctx, spec);
         }
     }
 
     fn insert_acceptor(&mut self, ctx: &mut Context, eid: EndpointId, acceptor: Acceptor) {
+        println!("Socket::insert_acceptor {:?}", eid);
         acceptor.open(ctx);
 
         self.acceptors.insert(eid, acceptor);
     }
 
     fn remove_acceptor(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointSpec> {
+        println!("Socket::remove_acceptor {:?}", eid);
         if let Some(acceptor) = self.acceptors.remove(&eid) {
             acceptor.close(ctx)
         } else {
@@ -281,6 +288,7 @@ impl Socket {
     }
 
     fn connect_acceptor(&self, eid: EndpointId, url: String) -> Acceptor {
+        println!("Socket::connect_acceptor {:?}", eid);
         Acceptor::new(
             eid,
             url,
@@ -330,6 +338,7 @@ impl Socket {
 /*****************************************************************************/
 
     pub fn recv(&mut self, ctx: &mut Context) {
+        println!("Socket::recv");
         if let Some(delay) = self.get_recv_timeout() {
             let task = Schedulable::RecvTimeout(self.id);
 
@@ -355,6 +364,7 @@ impl Socket {
     }
 
     pub fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        println!("Socket::on_recv_ready {:?}", eid);
         self.protocol.on_recv_ready(ctx, eid)
     }
 
@@ -383,6 +393,7 @@ impl Socket {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt;
     use std::rc::Rc;
     use std::sync::mpsc;
     use std::io;
@@ -445,9 +456,14 @@ mod tests {
         }
     }
 
+    impl fmt::Debug for FailingNetwork {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "FailingNetwork")
+        }
+    }
+
     impl Context for FailingNetwork {
         fn raise(&mut self, _: Event) {
-
         }
     }
 
@@ -497,6 +513,12 @@ mod tests {
             Ok(Scheduled::from(0))
         }
         fn cancel(&mut self, _: Scheduled){
+        }
+    }
+
+    impl fmt::Debug for WorkingNetwork {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "WorkingNetwork")
         }
     }
 

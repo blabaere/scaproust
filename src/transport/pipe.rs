@@ -8,7 +8,7 @@ use std::rc::Rc;
 use std::io;
 use std::fmt;
 
-use mio::EventSet;
+use mio::Ready;
 
 use core::Message;
 use transport::endpoint::*;
@@ -31,7 +31,7 @@ pub enum Event {
 }
 
 pub trait Pipe {
-    fn ready(&mut self, ctx: &mut Context, events: EventSet);
+    fn ready(&mut self, ctx: &mut Context, events: Ready);
     fn open(&mut self, ctx: &mut Context);
     fn close(&mut self, ctx: &mut Context);
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>);
@@ -40,6 +40,23 @@ pub trait Pipe {
 
 pub trait Context : EndpointRegistrar {
     fn raise(&mut self, evt: Event);
+}
+
+impl fmt::Debug for Command {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl Command {
+    fn name(&self) -> &'static str {
+        match *self {
+            Command::Open    => "Open",
+            Command::Close   => "Close",
+            Command::Send(_) => "Send",
+            Command::Recv    => "Recv"
+        }
+    }
 }
 
 impl fmt::Debug for Event {

@@ -46,16 +46,16 @@ impl<S : AsyncPipeStub + 'static> AsyncPipe<S> {
             let new_state = transition(old_state);
             let new_state_name = new_state.name();
 
-            println!("Pipe state changed from {} to {}", old_state_name, new_state_name);
-
             self.state = Some(new_state);
+
+            println!("AsyncPipe::apply switch from {} to {}", old_state_name, new_state_name);
         }
     }
 }
 
 impl<S : AsyncPipeStub> pipe::Pipe for AsyncPipe<S> {
 
-    fn ready(&mut self, ctx: &mut Context, events: mio::EventSet) {
+    fn ready(&mut self, ctx: &mut Context, events: mio::Ready) {
         self.apply(|s| s.ready(ctx, events))
     }
 

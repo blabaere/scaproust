@@ -7,7 +7,7 @@
 use std::rc::Rc;
 use std::io::{Result, Error};
 
-use mio::EventSet;
+use mio::Ready;
 
 use core::Message;
 use transport::async::stub::*;
@@ -18,28 +18,37 @@ pub trait PipeState<S : AsyncPipeStub + 'static> {
 
     fn name(&self) -> &'static str;
     fn open(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
+        println!("{}::open", self.name());
+        panic!("{}::open", self.name());
         box Dead
     }
     fn close(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
+        println!("{}::close", self.name());
         box Dead
     }
     fn send(self: Box<Self>, _: &mut Context, _: Rc<Message>) -> Box<PipeState<S>> {
+        println!("{}::send", self.name());
         box Dead
     }
     fn recv(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
+        println!("{}::recv", self.name());
         box Dead
     }
     fn error(self: Box<Self>, ctx: &mut Context, err: Error) -> Box<PipeState<S>> {
+        println!("{}::error {:?}", self.name(), err);
         ctx.raise(Event::Error(err));
 
         box Dead
     }
-    fn ready(self: Box<Self>, _: &mut Context, _: EventSet) -> Box<PipeState<S>> {
+    fn ready(self: Box<Self>, _: &mut Context, events: Ready) -> Box<PipeState<S>> {
+        println!("{}::ready {:?}", self.name(), events);
         box Dead
     }
     fn enter(&self, _: &mut Context) {
+        println!("{}::enter", self.name());
     }
     fn leave(&self, _: &mut Context) {
+        println!("{}::leave", self.name());
     }
 }
 

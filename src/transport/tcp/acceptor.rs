@@ -4,6 +4,8 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::io;
+
 use mio;
 use mio::tcp::{TcpListener, TcpStream};
 
@@ -31,14 +33,17 @@ impl TcpAcceptor {
 
         loop {
             match self.listener.accept() {
-                Ok(None) => break,
-                Ok(Some((stream, _))) => {
+                Ok((stream, _)) => {
                     let pipe = self.create_pipe(stream);
 
                     pipes.push(pipe);
                 },
                 Err(e) => {
-                    ctx.raise(Event::Error(e));
+                    if e.kind() == io::ErrorKind::WouldBlock {
+                        break;
+                    } else {
+                        ctx.raise(Event::Error(e));
+                    }
                 }
             }
         }
@@ -58,14 +63,14 @@ impl TcpAcceptor {
 }
 
 impl acceptor::Acceptor for TcpAcceptor {
-    fn ready(&mut self, ctx: &mut Context, events: mio::EventSet) {
+    fn ready(&mut self, ctx: &mut Context, events: mio::Ready) {
         if events.is_readable() {
             self.accept(ctx);
         }
     }
 
     fn open(&mut self, ctx: &mut Context) {
-        ctx.register(&self.listener, mio::EventSet::readable(), mio::PollOpt::edge()).expect("Acceptor.open failed");
+        ctx.register(&self.listener, mio::Ready::readable(), mio::PollOpt::edge()).expect("Acceptor.open failed");
         ctx.raise(Event::Opened);
     }
 

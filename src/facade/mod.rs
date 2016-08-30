@@ -26,7 +26,7 @@ pub trait Receiver<T> {
     fn receive(&self) -> io::Result<T>;
 }
 
-impl<T> Sender<reactor::Request> for T where T : Deref<Target = mio::Sender<reactor::Request>> {
+impl<T> Sender<reactor::Request> for T where T : Deref<Target = mio::deprecated::Sender<reactor::Request>> {
 
     fn send(&self, req: reactor::Request) -> io::Result<()> {
         self.deref().send(req).map_err(from_notify_error)
@@ -43,5 +43,5 @@ impl<T> Receiver<T> for mpsc::Receiver<T> {
     }
 }
 
-pub type EventLoopRequestSender = Rc<mio::Sender<reactor::Request>>;
+pub type EventLoopRequestSender = Rc<mio::deprecated::Sender<reactor::Request>>;
 

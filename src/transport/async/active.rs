@@ -7,13 +7,14 @@
 use std::rc::Rc;
 use std::io::Result;
 
-use mio::{EventSet, PollOpt};
+use mio::{Ready, PollOpt};
 
 use core::Message;
 use transport::async::stub::*;
 use transport::async::state::*;
 use transport::async::dead::Dead; 
 use transport::pipe::{Event, Context};
+use io_error::*;
 
 pub struct Active<S> {
     stub: S
@@ -30,18 +31,19 @@ impl<S : AsyncPipeStub> Active<S> {
     }
     fn on_msg_sent(&mut self, ctx: &mut Context) {
         ctx.raise(Event::Sent);
-        ctx.reregister(self.stub.deref(), EventSet::all(), PollOpt::edge());
+        ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
     }
-
-    fn writable_changed(&mut self, ctx: &mut Context, writable: bool) -> Result<()> {
-        if writable {
+    fn writable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
+        if events.is_writable() {
             if self.stub.has_pending_send() {
                 let progress = self.stub.resume_send();
 
                 self.on_send_progress(ctx, progress)
-            } else {
+            } else if !events.is_hup() { // Don't pretend to be able to send when client hup
                 ctx.raise(Event::CanSend);
 
+                Ok(())
+            } else {
                 Ok(())
             }
         } else {
@@ -52,23 +54,31 @@ impl<S : AsyncPipeStub> Active<S> {
     fn on_recv_progress(&mut self, ctx: &mut Context, progress: Result<Option<Message>>) -> Result<()> {
         progress.map(|recv| if let Some(msg) = recv { self.on_msg_received(ctx, msg) } )
     }
-
     fn on_msg_received(&mut self, ctx: &mut Context, msg: Message) {
         ctx.raise(Event::Received(msg));
-        ctx.reregister(self.stub.deref(), EventSet::all(), PollOpt::edge());
+        ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
     }
-
-    fn readable_changed(&mut self, ctx: &mut Context, readable: bool) -> Result<()> {
-        if readable {
+    fn readable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
+        if events.is_readable() {
             if self.stub.has_pending_recv() {
                 let progress = self.stub.resume_recv();
 
                 self.on_recv_progress(ctx, progress)
-            } else {
+            } else if !events.is_hup() { // Don't pretend to be able to recv when client hup
                 ctx.raise(Event::CanRecv);
                 
                 Ok(())
+            } else {
+                Ok(())
             }
+        } else {
+            Ok(())
+        }
+    }
+
+    fn hang_up_changed(&mut self, ctx: &mut Context, hup: bool) -> Result<()> {
+        if hup {
+            Err(other_io_error("hup"))
         } else {
             Ok(())
         }
@@ -79,30 +89,38 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
     fn name(&self) -> &'static str {"Active"}
 
     fn enter(&self, ctx: &mut Context) {
-        ctx.reregister(self.stub.deref(), EventSet::all(), PollOpt::edge());
+        println!("Active::enter");
+        ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
         ctx.raise(Event::Opened);
     }
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        println!("Active::close");
         ctx.deregister(self.stub.deref());
 
         box Dead
     }
     fn send(mut self: Box<Self>, ctx: &mut Context, msg: Rc<Message>) -> Box<PipeState<S>> {
+        println!("Active::send");
         let progress = self.stub.start_send(msg);
         let res = self.on_send_progress(ctx, progress);
 
         no_transition_if_ok(self, ctx, res)
     }
     fn recv(mut self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        println!("Active::recv");
         let progress = self.stub.start_recv();
         let res = self.on_recv_progress(ctx, progress);
 
         no_transition_if_ok(self, ctx, res)
     }
-    fn ready(mut self: Box<Self>, ctx: &mut Context, events: EventSet) -> Box<PipeState<S>> {
+    fn ready(mut self: Box<Self>, ctx: &mut Context, events: Ready) -> Box<PipeState<S>> {
+        println!("Active::ready {:?}", events);
         let res = 
-            self.readable_changed(ctx, events.is_readable()).and_then(|_|
-            self.writable_changed(ctx, events.is_writable()));
+            self.readable_changed(ctx, events).and_then(|_|
+            self.writable_changed(ctx, events).and_then(|_| 
+            self.hang_up_changed(ctx, events.is_hup())));
+
+        // optimisation: do no raise CanSend Or CanRecv when writable or readable was already set
 
         no_transition_if_ok(self, ctx, res)
     }
@@ -137,7 +155,7 @@ mod tests {
         assert_eq!(0, ctx.get_deregistrations());
 
         let (ref interest, ref poll_opt) = ctx.get_reregistrations()[0];
-        let all = mio::EventSet::all();
+        let all = mio::Ready::all();
         let edge = mio::PollOpt::edge();
 
         assert_eq!(&all, interest);
@@ -207,7 +225,7 @@ mod tests {
         assert_eq!(0, ctx.get_raised_events().len());
 
         sensor.borrow_mut().set_resume_send_result(Some(true));
-        let events = mio::EventSet::writable();
+        let events = mio::Ready::writable();
         let new_state = new_state.ready(&mut ctx, events);
 
         assert_eq!("Active", new_state.name());
@@ -262,7 +280,7 @@ mod tests {
         assert_eq!(0, ctx.get_raised_events().len());
 
         sensor.borrow_mut().set_resume_recv_result(Some(msg));
-        let events = mio::EventSet::readable();
+        let events = mio::Ready::readable();
         let new_state = new_state.ready(&mut ctx, events);
         assert_eq!("Active", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());

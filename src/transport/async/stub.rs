@@ -6,7 +6,7 @@
 
 use std::ops::Deref;
 use std::rc::Rc;
-use std::io::{Result, Read, Write};
+use std::io::{Result, Read, Write, ErrorKind};
 
 use byteorder::{ BigEndian, ByteOrder };
 
@@ -75,8 +75,41 @@ pub trait WriteBuffer {
 
 impl<T:Write> WriteBuffer for T {
     fn write_buffer(&mut self, buf: &[u8], written: &mut usize) -> Result<bool> {
-        *written += try!(self.write(&buf[*written..]));
+        match self.write(&buf[*written..]) {
+            Ok(x) => {
+                *written += x;
 
-        Ok(*written == buf.len())
+                Ok(*written == buf.len())
+            },
+            Err(e) => {
+                if e.kind() == ErrorKind::WouldBlock {
+                    Ok(false)
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+}
+
+
+pub trait ReadBuffer {
+    fn read_buffer(&mut self, buffer: &mut [u8]) -> Result<usize>;
+}
+
+impl<T:Read> ReadBuffer for T {
+    fn read_buffer(&mut self, buf: &mut [u8]) -> Result<usize> {
+        match self.read(buf) {
+            Ok(x) => {
+                Ok(x)
+            },
+            Err(e) => {
+                if e.kind() == ErrorKind::WouldBlock {
+                    Ok(0)
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 }

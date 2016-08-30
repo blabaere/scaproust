@@ -9,6 +9,7 @@ use std::io;
 use byteorder::{ BigEndian, ByteOrder };
 
 use core::Message;
+use transport::async::stub::*;
 use io_error::*;
 
 pub struct RecvOperation {
@@ -66,7 +67,7 @@ impl RecvOperationStep {
 }
 
 fn read_header<T:io::Read>(stream: &mut T, mut buffer: [u8; 8], mut read: usize, max_size: u64) -> io::Result<(bool, RecvOperationStep)> {
-    read += try!(stream.read(&mut buffer[read..]));
+    read += try!(stream.read_buffer(&mut buffer[read..]));
 
     if read == 8 {
         let msg_len = BigEndian::read_u64(&buffer);
@@ -83,7 +84,7 @@ fn read_header<T:io::Read>(stream: &mut T, mut buffer: [u8; 8], mut read: usize,
 }
 
 fn read_payload<T:io::Read>(stream: &mut T, mut buffer: Vec<u8>, mut read: usize) -> io::Result<(bool, RecvOperationStep)> {
-    read += try!(stream.read(&mut buffer[read..]));
+    read += try!(stream.read_buffer(&mut buffer[read..]));
 
     if read == buffer.capacity() {
         Ok((true, RecvOperationStep::Terminal(Message::from_body(buffer))))

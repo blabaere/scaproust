@@ -4,12 +4,15 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::fmt;
 use std::rc::Rc;
 use std::collections::HashMap;
 use std::io;
 use std::time::Duration;
 
-use mio::{Evented, Token, EventSet, PollOpt, EventLoop, Handler, Timeout};
+use mio::{Evented, Token, Ready, PollOpt};
+use mio::timer::{Timeout};
+use mio::deprecated::{EventLoop, Handler};
 
 use core::context;
 use core::network::Network;
@@ -25,8 +28,8 @@ use sequence::Sequence;
 use io_error::*;
 
 pub trait Registrar {
-    fn register(&mut self, io: &Evented, tok: Token, interest: EventSet, opt: PollOpt) -> io::Result<()>;
-    fn reregister(&mut self, io: &Evented, tok: Token, interest: EventSet, opt: PollOpt) -> io::Result<()>;
+    fn register(&mut self, io: &Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()>;
+    fn reregister(&mut self, io: &Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()>;
     fn deregister(&mut self, io: &Evented) -> io::Result<()>;
 }
 
@@ -74,10 +77,10 @@ pub struct Schedule {
 }
 
 impl<T:Handler> Registrar for EventLoop<T> {
-    fn register(&mut self, io: &Evented, tok: Token, interest: EventSet, opt: PollOpt) -> io::Result<()> {
+    fn register(&mut self, io: &Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
         self.register(io, tok, interest, opt)
     }
-    fn reregister(&mut self, io: &Evented, tok: Token, interest: EventSet, opt: PollOpt) -> io::Result<()> {
+    fn reregister(&mut self, io: &Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
         self.reregister(io, tok, interest, opt)
     }
     fn deregister(&mut self, io: &Evented) -> io::Result<()> {
@@ -101,7 +104,7 @@ impl<T:Handler<Timeout=context::Schedulable>> Timer for EventLoop<T> {
 /*****************************************************************************/
 
 impl PipeController {
-    pub fn ready<'a, 'b>(&mut self, registrar: &'a mut Registrar, signal_bus: &'b mut EventLoopBus<Signal>, events: EventSet) {
+    pub fn ready<'a, 'b>(&mut self, registrar: &'a mut Registrar, signal_bus: &'b mut EventLoopBus<Signal>, events: Ready) {
         let mut ctx = self.create_context(registrar, signal_bus);
 
         self.pipe.ready(&mut ctx, events);
@@ -114,7 +117,7 @@ impl PipeController {
             pipe::Command::Open      => self.pipe.open(&mut ctx),
             pipe::Command::Close     => self.pipe.close(&mut ctx),
             pipe::Command::Send(msg) => self.pipe.send(&mut ctx, msg),
-            pipe::Command::Recv      => self.pipe.open(&mut ctx)
+            pipe::Command::Recv      => self.pipe.recv(&mut ctx)
         }
     }
 
@@ -129,7 +132,7 @@ impl PipeController {
 }
 
 impl AcceptorController {
-    pub fn ready<'a, 'b>(&mut self, registrar: &'a mut Registrar, signal_bus: &'b mut EventLoopBus<Signal>, events: EventSet) {
+    pub fn ready<'a, 'b>(&mut self, registrar: &'a mut Registrar, signal_bus: &'b mut EventLoopBus<Signal>, events: Ready) {
         let mut ctx = self.create_context(registrar, signal_bus);
 
         self.acceptor.ready(&mut ctx, events);
@@ -370,6 +373,12 @@ impl<'a, 'b> context::Scheduler for SocketEventLoopContext<'a, 'b> {
     }
 }
 
+impl<'a, 'b> fmt::Debug for SocketEventLoopContext<'a, 'b> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Socket {:?}", self.socket_id)
+    }
+}
+
 impl<'a, 'b> context::Context for SocketEventLoopContext<'a, 'b> {
     fn raise(&mut self, evt: context::Event) {
         self.send_socket_evt(evt);
@@ -383,10 +392,10 @@ impl<'a, 'b> context::Context for SocketEventLoopContext<'a, 'b> {
 /*****************************************************************************/
 
 impl<'a, 'b> EndpointRegistrar for EndpointEventLoopContext<'a, 'b> {
-    fn register(&mut self, io: &Evented, interest: EventSet, opt: PollOpt) -> io::Result<()> {
+    fn register(&mut self, io: &Evented, interest: Ready, opt: PollOpt) -> io::Result<()> {
         self.registrar.register(io, self.endpoint_id.into(), interest, opt)
     }
-    fn reregister(&mut self, io: &Evented, interest: EventSet, opt: PollOpt) -> io::Result<()> {
+    fn reregister(&mut self, io: &Evented, interest: Ready, opt: PollOpt) -> io::Result<()> {
         self.registrar.reregister(io, self.endpoint_id.into(), interest, opt)
     }
     fn deregister(&mut self, io: &Evented) -> io::Result<()> {

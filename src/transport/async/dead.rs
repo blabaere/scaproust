@@ -6,7 +6,7 @@
 
 use std::rc::Rc;
 
-use mio::EventSet;
+use mio::Ready;
 
 use core::Message;
 use transport::async::stub::*;
@@ -33,7 +33,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Dead {
     fn recv(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
         self
     }
-    fn ready(self: Box<Self>, _: &mut Context, _: EventSet) -> Box<PipeState<S>> {
+    fn ready(self: Box<Self>, _: &mut Context, _: Ready) -> Box<PipeState<S>> {
         self
     }
 

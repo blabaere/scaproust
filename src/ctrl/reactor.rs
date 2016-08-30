@@ -33,7 +33,7 @@ pub enum Request {
 const BUS_TOKEN: mio::Token = mio::Token(::std::usize::MAX - 3);
 
 #[doc(hidden)]
-pub type EventLoop = mio::EventLoop<Reactor>;
+pub type EventLoop = mio::deprecated::EventLoop<Reactor>;
 
 pub fn run_event_loop(mut event_loop: EventLoop, reply_tx: mpsc::Sender<session::Reply>) {
     let signal_bus = EventLoopBus::new();
@@ -48,7 +48,7 @@ pub fn run_event_loop(mut event_loop: EventLoop, reply_tx: mpsc::Sender<session:
 }
 
 fn register_signal_bus(event_loop: &mut EventLoop, signal_bus: &EventLoopBus<Signal>) -> io::Result<()> {
-    event_loop.register(signal_bus, BUS_TOKEN, mio::EventSet::readable(), mio::PollOpt::edge())
+    event_loop.register(signal_bus, BUS_TOKEN, mio::Ready::readable(), mio::PollOpt::edge())
 }
 
 pub struct Reactor {
@@ -99,7 +99,7 @@ impl Reactor {
         }
 
     }
-    fn process_endpoint_readiness(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+    fn process_endpoint_readiness(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::Ready) {
         let eid = EndpointId::from(tok);
         {
             if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
@@ -129,6 +129,7 @@ impl Reactor {
         }
     }
     fn process_pipe_cmd(&mut self, event_loop: &mut EventLoop, eid: EndpointId, cmd: pipe::Command) {
+        println!("Reactor::process_pipe_cmd {:?} {:?}", cmd, eid);
         if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
             pipe.process(event_loop, &mut self.signal_bus, cmd);
         }
@@ -139,6 +140,7 @@ impl Reactor {
         }
     }
     fn process_pipe_evt(&mut self, event_loop: &mut EventLoop, sid: SocketId, eid: EndpointId, evt: pipe::Event) {
+        println!("Reactor::process_pipe_evt {:?} {:?}", evt, eid);
         match evt {
             pipe::Event::Opened        => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
             pipe::Event::CanSend       => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_ready(ctx, eid)),
@@ -173,7 +175,7 @@ impl Reactor {
     }
 }
 
-impl mio::Handler for Reactor {
+impl mio::deprecated::Handler for Reactor {
     type Timeout = context::Schedulable;
     type Message = Request;
 
@@ -181,7 +183,7 @@ impl mio::Handler for Reactor {
         self.process_request(event_loop, request);
     }
 
-    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
+    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::Ready) {
         if tok == BUS_TOKEN {
             self.process_signal_bus_readiness(event_loop);
         } else {

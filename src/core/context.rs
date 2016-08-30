@@ -11,7 +11,7 @@ use std::time::Duration;
 use core::{SocketId, EndpointSpec};
 use core::network::Network;
 
-pub trait Context : Network + Scheduler {
+pub trait Context : Network + Scheduler + fmt::Debug {
     fn raise(&mut self, evt: Event);
 }
 

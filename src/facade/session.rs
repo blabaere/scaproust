@@ -46,7 +46,7 @@ impl SessionBuilder {
 
     pub fn build() -> io::Result<Session> {
 
-        let mut builder = mio::EventLoopBuilder::new();
+        let mut builder = mio::deprecated::EventLoopBuilder::new();
 
         builder.
             notify_capacity(4_096).

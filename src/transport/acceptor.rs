@@ -6,7 +6,7 @@
 
 use std::io;
 
-use mio::EventSet;
+use mio::Ready;
 
 use transport::endpoint::EndpointRegistrar;
 use transport::pipe::Pipe;
@@ -24,7 +24,7 @@ pub enum Event {
 }
 
 pub trait Acceptor {
-    fn ready(&mut self, ctx: &mut Context, events: EventSet);
+    fn ready(&mut self, ctx: &mut Context, events: Ready);
     fn open(&mut self, ctx: &mut Context);
     fn close(&mut self, ctx: &mut Context);
 }
