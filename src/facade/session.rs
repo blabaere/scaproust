@@ -25,18 +25,15 @@ struct RequestSender {
     req_tx: EventLoopRequestSender
 }
 
-impl Sender<Request> for RequestSender {
-    fn send(&self, req: Request) -> io::Result<()> {
-        self.req_tx.send(reactor::Request::Session(req))
-    }
-}
-
 impl RequestSender {
     fn new(tx: EventLoopRequestSender) -> RequestSender {
         RequestSender { req_tx: tx }
     }
     fn child_sender(&self, socket_id: core::SocketId) -> socket::RequestSender {
         socket::RequestSender::new(self.req_tx.clone(), socket_id)
+    }
+    fn send(&self, req: Request) -> io::Result<()> {
+        self.req_tx.send(reactor::Request::Session(req)).map_err(from_notify_error)
     }
 }
 
@@ -57,8 +54,7 @@ impl SessionBuilder {
 
         let event_loop = try!(builder.build());
         let (reply_tx, reply_rx) = mpsc::channel();
-        let signal_tx = Rc::new(event_loop.channel());
-        let request_tx = RequestSender::new(signal_tx);
+        let request_tx = RequestSender::new(event_loop.channel());
         let session = Session::new(request_tx, reply_rx);
 
         thread::spawn(move || reactor::run_event_loop(event_loop, reply_tx));

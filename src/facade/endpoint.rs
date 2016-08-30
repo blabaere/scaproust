@@ -10,6 +10,7 @@ use super::*;
 use ctrl::reactor;
 use core::{SocketId, EndpointId};
 use core::endpoint::Request;
+use io_error::*;
 
 pub struct RequestSender {
     req_tx: EventLoopRequestSender,
@@ -25,11 +26,8 @@ impl RequestSender {
             id: eid,
         }
     }
-}
-
-impl Sender<Request> for RequestSender {
     fn send(&self, req: Request) -> io::Result<()> {
-        self.req_tx.send(reactor::Request::Endpoint(self.socket_id, self.id, req))
+        self.req_tx.send(reactor::Request::Endpoint(self.socket_id, self.id, req)).map_err(from_notify_error)
     }
 }
 

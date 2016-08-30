@@ -33,11 +33,8 @@ impl RequestSender {
     fn child_sender(&self, eid: core::EndpointId) -> endpoint::RequestSender {
         endpoint::RequestSender::new(self.req_tx.clone(), self.socket_id, eid)
     }
-}
-
-impl Sender<Request> for RequestSender {
     fn send(&self, req: Request) -> io::Result<()> {
-        self.req_tx.send(reactor::Request::Socket(self.socket_id, req))
+        self.req_tx.send(reactor::Request::Socket(self.socket_id, req)).map_err(from_notify_error)
     }
 }
 

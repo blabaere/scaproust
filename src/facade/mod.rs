@@ -8,8 +8,6 @@ pub mod session;
 pub mod socket;
 pub mod endpoint;
 
-use std::ops::Deref;
-use std::rc::Rc;
 use std::sync::mpsc;
 use std::io;
 
@@ -18,20 +16,8 @@ use mio;
 use ctrl::reactor;
 use io_error::*;
 
-pub trait Sender<T> {
-    fn send(&self, request: T) -> io::Result<()>;
-}
-
 pub trait Receiver<T> {
     fn receive(&self) -> io::Result<T>;
-}
-
-impl<T> Sender<reactor::Request> for T where T : Deref<Target = mio::deprecated::Sender<reactor::Request>> {
-
-    fn send(&self, req: reactor::Request) -> io::Result<()> {
-        self.deref().send(req).map_err(from_notify_error)
-    }
-
 }
 
 impl<T> Receiver<T> for mpsc::Receiver<T> {
@@ -43,5 +29,5 @@ impl<T> Receiver<T> for mpsc::Receiver<T> {
     }
 }
 
-pub type EventLoopRequestSender = Rc<mio::deprecated::Sender<reactor::Request>>;
+pub type EventLoopRequestSender = mio::deprecated::Sender<reactor::Request>;
 
