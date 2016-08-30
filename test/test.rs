@@ -27,13 +27,29 @@ fn test_send_timeout() {
 }
 
 #[test]
+fn test_recv_timeout() {
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+    let timeout = Some(Duration::from_millis(50));
+
+    pull.set_recv_timeout(timeout).unwrap();
+    pull.bind("tcp://127.0.0.1:5459").unwrap();
+    push.connect("tcp://127.0.0.1:5459").unwrap();
+
+    let err = pull.recv().unwrap_err();
+
+    assert_eq!(io::ErrorKind::TimedOut, err.kind());
+}
+
+#[test]
 fn check_readable_pipe_is_used_for_recv() {
     let mut session = SessionBuilder::build().expect("Failed to create session !");
     let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
     let mut push1 = session.create_socket::<Push>().expect("Failed to create socket !");
     let mut push2 = session.create_socket::<Push>().expect("Failed to create socket !");
     let mut push3 = session.create_socket::<Push>().expect("Failed to create socket !");
-    let timeout = Some(Duration::from_millis(50));
+    let timeout = Some(Duration::from_millis(500));
 
     pull.bind("tcp://127.0.0.1:5473").unwrap();
     push1.connect("tcp://127.0.0.1:5473").unwrap();

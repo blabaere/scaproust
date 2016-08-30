@@ -95,7 +95,7 @@ impl Reactor {
             context::Schedulable::Reconnect(sid, spec) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.reconnect(ctx, spec)),
             context::Schedulable::Rebind(sid, spec)    => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.rebind(ctx, spec)),
             context::Schedulable::SendTimeout(sid)     => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_timeout(ctx)),
-            _ => {},
+            context::Schedulable::RecvTimeout(sid)     => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_recv_timeout(ctx))
         }
 
     }
