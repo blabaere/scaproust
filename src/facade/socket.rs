@@ -151,9 +151,12 @@ impl Socket {
 /*                                                                           */
 /*****************************************************************************/
 
-    // TODO move this to a trait ?
-    pub fn set_send_timeout(&mut self, timeout: Duration) -> io::Result<()> {
+    pub fn set_send_timeout(&mut self, timeout: Option<Duration>) -> io::Result<()> {
         self.set_option(ConfigOption::SendTimeout(timeout))
+    }
+
+    pub fn set_recv_timeout(&mut self, timeout: Option<Duration>) -> io::Result<()> {
+        self.set_option(ConfigOption::RecvTimeout(timeout))
     }
 
     pub fn set_option(&mut self, cfg_opt: ConfigOption) -> io::Result<()> {

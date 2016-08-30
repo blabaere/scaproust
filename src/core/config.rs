@@ -13,16 +13,16 @@ pub struct Config {
     pub recv_timeout: Option<Duration>,
     pub recv_priority: u8,
     pub retry_ivl: Duration,
-    pub retry_ivl_max: Duration
+    pub retry_ivl_max: Option<Duration>
 }
 
 pub enum ConfigOption {
-    SendTimeout(Duration),
+    SendTimeout(Option<Duration>),
     SendPriority(u8),
-    RecvTimeout(Duration),
+    RecvTimeout(Option<Duration>),
     RecvPriority(u8),
     RetryIvl(Duration),
-    RetryIvlMax(Duration),
+    RetryIvlMax(Option<Duration>),
 }
 
 impl Config {
@@ -33,12 +33,22 @@ impl Config {
             recv_timeout: None,
             recv_priority: 8,
             retry_ivl: Duration::from_millis(100),
-            retry_ivl_max: Duration::from_millis(0)
+            retry_ivl_max: None
         }
     }
 
     pub fn set(&mut self, cfg_opt: ConfigOption) -> Result<()> {
+        match cfg_opt {
+            ConfigOption::SendTimeout(timeout) => self.send_timeout = timeout,
+            ConfigOption::SendPriority(priority) => self.send_priority = priority,
+            ConfigOption::RecvTimeout(timeout) => self.recv_timeout = timeout,
+            ConfigOption::RecvPriority(priority) => self.recv_priority = priority,
+            ConfigOption::RetryIvl(ivl) => self.retry_ivl = ivl,
+            ConfigOption::RetryIvlMax(ivl) => self.retry_ivl_max = ivl
+        }
         Ok(())
     }
+
+
 
 }

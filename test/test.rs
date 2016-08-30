@@ -6,59 +6,65 @@
 
 extern crate scaproust;
 
-use std::rc::Rc;
-use std::sync::mpsc;
+use std::time::Duration;
+use std::thread;
+use std::io;
 
 use scaproust::*;
-use scaproust::core::context::{Context, Scheduled};
-use scaproust::core::socket::{Protocol, Reply};
-use scaproust::core::{Message, EndpointId};
-use scaproust::core::endpoint::Pipe;
 
 #[test]
-fn can_create_socket() {
-    let mut session = SessionBuilder::build().unwrap();
-    let mut socket = session.create_socket::<Plush>().unwrap();
-    let ep = socket.connect("tcp://127.0.0.1:5454").unwrap();
+fn test_send_timeout() {
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let timeout = Some(Duration::from_millis(50));
 
-    let _ = ep.close();
+    push.bind("tcp://127.0.0.1:5457").unwrap();
+    push.set_send_timeout(timeout).unwrap();
+
+    let err = push.send(vec![65, 66, 67]).unwrap_err();
+
+    assert_eq!(io::ErrorKind::TimedOut, err.kind());
 }
 
-pub struct Plush {
-    sender: mpsc::Sender<Reply>,
-    pipe_id: Option<EndpointId>,
-    pipe: Option<Pipe>
-}
-impl Protocol for Plush {
-    fn id(&self) -> u16 { (5 * 16) }
-    fn peer_id(&self) -> u16 { (5 * 16) + 1 }
-    fn add_pipe(&mut self, _: &mut Context, eid: EndpointId, pipe: Pipe) {
-        self.pipe_id = Some(eid);
-        self.pipe = Some(pipe);
-    }
-    fn remove_pipe(&mut self, _: &mut Context, _: EndpointId) -> Option<Pipe> {
-        let (_, pipe) = (self.pipe_id.take(), self.pipe.take());
+#[test]
+fn check_readable_pipe_is_used_for_recv() {
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+    let mut push1 = session.create_socket::<Push>().expect("Failed to create socket !");
+    let mut push2 = session.create_socket::<Push>().expect("Failed to create socket !");
+    let mut push3 = session.create_socket::<Push>().expect("Failed to create socket !");
+    let timeout = Some(Duration::from_millis(50));
 
-        pipe
-    }
-    fn send(&mut self, ctx: &mut Context, msg: Message, _: Option<Scheduled>) {
-        self.pipe_id.map(|eid| ctx.send(eid, Rc::new(msg)));
-    }
-    fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {}
-    fn on_send_timeout(&mut self, _: &mut Context) {}
-    fn on_send_ready(&mut self, _: &mut Context, _: EndpointId) {}
-    fn recv(&mut self, _: &mut Context, _: Option<Scheduled>) {}
-    fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
-    fn on_recv_timeout(&mut self, _: &mut Context) {}
-    fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {}
-}
+    pull.bind("tcp://127.0.0.1:5473").unwrap();
+    push1.connect("tcp://127.0.0.1:5473").unwrap();
+    push2.connect("tcp://127.0.0.1:5473").unwrap();
+    push3.connect("tcp://127.0.0.1:5473").unwrap();
 
-impl From<mpsc::Sender<Reply>> for Plush {
-    fn from(tx: mpsc::Sender<Reply>) -> Plush {
-        Plush {
-            sender: tx,
-            pipe_id: None,
-            pipe: None
-        }
-    }
+    thread::sleep(Duration::from_millis(250));
+    //sleep_enough_for_connections_to_establish();
+
+    push1.set_send_timeout(timeout).unwrap();
+    push2.set_send_timeout(timeout).unwrap();
+    push3.set_send_timeout(timeout).unwrap();
+    pull.set_recv_timeout(timeout).unwrap();
+
+    // Make sure the socket will try to read from the correct pipe
+    push2.send(vec![65, 66, 67]).unwrap();
+    let received1 = pull.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received1);
+
+    // Make sure the socket will try to read from the same correct pipe
+    push2.send(vec![67, 66, 65]).unwrap();
+    let received2 = pull.recv().unwrap();
+    assert_eq!(vec![67, 66, 65], received2);
+
+    // Make sure the socket will try to read from the new correct pipe
+    push1.send(vec![66, 67, 65]).unwrap();
+    let received3 = pull.recv().unwrap();
+    assert_eq!(vec![66, 67, 65], received3);
+
+    // Make sure the socket will try to read from the newest correct pipe
+    push3.send(vec![66, 67, 68]).unwrap();
+    let received3 = pull.recv().unwrap();
+    assert_eq!(vec![66, 67, 68], received3);
 }
