@@ -89,32 +89,27 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
     fn name(&self) -> &'static str {"Active"}
 
     fn enter(&self, ctx: &mut Context) {
-        println!("Active::enter");
         ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
         ctx.raise(Event::Opened);
     }
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
-        println!("Active::close");
         ctx.deregister(self.stub.deref());
 
         box Dead
     }
     fn send(mut self: Box<Self>, ctx: &mut Context, msg: Rc<Message>) -> Box<PipeState<S>> {
-        println!("Active::send");
         let progress = self.stub.start_send(msg);
         let res = self.on_send_progress(ctx, progress);
 
         no_transition_if_ok(self, ctx, res)
     }
     fn recv(mut self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
-        println!("Active::recv");
         let progress = self.stub.start_recv();
         let res = self.on_recv_progress(ctx, progress);
 
         no_transition_if_ok(self, ctx, res)
     }
     fn ready(mut self: Box<Self>, ctx: &mut Context, events: Ready) -> Box<PipeState<S>> {
-        println!("Active::ready {:?}", events);
         let res = 
             self.readable_changed(ctx, events).and_then(|_|
             self.writable_changed(ctx, events).and_then(|_| 

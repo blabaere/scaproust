@@ -11,7 +11,7 @@ use std::sync::mpsc::Sender;
 use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
-use core::context::{Context, Scheduled};
+use core::context::Context;
 use super::priolist::Priolist;
 use super::{Timeout, PUSH, PULL};
 use io_error::*;
@@ -23,7 +23,7 @@ pub struct Push {
 
 enum State {
     Idle,
-    Sending(EndpointId, Timeout),
+    Sending(EndpointId, Rc<Message>, Timeout),
     SendOnHold(Rc<Message>, Timeout)
 }
 
@@ -79,8 +79,14 @@ impl Protocol for Push {
     fn add_pipe(&mut self, _: &mut Context, eid: EndpointId, pipe: Pipe) {
         self.inner.add_pipe(eid, pipe)
     }
-    fn remove_pipe(&mut self, _: &mut Context, eid: EndpointId) -> Option<Pipe> {
-        self.inner.remove_pipe(eid)
+    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe> {
+        let pipe = self.inner.remove_pipe(eid);
+
+        if pipe.is_some() {
+            self.apply(|s, inner| s.on_pipe_removed(ctx, inner, eid));
+        }
+
+        pipe
     }
     fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Timeout) {
         self.apply(|s, inner| s.send(ctx, inner, Rc::new(msg), timeout))
@@ -119,8 +125,21 @@ impl State {
     fn name(&self) -> &'static str {
         match *self {
             State::Idle             => "Idle",
-            State::Sending(_, _)    => "Sending",
+            State::Sending(_, _, _) => "Sending",
             State::SendOnHold(_, _) => "SendOnHold"
+        }
+    }
+
+    fn on_pipe_removed(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        match self {
+            State::Sending(id, msg, timeout) => {
+                if id == eid {
+                    State::Idle.send(ctx, inner, msg, timeout)
+                } else {
+                    State::Sending(id, msg, timeout)
+                }
+            },
+            any => any
         }
     }
 
@@ -131,18 +150,20 @@ impl State {
 /*****************************************************************************/
 
     fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout) -> State {
-        inner.send(ctx, msg.clone()).map_or_else(
-            |   | State::SendOnHold(msg, timeout),
-            |eid| State::Sending(eid, timeout))
+        if let Some(eid) = inner.send(ctx, msg.clone()) {
+            State::Sending(eid, msg, timeout)
+        } else {
+            State::SendOnHold(msg, timeout)
+        }
     }
     fn on_send_ack(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
         match self {
-            State::Sending(id, timeout) => {
+            State::Sending(id, msg, timeout) => {
                 if id == eid {
                     inner.on_send_ack(ctx, timeout);
                     State::Idle
                 } else {
-                    State::Sending(id, timeout)
+                    State::Sending(id, msg, timeout)
                 }
             },
             any => any

@@ -79,19 +79,15 @@ impl Pipe {
     }
 
     pub fn open(&self, network: &mut Context) {
-        println!("core::Pipe::open {:?}", self.0.id);
         self.0.open(network, true)
     }
     pub fn send(&self, network: &mut Context, msg: Rc<Message>) {
-        println!("core::Pipe::send {:?}", self.0.id);
         self.0.send(network, msg)
     }
     pub fn recv(&self, network: &mut Context) {
-        println!("core::Pipe::recv {:?}", self.0.id);
         self.0.recv(network)
     }
     pub fn close(mut self, network: &mut Context) -> Option<EndpointSpec> {
-        println!("core::Pipe::close {:?}", self.0.id);
         self.0.close(network, true)
     }
     pub fn get_send_priority(&self) -> u8 {

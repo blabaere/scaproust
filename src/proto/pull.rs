@@ -43,13 +43,13 @@ impl Pull {
 
     fn apply<F>(&mut self, transition: F) where F : FnOnce(State, &mut Inner) -> State {
         if let Some(old_state) = self.state.take() {
-            let old_name = old_state.name();
+            //let old_name = old_state.name();
             let new_state = transition(old_state, &mut self.inner);
-            let new_name = new_state.name();
+            //let new_name = new_state.name();
 
             self.state = Some(new_state);
 
-            println!("Pull::apply switch from {} to {}", old_name, new_name);
+            //println!("Pull::apply switch from {} to {}", old_name, new_name);
         }
     }
 
@@ -79,43 +79,39 @@ impl Protocol for Pull {
     fn peer_id(&self) -> u16 { PUSH }
 
     fn add_pipe(&mut self, _: &mut Context, eid: EndpointId, pipe: Pipe) {
-        println!("Pull::add_pipe {:?}", eid);
         self.inner.add_pipe(eid, pipe)
     }
-    fn remove_pipe(&mut self, _: &mut Context, eid: EndpointId) -> Option<Pipe> {
-        println!("Pull::remove_pipe {:?}", eid);
-        self.inner.remove_pipe(eid)
+    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe> {
+        let pipe = self.inner.remove_pipe(eid);
+
+        if pipe.is_some() {
+            self.apply(|s, inner| s.on_pipe_removed(ctx, inner, eid));
+        }
+
+        pipe
     }
     fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Timeout) {
-        println!("Pull::send");
         self.apply(|s, inner| s.send(ctx, inner, Rc::new(msg), timeout))
     }
     fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
-        println!("Pull::on_send_ack");
         self.apply(|s, inner| s.on_send_ack(ctx, inner, eid))
     }
     fn on_send_timeout(&mut self, ctx: &mut Context) {
-        println!("Pull::on_send_timeout");
         self.apply(|s, inner| s.on_send_timeout(ctx, inner))
     }
     fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
-        println!("Pull::on_send_ready");
         self.apply(|s, inner| s.on_send_ready(ctx, inner, eid))
     }
     fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
-        println!("Pull::recv");
         self.apply(|s, inner| s.recv(ctx, inner, timeout))
     }
     fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message) {
-        println!("Pull::on_recv_ack");
         self.apply(|s, inner| s.on_recv_ack(ctx, inner, eid, msg))
     }
     fn on_recv_timeout(&mut self, ctx: &mut Context) {
-        println!("Pull::on_recv_timeout");
         self.apply(|s, inner| s.on_recv_timeout(ctx, inner))
     }
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
-        println!("Pull::on_recv_ready");
         self.apply(|s, inner| s.on_recv_ready(ctx, inner, eid))
     }
 }
@@ -133,6 +129,19 @@ impl State {
             State::Idle            => "Idle",
             State::Receiving(_, _) => "Receiving",
             State::RecvOnHold(_)   => "RecvOnHold"
+        }
+    }
+
+    fn on_pipe_removed(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        match self {
+            State::Receiving(id, timeout) => {
+                if id == eid {
+                    State::Idle.recv(ctx, inner, timeout)
+                } else {
+                    State::Receiving(id, timeout)
+                }
+            },
+            any => any
         }
     }
 

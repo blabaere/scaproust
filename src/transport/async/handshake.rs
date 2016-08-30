@@ -104,7 +104,14 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for HandshakeRx<S> {
         if events.is_readable() {
             let res = self.recv_handshake();
             
-            transition_if_ok::<HandshakeRx<S>, Active<S>, S>(self, ctx, res)
+            /*if events.is_hup() && res.is_ok() {
+                let active = transition::<HandshakeRx<S>, Active<S>, S>(self, ctx);
+                let next = active.ready(ctx, events);
+
+                next
+            } else*/ {
+                transition_if_ok::<HandshakeRx<S>, Active<S>, S>(self, ctx, res)
+            }
         } else {
             self
         }

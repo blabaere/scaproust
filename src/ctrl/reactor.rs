@@ -129,7 +129,6 @@ impl Reactor {
         }
     }
     fn process_pipe_cmd(&mut self, event_loop: &mut EventLoop, eid: EndpointId, cmd: pipe::Command) {
-        println!("Reactor::process_pipe_cmd {:?} {:?}", cmd, eid);
         if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
             pipe.process(event_loop, &mut self.signal_bus, cmd);
         }
@@ -140,7 +139,6 @@ impl Reactor {
         }
     }
     fn process_pipe_evt(&mut self, event_loop: &mut EventLoop, sid: SocketId, eid: EndpointId, evt: pipe::Event) {
-        println!("Reactor::process_pipe_evt {:?} {:?}", evt, eid);
         match evt {
             pipe::Event::Opened        => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
             pipe::Event::CanSend       => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_ready(ctx, eid)),
