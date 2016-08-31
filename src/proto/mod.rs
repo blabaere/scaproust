@@ -8,6 +8,7 @@ pub mod pair;
 pub mod push;
 pub mod pull;
 pub mod publ;
+pub mod sub;
 
 mod priolist;
 
