@@ -11,7 +11,6 @@ use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
 use core::context::Context;
-use super::priolist::Priolist;
 use super::{Timeout, PAIR};
 use io_error::*;
 
@@ -138,7 +137,7 @@ impl State {
         }
     }
 
-    fn on_pipe_removed(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_pipe_removed(self, _: &mut Context, _: &mut Inner, eid: EndpointId) -> State {
         match self {
             State::Sending(id, msg, timeout) => {
                 if id == eid {

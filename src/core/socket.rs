@@ -65,7 +65,7 @@ pub trait Protocol {
     fn on_recv_timeout(&mut self, ctx: &mut Context);
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId);
 
-    fn set_option(&mut self, opt: ConfigOption) -> io::Result<()> {
+    fn set_option(&mut self, _: ConfigOption) -> io::Result<()> {
         Err(invalid_input_io_error("option not supported"))
     }
 }
