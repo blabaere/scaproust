@@ -7,7 +7,7 @@
 pub mod reactor;
 mod bus;
 mod adapter;
-mod controller;
+mod dispatcher;
 
 use core::{SocketId, EndpointId, context, session, socket, endpoint};
 use transport::{pipe, acceptor};
@@ -28,3 +28,6 @@ pub enum Request {
     Socket(SocketId, socket::Request),
     Endpoint(SocketId, EndpointId, endpoint::Request)
 }
+
+// If there are more tasks to  schedule than core::context::Schedulable
+// A 'Task' enum should go there and follow the design of Signal

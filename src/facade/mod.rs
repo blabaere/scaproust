@@ -14,7 +14,6 @@ use std::io;
 use mio;
 
 use ctrl;
-use ctrl::reactor;
 use io_error::*;
 
 pub trait Receiver<T> {
