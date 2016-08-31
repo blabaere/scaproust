@@ -40,31 +40,17 @@ pub struct SessionBuilder;
 
 impl SessionBuilder {
 
+    pub fn new() -> SessionBuilder {
+        SessionBuilder
+    }
+
     pub fn build() -> io::Result<Session> {
 
         let (reply_tx, reply_rx) = mpsc::channel();
         let (request_tx, request_rx) = mio::channel::channel();
         let session = Session::new(RequestSender::new(request_tx), reply_rx);
 
-        thread::spawn(move || {
-            let mut dispatcher = dispatcher::Dispatcher::new(request_rx, reply_tx);
-
-            dispatcher.run()
-        });
-        /*let mut builder = mio::deprecated::EventLoopBuilder::new();
-
-        builder.
-            notify_capacity(4_096).
-            messages_per_tick(256).
-            timer_tick(time::Duration::from_millis(15)).
-            timer_wheel_size(1_024).
-            timer_capacity(4_096);
-
-        let event_loop = try!(builder.build());
-        let request_tx = RequestSender::new(event_loop.channel());
-        let session = Session::new(request_tx, reply_rx);
-
-        thread::spawn(move || reactor::run_event_loop(event_loop, reply_tx));*/
+        thread::spawn(move || dispatcher::Dispatcher::dispatch(request_rx, reply_tx));
 
         Ok(session)
     }}

@@ -6,7 +6,7 @@
 
 use std::io;
 
-use mio::{Poll, Token, Ready, Events, Event, Evented, PollOpt};
+use mio::{Poll, Token, Ready, Events, Evented, PollOpt};
 
 pub trait EventHandler {
     fn handle(&mut self, el: &mut EventLoop, token: Token, events: Ready);
@@ -20,7 +20,7 @@ pub struct EventLoop {
 
 impl EventLoop {
     pub fn new() -> io::Result<EventLoop> {
-        let evts = Events::with_capacity(1024);
+        let evts = Events::new();
         let poll = try!(Poll::new());
         let event_loop = EventLoop {
             events_poller: poll,
@@ -33,10 +33,6 @@ impl EventLoop {
 
     pub fn shutdown(&mut self) {
         self.running = false;
-    }
-
-    pub fn is_running(&self) -> bool {
-        self.running
     }
 
     pub fn run<H: EventHandler>(&mut self, event_handler: &mut H) -> io::Result<()> {

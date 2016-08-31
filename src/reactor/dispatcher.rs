@@ -6,12 +6,13 @@
 
 use std::sync::mpsc::Sender;
 use std::io;
+use std::time::Duration;
 
-use mio::{Token, Poll, Ready, PollOpt};
-use mio::timer::{Timer};
+use mio::{Token, Ready, PollOpt};
+use mio::timer::{Timer, Builder};
 use mio::channel::{Receiver};
 
-use core::{SocketId, EndpointId, session, socket, endpoint, context};
+use core::{SocketId, EndpointId, session, socket, context};
 use transport::{pipe, acceptor};
 use super::{Signal, Request};
 use super::event_loop::{EventLoop, EventHandler};
@@ -36,13 +37,23 @@ pub struct Dispatcher {
 }
 
 impl Dispatcher {
+    pub fn dispatch(rx: Receiver<Request>, tx: Sender<session::Reply>) -> io::Result<()> {
+        let mut dispatcher = Dispatcher::new(rx, tx);
+
+        dispatcher.run()
+    }
     pub fn new(rx: Receiver<Request>, tx: Sender<session::Reply>) -> Dispatcher {
         let seq = Sequence::new();
+        let clock = Builder::default().
+            tick_duration(Duration::from_millis(25)).
+            num_slots(1_024).
+            capacity(8_192).
+            build();
 
         Dispatcher {
             channel: rx,
             bus: EventLoopBus::new(),
-            timer: Timer::default(),
+            timer: clock,
             sockets: session::Session::new(seq.clone(), tx),
             endpoints: EndpointCollection::new(seq.clone()),
             schedule: Schedule::new(seq.clone())
@@ -74,12 +85,6 @@ impl Dispatcher {
 /*****************************************************************************/
 
     fn process_channel(&mut self, el: &mut EventLoop) {
-        /*for _ in 0..self.config.messages_per_tick {
-            match self.channel.try_recv() {
-                Ok(req) => self.dispatcher.process_request(poll, req),
-                _ => break,
-            }
-        }*/
         while let Ok(req) = self.channel.try_recv() {
             self.process_request(el, req);
         }
@@ -102,7 +107,7 @@ impl Dispatcher {
 /*****************************************************************************/
     fn process_request(&mut self, el: &mut EventLoop, request: Request) {
         match request {
-            Request::Session(req) => self.process_session_request(req),
+            Request::Session(req) => self.process_session_request(el, req),
             Request::Socket(id, req) => self.process_socket_request(el, id, req),
             _ => {}
         }
@@ -116,12 +121,12 @@ impl Dispatcher {
             Signal::SocketEvt(_, _) => {}
         }
     }
-    fn process_tick(&mut self, el: &mut EventLoop, timeout: context::Schedulable) {
+    fn process_tick(&mut self, _: &mut EventLoop, timeout: context::Schedulable) {
         match timeout {
-            context::Schedulable::Reconnect(sid, spec) => self.apply_on_socket(el, sid, |socket, ctx| socket.reconnect(ctx, spec)),
-            context::Schedulable::Rebind(sid, spec)    => self.apply_on_socket(el, sid, |socket, ctx| socket.rebind(ctx, spec)),
-            context::Schedulable::SendTimeout(sid)     => self.apply_on_socket(el, sid, |socket, ctx| socket.on_send_timeout(ctx)),
-            context::Schedulable::RecvTimeout(sid)     => self.apply_on_socket(el, sid, |socket, ctx| socket.on_recv_timeout(ctx))
+            context::Schedulable::Reconnect(sid, spec) => self.apply_on_socket(sid, |socket, ctx| socket.reconnect(ctx, spec)),
+            context::Schedulable::Rebind(sid, spec)    => self.apply_on_socket(sid, |socket, ctx| socket.rebind(ctx, spec)),
+            context::Schedulable::SendTimeout(sid)     => self.apply_on_socket(sid, |socket, ctx| socket.on_send_timeout(ctx)),
+            context::Schedulable::RecvTimeout(sid)     => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_timeout(ctx))
         }
     }
     fn process_io(&mut self, el: &mut EventLoop, token: Token, events: Ready) {
@@ -145,19 +150,20 @@ impl Dispatcher {
 /* process regular requests                                                  */
 /*                                                                           */
 /*****************************************************************************/
-    fn process_session_request(&mut self, request: session::Request) {
+    fn process_session_request(&mut self, el: &mut EventLoop, request: session::Request) {
         match request {
             session::Request::CreateSocket(ctor) => self.sockets.add_socket(ctor),
+            session::Request::Shutdown => el.shutdown(),
             _ => {}
         }
     }
-    fn process_socket_request(&mut self, el: &mut EventLoop, id: SocketId, request: socket::Request) {
+    fn process_socket_request(&mut self, _: &mut EventLoop, id: SocketId, request: socket::Request) {
         match request {
-            socket::Request::Connect(url) => self.apply_on_socket(el, id, |socket, ctx| socket.connect(ctx, url)),
-            socket::Request::Bind(url)    => self.apply_on_socket(el, id, |socket, ctx| socket.bind(ctx, url)),
-            socket::Request::Send(msg)    => self.apply_on_socket(el, id, |socket, ctx| socket.send(ctx, msg)),
-            socket::Request::Recv         => self.apply_on_socket(el, id, |socket, ctx| socket.recv(ctx)),
-            socket::Request::SetOption(x) => self.apply_on_socket(el, id, |socket, ctx| socket.set_opt(ctx, x))
+            socket::Request::Connect(url) => self.apply_on_socket(id, |socket, ctx| socket.connect(ctx, url)),
+            socket::Request::Bind(url)    => self.apply_on_socket(id, |socket, ctx| socket.bind(ctx, url)),
+            socket::Request::Send(msg)    => self.apply_on_socket(id, |socket, ctx| socket.send(ctx, msg)),
+            socket::Request::Recv         => self.apply_on_socket(id, |socket, ctx| socket.recv(ctx)),
+            socket::Request::SetOption(x) => self.apply_on_socket(id, |socket, ctx| socket.set_opt(ctx, x))
         }
     }
 
@@ -176,26 +182,26 @@ impl Dispatcher {
             acceptor.process(el, &mut self.bus, cmd);
         }
     }
-    fn process_pipe_evt(&mut self, el: &mut EventLoop, sid: SocketId, eid: EndpointId, evt: pipe::Event) {
+    fn process_pipe_evt(&mut self, _: &mut EventLoop, sid: SocketId, eid: EndpointId, evt: pipe::Event) {
         match evt {
-            pipe::Event::Opened        => self.apply_on_socket(el, sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
-            pipe::Event::CanSend       => self.apply_on_socket(el, sid, |socket, ctx| socket.on_send_ready(ctx, eid)),
-            pipe::Event::Sent          => self.apply_on_socket(el, sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
-            pipe::Event::CanRecv       => self.apply_on_socket(el, sid, |socket, ctx| socket.on_recv_ready(ctx, eid)),
-            pipe::Event::Received(msg) => self.apply_on_socket(el, sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
-            pipe::Event::Error(err)    => self.apply_on_socket(el, sid, |socket, ctx| socket.on_pipe_error(ctx, eid, err)),
+            pipe::Event::Opened        => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
+            pipe::Event::CanSend       => self.apply_on_socket(sid, |socket, ctx| socket.on_send_ready(ctx, eid)),
+            pipe::Event::Sent          => self.apply_on_socket(sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
+            pipe::Event::CanRecv       => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_ready(ctx, eid)),
+            pipe::Event::Received(msg) => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
+            pipe::Event::Error(err)    => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_error(ctx, eid, err)),
             pipe::Event::Closed        => self.endpoints.remove_pipe(eid)
         }
     }
-    fn process_acceptor_evt(&mut self, el: &mut EventLoop, sid: SocketId, aid: EndpointId, evt: acceptor::Event) {
+    fn process_acceptor_evt(&mut self, _: &mut EventLoop, sid: SocketId, aid: EndpointId, evt: acceptor::Event) {
         match evt {
             // Maybe the controller should be removed from the endpoint collection
-            acceptor::Event::Error(e) => self.apply_on_socket(el, sid, |socket, ctx| socket.on_acceptor_error(ctx, aid, e)),
+            acceptor::Event::Error(e) => self.apply_on_socket(sid, |socket, ctx| socket.on_acceptor_error(ctx, aid, e)),
             acceptor::Event::Accepted(pipes) => {
                 for pipe in pipes {
                     let pipe_id = self.endpoints.insert_pipe(sid, pipe);
 
-                    self.apply_on_socket(el, sid, |socket, ctx| socket.on_pipe_accepted(ctx, aid, pipe_id));
+                    self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_accepted(ctx, aid, pipe_id));
                 }
             },
             _ => {}
@@ -208,7 +214,7 @@ impl Dispatcher {
 /*                                                                           */
 /*****************************************************************************/
 
-    fn apply_on_socket<F>(&mut self, event_loop: &mut EventLoop, id: SocketId, f: F) 
+    fn apply_on_socket<F>(&mut self, id: SocketId, f: F) 
     where F : FnOnce(&mut socket::Socket, &mut SocketEventLoopContext) {
         if let Some(socket) = self.sockets.get_socket_mut(id) {
             let mut ctx = SocketEventLoopContext::new(
