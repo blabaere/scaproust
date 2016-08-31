@@ -122,7 +122,6 @@ fn write_usr_payload<T:io::Write>(stream: &mut T, msg: Rc<Message>, mut written:
 mod tests {
     use std::ops::Deref;
     use std::rc::Rc;
-    use std::io;
 
     use core::Message;
     use super::*;

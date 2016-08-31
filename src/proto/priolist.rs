@@ -187,8 +187,8 @@ impl Priolist {
         self.current = None;
     }
 
-    pub fn len(&self) -> usize { self.items.len() }
-    pub fn is_empty(&self) -> bool { self.len() == 0 }
+    fn len(&self) -> usize { self.items.len() }
+    //pub fn is_empty(&self) -> bool { self.len() == 0 }
 
     fn all(&self) -> Range<usize> {
         0..self.len()
@@ -241,18 +241,6 @@ mod tests {
 
         priolist.insert(eid, 8);
         assert!(priolist.next().is_none());
-    }
-
-    #[test]
-    fn can_insert_and_remove() {
-        let mut priolist = Priolist::new();
-        let eid = EndpointId::from(0);
-
-        priolist.insert(eid, 8);
-        assert!(priolist.is_empty() == false);
-
-        priolist.remove(&eid);
-        assert!(priolist.is_empty() == true);
     }
 
     #[test]

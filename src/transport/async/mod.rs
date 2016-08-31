@@ -42,13 +42,13 @@ impl<S : AsyncPipeStub + 'static> AsyncPipe<S> {
 
     fn apply<F>(&mut self, ctx: &mut Context, transition: F) where F : FnOnce(Box<PipeState<S>>, &mut Context) -> Box<PipeState<S>> {
         if let Some(old_state) = self.state.take() {
-            let old_name = old_state.name();
+            #[cfg(debug_assertions)] let old_name = old_state.name();
             let new_state = transition(old_state, ctx);
-            let new_name = new_state.name();
+            #[cfg(debug_assertions)] let new_name = new_state.name();
 
             self.state = Some(new_state);
 
-            debug!("[{:?}] switch from {} to {}", ctx, old_name, new_name);
+            #[cfg(debug_assertions)] debug!("[{:?}] switch from {} to {}", ctx, old_name, new_name);
         }
     }
 }

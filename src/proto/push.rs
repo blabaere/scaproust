@@ -43,13 +43,13 @@ impl Push {
 
     fn apply<F>(&mut self, ctx: &mut Context, transition: F) where F : FnOnce(State, &mut Context, &mut Inner) -> State {
         if let Some(old_state) = self.state.take() {
-            let old_name = old_state.name();
+            #[cfg(debug_assertions)] let old_name = old_state.name();
             let new_state = transition(old_state, ctx, &mut self.inner);
-            let new_name = new_state.name();
+            #[cfg(debug_assertions)] let new_name = new_state.name();
 
             self.state = Some(new_state);
 
-            debug!("[{:?}] switch from {} to {}", ctx, old_name, new_name);
+            #[cfg(debug_assertions)] debug!("[{:?}] switch from {} to {}", ctx, old_name, new_name);
         }
     }
 
@@ -124,6 +124,7 @@ impl Protocol for Push {
 
 impl State {
 
+    #[cfg(debug_assertions)]
     fn name(&self) -> &'static str {
         match *self {
             State::Idle             => "Idle",

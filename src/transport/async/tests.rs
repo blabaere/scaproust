@@ -116,13 +116,13 @@ impl stub::AsyncPipeStub for TestStepStream {
 }
 
 impl mio::Evented for TestStepStream {
-    fn register(&self, poll: &mio::Poll, token: mio::Token, interest: mio::Ready, opts: mio::PollOpt) -> io::Result<()> {
+    fn register(&self, _: &mio::Poll, _: mio::Token, _: mio::Ready, _: mio::PollOpt) -> io::Result<()> {
         unimplemented!();
     }
-    fn reregister(&self, poll: &mio::Poll, token: mio::Token, interest: mio::Ready, opts: mio::PollOpt) -> io::Result<()> {
+    fn reregister(&self, _: &mio::Poll, _: mio::Token, _: mio::Ready, _: mio::PollOpt) -> io::Result<()> {
         unimplemented!();
     }
-    fn deregister(&self, poll: &mio::Poll) -> io::Result<()> {
+    fn deregister(&self, _: &mio::Poll) -> io::Result<()> {
         unimplemented!();
     }
 }
@@ -139,14 +139,14 @@ impl stub::Handshake for TestStepStream {
         self.sensor.borrow_mut().push_sent_handshake(pids);
         if self.send_handshake_ok { Ok(()) } else { Err(other_io_error("test")) }
     }
-    fn recv_handshake(&mut self, pids: (u16, u16)) -> io::Result<()> {
+    fn recv_handshake(&mut self, _: (u16, u16)) -> io::Result<()> {
         self.sensor.borrow_mut().push_received_handshake();
         if self.recv_handshake_ok { Ok(()) } else { Err(other_io_error("test")) }
     }
 }
 
 impl stub::Sender for TestStepStream {
-    fn start_send(&mut self, msg: Rc<Message>) -> io::Result<bool> {
+    fn start_send(&mut self, _: Rc<Message>) -> io::Result<bool> {
         match self.sensor.borrow_mut().take_start_send_result() {
             Some(true) => { self.pending_send = false; Ok(true) },
             Some(false) => { self.pending_send = true; Ok(false) },

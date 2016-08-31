@@ -9,6 +9,7 @@
 
 #![feature(box_syntax)]
 #![feature(fnbox)]
+#![feature(stmt_expr_attributes)]
 
 //#![feature(plugin)]
 //#![plugin(clippy)]
