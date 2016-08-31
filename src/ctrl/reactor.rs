@@ -14,7 +14,7 @@ use core::{SocketId, EndpointId, session, socket, endpoint, context};
 use transport::pipe;
 use transport::acceptor;
 
-use ctrl::Signal;
+use ctrl::{Signal, Request};
 use ctrl::bus::EventLoopBus;
 use ctrl::adapter::{
     EndpointCollection,
@@ -22,13 +22,6 @@ use ctrl::adapter::{
     SocketEventLoopContext
 };
 use sequence::Sequence;
-
-/// Requests flowing to core components via the controller
-pub enum Request {
-    Session(session::Request),
-    Socket(SocketId, socket::Request),
-    Endpoint(SocketId, EndpointId, endpoint::Request)
-}
 
 const BUS_TOKEN: mio::Token = mio::Token(::std::usize::MAX - 3);
 

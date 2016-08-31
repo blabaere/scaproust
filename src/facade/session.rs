@@ -12,6 +12,7 @@ use std::time;
 use mio;
 
 use super::*;
+use ctrl;
 use ctrl::reactor;
 use core::session::{Request, Reply};
 use core::socket::{Protocol, ProtocolCtor};
@@ -32,7 +33,7 @@ impl RequestSender {
         socket::RequestSender::new(self.req_tx.clone(), socket_id)
     }
     fn send(&self, req: Request) -> io::Result<()> {
-        self.req_tx.send(reactor::Request::Session(req)).map_err(from_notify_error)
+        self.req_tx.send(ctrl::Request::Session(req)).map_err(from_notify_error)
     }
 }
 

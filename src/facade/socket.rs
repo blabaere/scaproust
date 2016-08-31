@@ -9,6 +9,7 @@ use std::io;
 use std::time::Duration;
 
 use super::*;
+use ctrl;
 use ctrl::reactor;
 use core::{SocketId, Message};
 use core::socket::{Request, Reply};
@@ -34,7 +35,7 @@ impl RequestSender {
         endpoint::RequestSender::new(self.req_tx.clone(), self.socket_id, eid)
     }
     fn send(&self, req: Request) -> io::Result<()> {
-        self.req_tx.send(reactor::Request::Socket(self.socket_id, req)).map_err(from_notify_error)
+        self.req_tx.send(ctrl::Request::Socket(self.socket_id, req)).map_err(from_notify_error)
     }
 }
 

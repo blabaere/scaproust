@@ -7,8 +7,9 @@
 pub mod reactor;
 mod bus;
 mod adapter;
+mod controller;
 
-use core::{SocketId, EndpointId, context};
+use core::{SocketId, EndpointId, context, session, socket, endpoint};
 use transport::{pipe, acceptor};
 
 /// Commands and events flowing between the controller and transport or core components.
@@ -19,4 +20,11 @@ pub enum Signal {
     AcceptorCmd(SocketId, EndpointId, acceptor::Command),
     AcceptorEvt(SocketId, EndpointId, acceptor::Event),
     SocketEvt(SocketId, context::Event)
+}
+
+/// Requests flowing to core components via the controller
+pub enum Request {
+    Session(session::Request),
+    Socket(SocketId, socket::Request),
+    Endpoint(SocketId, EndpointId, endpoint::Request)
 }

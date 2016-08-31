@@ -13,6 +13,7 @@ use std::io;
 
 use mio;
 
+use ctrl;
 use ctrl::reactor;
 use io_error::*;
 
@@ -29,5 +30,5 @@ impl<T> Receiver<T> for mpsc::Receiver<T> {
     }
 }
 
-pub type EventLoopRequestSender = mio::deprecated::Sender<reactor::Request>;
+pub type EventLoopRequestSender = mio::deprecated::Sender<ctrl::Request>;
 
