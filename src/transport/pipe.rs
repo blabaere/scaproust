@@ -66,7 +66,7 @@ impl fmt::Debug for Event {
 }
 
 impl Event {
-    fn name(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         match *self {
             Event::Opened      => "Opened",
             Event::Closed      => "Closed",

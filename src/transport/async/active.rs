@@ -34,21 +34,19 @@ impl<S : AsyncPipeStub> Active<S> {
         ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
     }
     fn writable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
-        if events.is_writable() {
-            if self.stub.has_pending_send() {
-                let progress = self.stub.resume_send();
-
-                self.on_send_progress(ctx, progress)
-            } else if !events.is_hup() { // Don't pretend to be able to send when client hup
-                ctx.raise(Event::CanSend);
-
-                Ok(())
-            } else {
-                Ok(())
-            }
-        } else {
-            Ok(())
+        if events.is_writable() == false {
+            return Ok(());
         }
+        if self.stub.has_pending_send() {
+            let progress = self.stub.resume_send();
+
+            return self.on_send_progress(ctx, progress);
+        }
+        if events.is_hup() == false {
+            ctx.raise(Event::CanSend);
+        }
+
+        Ok(())
     }
 
     fn on_recv_progress(&mut self, ctx: &mut Context, progress: Result<Option<Message>>) -> Result<()> {
@@ -59,21 +57,19 @@ impl<S : AsyncPipeStub> Active<S> {
         ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
     }
     fn readable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
-        if events.is_readable() {
-            if self.stub.has_pending_recv() {
-                let progress = self.stub.resume_recv();
-
-                self.on_recv_progress(ctx, progress)
-            } else if !events.is_hup() { // Don't pretend to be able to recv when client hup
-                ctx.raise(Event::CanRecv);
-                
-                Ok(())
-            } else {
-                Ok(())
-            }
-        } else {
-            Ok(())
+        if events.is_readable() == false {
+            return Ok(());
         }
+        if self.stub.has_pending_recv() {
+            let progress = self.stub.resume_recv();
+
+            return self.on_recv_progress(ctx, progress);
+        }
+        if events.is_hup() == false {
+            ctx.raise(Event::CanRecv);
+        }
+
+        Ok(())
     }
 
     fn hang_up_changed(&mut self, ctx: &mut Context, hup: bool) -> Result<()> {
@@ -236,6 +232,48 @@ mod tests {
     }
 
     #[test]
+    fn when_writable_should_raise_an_event() {
+        let sensor_srv = TestStepStreamSensor::new();
+        let sensor = Rc::new(RefCell::new(sensor_srv));
+        let stub = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stub);
+        let mut ctx = TestPipeContext::new();
+        let events = mio::Ready::writable();
+        let new_state = state.ready(&mut ctx, events);
+        assert_eq!("Active", new_state.name());
+        assert_eq!(1, ctx.get_raised_events().len());
+
+        let ref evt = ctx.get_raised_events()[0];
+        let is_can_send = match evt {
+            &pipe::Event::CanSend => true,
+            _ => false,
+        };
+
+        assert!(is_can_send);
+    }
+
+    #[test]
+    fn when_writable_hup_should_not_raise_an_event_and_transition_to_dead() {
+        let sensor_srv = TestStepStreamSensor::new();
+        let sensor = Rc::new(RefCell::new(sensor_srv));
+        let stub = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stub);
+        let mut ctx = TestPipeContext::new();
+        let events = mio::Ready::writable() | mio::Ready::hup();
+        let new_state = state.ready(&mut ctx, events);
+        assert_eq!("Dead", new_state.name());
+        assert_eq!(1, ctx.get_raised_events().len());
+
+        let ref evt = ctx.get_raised_events()[0];
+        let is_error = match evt {
+            &pipe::Event::Error(_) => true,
+            _ => false,
+        };
+
+        assert!(is_error);
+    }
+
+    #[test]
     fn recv_with_immediate_success() {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
@@ -287,5 +325,47 @@ mod tests {
         };
 
         assert!(is_recv);
+    }
+
+    #[test]
+    fn when_readable_should_raise_an_event() {
+        let sensor_srv = TestStepStreamSensor::new();
+        let sensor = Rc::new(RefCell::new(sensor_srv));
+        let stub = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stub);
+        let mut ctx = TestPipeContext::new();
+        let events = mio::Ready::readable();
+        let new_state = state.ready(&mut ctx, events);
+        assert_eq!("Active", new_state.name());
+        assert_eq!(1, ctx.get_raised_events().len());
+
+        let ref evt = ctx.get_raised_events()[0];
+        let is_can_recv = match evt {
+            &pipe::Event::CanRecv => true,
+            _ => false,
+        };
+
+        assert!(is_can_recv);
+    }
+
+    #[test]
+    fn when_readable_hup_should_not_raise_an_event_and_transition_to_dead() {
+        let sensor_srv = TestStepStreamSensor::new();
+        let sensor = Rc::new(RefCell::new(sensor_srv));
+        let stub = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stub);
+        let mut ctx = TestPipeContext::new();
+        let events = mio::Ready::readable() | mio::Ready::hup();
+        let new_state = state.ready(&mut ctx, events);
+        assert_eq!("Dead", new_state.name());
+        assert_eq!(1, ctx.get_raised_events().len());
+
+        let ref evt = ctx.get_raised_events()[0];
+        let is_error = match evt {
+            &pipe::Event::Error(_) => true,
+            _ => false,
+        };
+
+        assert!(is_error);
     }
 }
