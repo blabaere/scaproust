@@ -36,6 +36,7 @@ pub use facade::session::SessionBuilder;
 pub use facade::session::Session;
 pub use facade::socket::Socket;
 
+pub use proto::pair::Pair;
 pub use proto::push::Push;
 pub use proto::pull::Pull;
 

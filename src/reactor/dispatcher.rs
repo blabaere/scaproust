@@ -121,6 +121,12 @@ impl Dispatcher {
             Signal::SocketEvt(_, _) => {}
         }
     }
+
+/*****************************************************************************/
+/*                                                                           */
+/* process timed requests                                                    */
+/*                                                                           */
+/*****************************************************************************/
     fn process_tick(&mut self, _: &mut EventLoop, timeout: context::Schedulable) {
         match timeout {
             context::Schedulable::Reconnect(sid, spec) => self.apply_on_socket(sid, |socket, ctx| socket.reconnect(ctx, spec)),
@@ -129,6 +135,12 @@ impl Dispatcher {
             context::Schedulable::RecvTimeout(sid)     => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_timeout(ctx))
         }
     }
+
+/*****************************************************************************/
+/*                                                                           */
+/* process i/o readiness                                                     */
+/*                                                                           */
+/*****************************************************************************/
     fn process_io(&mut self, el: &mut EventLoop, token: Token, events: Ready) {
         let eid = EndpointId::from(token);
         {
@@ -207,12 +219,6 @@ impl Dispatcher {
             _ => {}
         }
     }
-
-/*****************************************************************************/
-/*                                                                           */
-/* process timed requests                                                    */
-/*                                                                           */
-/*****************************************************************************/
 
     fn apply_on_socket<F>(&mut self, id: SocketId, f: F) 
     where F : FnOnce(&mut socket::Socket, &mut SocketEventLoopContext) {

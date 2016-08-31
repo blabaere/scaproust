@@ -4,6 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+pub mod pair;
 pub mod push;
 pub mod pull;
 
@@ -11,6 +12,7 @@ mod priolist;
 
 use core::context::Scheduled;
 
+pub const PAIR: u16 = (    16);
 pub const PUSH: u16 = (5 * 16);
 pub const PULL: u16 = (5 * 16) + 1;
 

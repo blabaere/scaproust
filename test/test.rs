@@ -15,6 +15,7 @@ extern crate scaproust;
 mod socket;
 mod fair_queue;
 mod pipeline;
+mod pair;
 
 pub use std::time::Duration;
 pub use std::thread;
@@ -68,4 +69,3 @@ pub mod urls {
 
     }
 }
-
