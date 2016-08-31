@@ -392,14 +392,26 @@ impl<'a, 'b> context::Context for SocketEventLoopContext<'a, 'b> {
 /*****************************************************************************/
 
 impl<'a, 'b> EndpointRegistrar for EndpointEventLoopContext<'a, 'b> {
-    fn register(&mut self, io: &Evented, interest: Ready, opt: PollOpt) -> io::Result<()> {
-        self.registrar.register(io, self.endpoint_id.into(), interest, opt)
+    fn register(&mut self, io: &Evented, interest: Ready, opt: PollOpt) {
+        let res = self.registrar.register(io, self.endpoint_id.into(), interest, opt);
+
+        if res.is_err() {
+            error!("[{:?}] register failed: {}", self, res.unwrap_err());
+        }
     }
-    fn reregister(&mut self, io: &Evented, interest: Ready, opt: PollOpt) -> io::Result<()> {
-        self.registrar.reregister(io, self.endpoint_id.into(), interest, opt)
+    fn reregister(&mut self, io: &Evented, interest: Ready, opt: PollOpt) {
+        let res = self.registrar.reregister(io, self.endpoint_id.into(), interest, opt);
+
+        if res.is_err() {
+            error!("[{:?}] reregister failed: {}", self, res.unwrap_err());
+        }
     }
-    fn deregister(&mut self, io: &Evented) -> io::Result<()> {
-        self.registrar.deregister(io)
+    fn deregister(&mut self, io: &Evented) {
+        let res = self.registrar.deregister(io);
+
+        if res.is_err() {
+            error!("[{:?}] deregister failed: {}", self, res.unwrap_err());
+        }
     }
 }
 

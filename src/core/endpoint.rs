@@ -87,7 +87,7 @@ impl Pipe {
     pub fn recv(&self, network: &mut Context) {
         self.0.recv(network)
     }
-    pub fn close(mut self, network: &mut Context) -> Option<EndpointSpec> {
+    pub fn close(self, network: &mut Context) -> Option<EndpointSpec> {
         self.0.close(network, true)
     }
     pub fn get_send_priority(&self) -> u8 {
@@ -105,7 +105,7 @@ impl Acceptor {
     pub fn open(&self, network: &mut Context) {
         self.0.open(network, false)
     }
-    pub fn close(mut self, network: &mut Context) -> Option<EndpointSpec> {
+    pub fn close(self, network: &mut Context) -> Option<EndpointSpec> {
         self.0.close(network, false)
     }
     pub fn get_send_priority(&self) -> u8 {

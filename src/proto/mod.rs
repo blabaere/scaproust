@@ -9,15 +9,7 @@ pub mod pull;
 
 mod priolist;
 
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::mpsc::Sender;
-
-use core::{EndpointId, Message};
-use core::socket::Reply;
-use core::endpoint::Pipe;
-use core::context::{Context, Scheduled};
-use self::priolist::Priolist;
+use core::context::Scheduled;
 
 pub const PUSH: u16 = (5 * 16);
 pub const PULL: u16 = (5 * 16) + 1;

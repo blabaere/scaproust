@@ -405,7 +405,7 @@ mod tests {
         fn on_send_ready(&mut self, _: &mut Context, _: EndpointId) {}
         fn recv(&mut self, _: &mut Context, _: Option<Scheduled>) {}
         fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
-        fn on_recv_timeout(&mut self, ctx: &mut Context) {}
+        fn on_recv_timeout(&mut self, _: &mut Context) {}
         fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {}
     }
 

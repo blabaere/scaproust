@@ -41,10 +41,6 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Dead {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-    use std::cell::RefCell;
-
-    use mio;
 
     use transport::*;
     use transport::tests::*;

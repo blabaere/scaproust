@@ -70,7 +70,7 @@ impl acceptor::Acceptor for TcpAcceptor {
     }
 
     fn open(&mut self, ctx: &mut Context) {
-        ctx.register(&self.listener, mio::Ready::readable(), mio::PollOpt::edge()).expect("Acceptor.open failed");
+        ctx.register(&self.listener, mio::Ready::readable(), mio::PollOpt::edge());
         ctx.raise(Event::Opened);
     }
 

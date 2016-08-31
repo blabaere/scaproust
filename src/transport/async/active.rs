@@ -78,7 +78,7 @@ impl<S : AsyncPipeStub> Active<S> {
         Ok(())
     }
 
-    fn hang_up_changed(&mut self, ctx: &mut Context, hup: bool) -> Result<()> {
+    fn hang_up_changed(&mut self, hup: bool) -> Result<()> {
         if hup {
             self.writable = false;
             self.readable = false;
@@ -121,9 +121,8 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
         let res = 
             self.readable_changed(ctx, events).and_then(|_|
             self.writable_changed(ctx, events).and_then(|_| 
-            self.hang_up_changed(ctx, events.is_hup())));
-
-        // optimisation: do no raise CanSend Or CanRecv when writable or readable was already set
+            self.hang_up_changed(events.is_hup()))
+        );
 
         no_transition_if_ok(self, ctx, res)
     }

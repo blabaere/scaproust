@@ -4,12 +4,10 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::io::Result;
-
 use mio::{Evented, Ready, PollOpt};
 
 pub trait EndpointRegistrar {
-    fn register(&mut self, io: &Evented, interest: Ready, opt: PollOpt) -> Result<()>;
-    fn reregister(&mut self, io: &Evented, interest: Ready, opt: PollOpt) -> Result<()>;
-    fn deregister(&mut self, io: &Evented) -> Result<()>;
+    fn register(&mut self, io: &Evented, interest: Ready, opt: PollOpt);
+    fn reregister(&mut self, io: &Evented, interest: Ready, opt: PollOpt);
+    fn deregister(&mut self, io: &Evented);
 }

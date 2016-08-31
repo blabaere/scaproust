@@ -22,17 +22,12 @@ pub trait Transport {
 #[cfg(test)]
 mod tests {
     use std::fmt;
-    use std::io;
 
     use mio;
 
     use transport::*;
-    use io_error::*;
 
     pub struct TestPipeContext {
-        registration_ok: bool,
-        reregistration_ok: bool,
-        deregistration_ok: bool,
         registrations: Vec<(mio::Ready, mio::PollOpt)>,
         reregistrations: Vec<(mio::Ready, mio::PollOpt)>,
         deregistrations: usize,
@@ -42,18 +37,12 @@ mod tests {
     impl TestPipeContext {
         pub fn new() -> TestPipeContext {
             TestPipeContext {
-                registration_ok: true,
-                reregistration_ok: true,
-                deregistration_ok: true,
                 registrations: Vec::new(),
                 reregistrations: Vec::new(),
                 deregistrations: 0,
                 raised_events: Vec::new()
             }
         }
-        pub fn set_registration_ok(&mut self, registration_ok: bool) { self.registration_ok = registration_ok; }
-        pub fn set_reregistration_ok(&mut self, reregistration_ok: bool) { self.reregistration_ok = reregistration_ok; }
-        pub fn set_deregistration_ok(&mut self, deregistration_ok: bool) { self.deregistration_ok = deregistration_ok; }
         pub fn get_registrations(&self) -> &[(mio::Ready, mio::PollOpt)] { &self.registrations }
         pub fn get_reregistrations(&self) -> &[(mio::Ready, mio::PollOpt)] { &self.reregistrations }
         pub fn get_deregistrations(&self) -> usize { self.deregistrations }
@@ -61,17 +50,14 @@ mod tests {
     }
 
     impl endpoint::EndpointRegistrar for TestPipeContext {
-        fn register(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::Ready, opt: mio::PollOpt) -> io::Result<()> {
+        fn register(&mut self, _: &mio::Evented, interest: mio::Ready, opt: mio::PollOpt) {
             self.registrations.push((interest, opt));
-            if self.registration_ok { Ok(()) } else { Err(other_io_error("test")) }
         }
-        fn reregister(&mut self, io: &mio::Evented/*, tok: mio::Token*/, interest: mio::Ready, opt: mio::PollOpt) -> io::Result<()> {
+        fn reregister(&mut self, _: &mio::Evented, interest: mio::Ready, opt: mio::PollOpt) {
             self.reregistrations.push((interest, opt));
-            if self.reregistration_ok { Ok(()) } else { Err(other_io_error("test")) }
         }
-        fn deregister(&mut self, io: &mio::Evented) -> io::Result<()> {
+        fn deregister(&mut self, _: &mio::Evented) {
             self.deregistrations += 1;
-            if self.deregistration_ok { Ok(()) } else { Err(other_io_error("test")) }
         }
     }
 
