@@ -25,7 +25,7 @@ extern crate time;
 
 pub mod core;
 pub mod proto;
-mod ctrl;
+mod reactor;
 mod facade;
 mod transport;
 

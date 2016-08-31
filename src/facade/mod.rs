@@ -13,7 +13,7 @@ use std::io;
 
 use mio;
 
-use ctrl;
+use reactor;
 use io_error::*;
 
 pub trait Receiver<T> {
@@ -29,5 +29,4 @@ impl<T> Receiver<T> for mpsc::Receiver<T> {
     }
 }
 
-pub type EventLoopRequestSender = mio::channel::Sender<ctrl::Request>;
-
+pub type EventLoopRequestSender = mio::channel::Sender<reactor::Request>;

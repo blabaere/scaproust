@@ -7,7 +7,7 @@
 use std::io;
 
 use super::*;
-use ctrl;
+use reactor;
 use core::{SocketId, EndpointId};
 use core::endpoint::Request;
 use io_error::*;
@@ -27,7 +27,7 @@ impl RequestSender {
         }
     }
     fn send(&self, req: Request) -> io::Result<()> {
-        self.req_tx.send(ctrl::Request::Endpoint(self.socket_id, self.id, req)).map_err(from_send_error)
+        self.req_tx.send(reactor::Request::Endpoint(self.socket_id, self.id, req)).map_err(from_send_error)
     }
 }
 

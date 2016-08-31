@@ -11,8 +11,8 @@ use std::sync::mpsc;
 use mio;
 
 use super::*;
-use ctrl;
-use ctrl::dispatcher;
+use reactor;
+use reactor::dispatcher;
 use core::session::{Request, Reply};
 use core::socket::{Protocol, ProtocolCtor};
 use core;
@@ -32,7 +32,7 @@ impl RequestSender {
         socket::RequestSender::new(self.req_tx.clone(), socket_id)
     }
     fn send(&self, req: Request) -> io::Result<()> {
-        self.req_tx.send(ctrl::Request::Session(req)).map_err(from_send_error)
+        self.req_tx.send(reactor::Request::Session(req)).map_err(from_send_error)
     }
 }
 
