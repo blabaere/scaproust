@@ -17,13 +17,17 @@ use transport::pipe::{Event, Context};
 use io_error::*;
 
 pub struct Active<S> {
-    stub: S
+    stub: S,
+    writable: bool,
+    readable: bool
 }
 
 impl<S : AsyncPipeStub> Active<S> {
     pub fn new(s: S) -> Active<S> {
         Active {
-            stub: s
+            stub: s,
+            writable: false,
+            readable: false
         }
     }
     fn on_send_progress(&mut self, ctx: &mut Context, progress: Result<bool>) -> Result<()> {
@@ -42,7 +46,8 @@ impl<S : AsyncPipeStub> Active<S> {
 
             return self.on_send_progress(ctx, progress);
         }
-        if events.is_hup() == false {
+        if events.is_hup() == false && self.writable == false {
+            self.writable = true;
             ctx.raise(Event::CanSend);
         }
 
@@ -65,7 +70,8 @@ impl<S : AsyncPipeStub> Active<S> {
 
             return self.on_recv_progress(ctx, progress);
         }
-        if events.is_hup() == false {
+        if events.is_hup() == false && self.readable == false {
+            self.readable = true;
             ctx.raise(Event::CanRecv);
         }
 
@@ -74,6 +80,8 @@ impl<S : AsyncPipeStub> Active<S> {
 
     fn hang_up_changed(&mut self, ctx: &mut Context, hup: bool) -> Result<()> {
         if hup {
+            self.writable = false;
+            self.readable = false;
             Err(other_io_error("hup"))
         } else {
             Ok(())
@@ -97,11 +105,15 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
         let progress = self.stub.start_send(msg);
         let res = self.on_send_progress(ctx, progress);
 
+        self.writable = false;
+
         no_transition_if_ok(self, ctx, res)
     }
     fn recv(mut self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         let progress = self.stub.start_recv();
         let res = self.on_recv_progress(ctx, progress);
+
+        self.readable = false;
 
         no_transition_if_ok(self, ctx, res)
     }
@@ -250,6 +262,23 @@ mod tests {
         };
 
         assert!(is_can_send);
+    }
+
+    #[test]
+    fn when_writable_should_raise_an_event_unless_no_change() {
+        let sensor_srv = TestStepStreamSensor::new();
+        let sensor = Rc::new(RefCell::new(sensor_srv));
+        let stub = TestStepStream::with_sensor(sensor.clone());
+        let state = box Active::new(stub);
+        let mut ctx = TestPipeContext::new();
+        let events = mio::Ready::writable();
+        let new_state = state.ready(&mut ctx, events);
+        assert_eq!("Active", new_state.name());
+        assert_eq!(1, ctx.get_raised_events().len());
+
+        let new_state = new_state.ready(&mut ctx, events);
+        assert_eq!("Active", new_state.name());
+        assert_eq!(1, ctx.get_raised_events().len());
     }
 
     #[test]
