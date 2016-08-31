@@ -13,8 +13,8 @@ use mio::channel::{Receiver};
 
 use core::{SocketId, EndpointId, session, socket, endpoint, context};
 use transport::{pipe, acceptor};
-use super::reactor::{EventLoop, EventHandler};
 use super::{Signal, Request};
+use super::event_loop::{EventLoop, EventHandler};
 use super::bus::EventLoopBus;
 use super::adapter::{EndpointCollection, Schedule, SocketEventLoopContext};
 use sequence::Sequence;

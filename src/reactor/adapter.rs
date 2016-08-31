@@ -25,7 +25,7 @@ use super::bus::EventLoopBus;
 use super::Signal;
 use sequence::Sequence;
 use io_error::*;
-use super::reactor::EventLoop;
+use super::event_loop::EventLoop;
 
 pub trait Registrar {
     fn register(&mut self, io: &Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()>;
