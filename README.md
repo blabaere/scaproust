@@ -24,48 +24,55 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 * Ability to use a socket as a raw file descriptor with system level functions.
 
 ## Progress
+- [ ] Features
+  - [ ] Device
+  - [ ] Examples
+  - [ ] Documentation
+  - [x] User defined protocols
+  - [ ] User defined transports
+
 - [ ] Protocols
-  - [ ] PAIR
+  - [x] PAIR
   - [ ] BUS
   - [ ] REQREP
     - [ ] REQ
     - [ ] REQ resend
     - [ ] REQ prefetch replies
     - [ ] REP
-  - [ ] PUBSUB
-    - [ ] PUB
-    - [ ] SUB
-    - [ ] SUB subscription filter
-  - [ ] PIPELINE
-    - [ ] PUSH
-    - [ ] PULL
+  - [x] PUBSUB
+    - [x] PUB
+    - [x] SUB
+    - [x] SUB subscription filter
+  - [x] PIPELINE
+    - [x] PUSH
+    - [x] PULL
   - [ ] SURVEY
     - [ ] SURVEYOR
     - [ ] SURVEYOR deadline
     - [ ] RESPONDENT  
 
 - [ ] Transports
-  - [ ] TCP
+  - [x] TCP
   - [ ] IPC (*nix only)
   - [ ] IPC (Windows)
 
 - [ ] Socket options
   - [ ] Linger
   - [ ] Recv buffer size max
-  - [ ] Send timeout
-  - [ ] Recv timeout
-  - [ ] Reconnect interval
+  - [x] Send timeout
+  - [x] Recv timeout
+  - [x] Reconnect interval
   - [ ] Reconnect interval max
-  - [ ] Send priority
-  - [ ] Recv priority
+  - [x] Send priority
+  - [x] Recv priority
   - [ ] IPV4 only
   - [ ] Socket name
 
 - [ ] Protocol options
   - [ ] REQ resend interval
   - [ ] SURVEYOR deadline
-  - [ ] SUB subscribe
-  - [ ] SUB unsubscribe
+  - [x] SUB subscribe
+  - [x] SUB unsubscribe
 
 - [ ] Transport options
   - [ ] TCP no delay
