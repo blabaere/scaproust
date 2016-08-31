@@ -4,12 +4,14 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
+use std::io;
 
 use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
+use core::config::ConfigOption;
 use core::endpoint::Pipe;
 use core::context::Context;
 use super::priolist::Priolist;
@@ -30,7 +32,8 @@ enum State {
 struct Inner {
     reply_tx: Sender<Reply>,
     pipes: HashMap<EndpointId, Pipe>,
-    fq: Priolist
+    fq: Priolist,
+    subscriptions: HashSet<Vec<u8>>
 }
 
 /*****************************************************************************/
@@ -61,7 +64,8 @@ impl From<Sender<Reply>> for Sub {
             inner: Inner {
                 reply_tx: tx,
                 pipes: HashMap::new(),
-                fq: Priolist::new()
+                fq: Priolist::new(),
+                subscriptions: HashSet::new()
             },
             state: Some(State::Idle)
         }
@@ -113,6 +117,14 @@ impl Protocol for Sub {
     }
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
+    }
+    fn set_option(&mut self, opt: ConfigOption) -> io::Result<()> {
+        match opt {
+            ConfigOption::Subscribe(x)   => Ok(self.inner.subscribe(x)),
+            ConfigOption::Unsubscribe(x) => Ok(self.inner.unsubscribe(x)),
+            _ => Err(invalid_input_io_error("option not supported"))
+        }
+        
     }
 }
 
@@ -181,8 +193,12 @@ impl State {
         match self {
             State::Receiving(id, timeout) => {
                 if id == eid {
-                    inner.on_recv_ack(ctx, timeout, msg);
-                    State::Idle
+                    if inner.accept(&msg) {
+                        inner.on_recv_ack(ctx, timeout, msg);
+                        State::Idle
+                    } else {
+                        State::Idle.recv(ctx, inner, timeout)
+                    }
                 } else {
                     State::Receiving(id, timeout)
                 }
@@ -249,5 +265,19 @@ impl Inner {
     fn on_recv_timeout(&self) {
         let error = timedout_io_error("Recv timed out");
         let _ = self.reply_tx.send(Reply::Err(error));
+    }
+
+    fn subscribe(&mut self, subscription :String) {
+        self.subscriptions.insert(subscription.into_bytes());
+    }
+
+    fn unsubscribe(&mut self, subscription :String) {
+        self.subscriptions.remove(&subscription.into_bytes());
+    }
+
+    fn accept(&self, msg: &Message) -> bool {
+        let payload = msg.get_body();
+        
+        self.subscriptions.iter().any(|s| payload.starts_with(s))
     }
 }

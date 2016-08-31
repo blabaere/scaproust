@@ -29,7 +29,7 @@ pub enum ConfigOption {
 
     // specific options, apply to some protocols
     Subscribe(String),
-    Unubscribe(String)
+    Unsubscribe(String)
 }
 
 impl Config {

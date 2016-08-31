@@ -37,6 +37,10 @@ describe! can {
         sub2.connect(&url).unwrap();
         sub3.connect(&url).unwrap();
 
+        sub1.set_option(ConfigOption::Subscribe(String::from("A"))).unwrap();
+        sub2.set_option(ConfigOption::Subscribe(String::from("A"))).unwrap();
+        sub3.set_option(ConfigOption::Subscribe(String::from("A"))).unwrap();
+
         sleep_some();
 
         let sent = vec![65, 66, 67];
@@ -54,6 +58,11 @@ describe! can {
         let url1 = urls::tcp::get();
         let url2 = urls::tcp::get();
         let url3 = urls::tcp::get();
+
+        sub1.set_option(ConfigOption::Subscribe(String::from("A"))).unwrap();
+        sub2.set_option(ConfigOption::Subscribe(String::from("A"))).unwrap();
+        sub3.set_option(ConfigOption::Subscribe(String::from("A"))).unwrap();
+
         sub1.bind(&url1).unwrap();
         sub2.bind(&url2).unwrap();
         sub3.bind(&url3).unwrap();
@@ -71,6 +80,31 @@ describe! can {
 
         assert_eq!(vec![65, 66, 67], received1);
         assert_eq!(vec![65, 66, 67], received2);
+        assert_eq!(vec![65, 66, 67], received3);
+    }
+
+    it "ignores messages based on subscriptions" {
+        let url = urls::tcp::get();
+
+        publ.bind(&url).unwrap();
+        sub1.connect(&url).unwrap();
+        sub2.connect(&url).unwrap();
+        sub3.connect(&url).unwrap();
+
+        sub1.set_option(ConfigOption::Subscribe(String::from("A"))).unwrap();
+        sub2.set_option(ConfigOption::Subscribe(String::from("B"))).unwrap();
+        sub3.set_option(ConfigOption::Subscribe(String::from("A"))).unwrap();
+
+        sleep_some();
+
+        let sent = vec![65, 66, 67];
+        publ.send(sent).unwrap();
+        let received1 = sub1.recv().unwrap();
+        let not_received2 = sub2.recv().unwrap_err();
+        let received3 = sub3.recv().unwrap();
+
+        assert_eq!(vec![65, 66, 67], received1);
+        assert_eq!(io::ErrorKind::TimedOut, not_received2.kind());
         assert_eq!(vec![65, 66, 67], received3);
     }
 }

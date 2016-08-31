@@ -35,6 +35,7 @@ mod io_error;
 pub use facade::session::SessionBuilder;
 pub use facade::session::Session;
 pub use facade::socket::Socket;
+pub use core::config::ConfigOption;
 
 pub use proto::pair::Pair;
 pub use proto::publ::Pub;
