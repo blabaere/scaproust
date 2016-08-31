@@ -4,10 +4,10 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-pub mod reactor;
+pub mod dispatcher;
+mod reactor;
 mod bus;
 mod adapter;
-mod dispatcher;
 
 use core::{SocketId, EndpointId, context, session, socket, endpoint};
 use transport::{pipe, acceptor};
@@ -26,7 +26,8 @@ pub enum Signal {
 pub enum Request {
     Session(session::Request),
     Socket(SocketId, socket::Request),
-    Endpoint(SocketId, EndpointId, endpoint::Request)
+    Endpoint(SocketId, EndpointId, endpoint::Request),
+    Shutdown
 }
 
 // If there are more tasks to  schedule than core::context::Schedulable

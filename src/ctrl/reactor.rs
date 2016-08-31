@@ -4,188 +4,91 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::sync::mpsc;
 use std::io;
 
-use mio;
+use mio::{Poll, Token, Ready, Events, Event, Evented, PollOpt};
 
-use core::{SocketId, EndpointId, session, socket, endpoint, context};
-
-use transport::pipe;
-use transport::acceptor;
-
-use ctrl::{Signal, Request};
-use ctrl::bus::EventLoopBus;
-use ctrl::adapter::{
-    EndpointCollection,
-    Schedule,
-    SocketEventLoopContext
-};
-use sequence::Sequence;
-
-const BUS_TOKEN: mio::Token = mio::Token(::std::usize::MAX - 3);
-
-#[doc(hidden)]
-pub type EventLoop = mio::deprecated::EventLoop<Reactor>;
-
-pub fn run_event_loop(mut event_loop: EventLoop, reply_tx: mpsc::Sender<session::Reply>) {
-    let signal_bus = EventLoopBus::new();
-    let signal_bus_reg = register_signal_bus(&mut event_loop, &signal_bus);
-    let mut handler = Reactor::new(signal_bus, reply_tx);
-    let exec = signal_bus_reg.and_then(|_| event_loop.run(&mut handler));
-
-    match exec {
-        Ok(_) => debug!("event loop exited"),
-        Err(e) => error!("event loop failed to run: {}", e)
-    }
+pub trait EventHandler {
+    fn handle(&mut self, el: &mut EventLoop, token: Token, events: Ready);
 }
 
-fn register_signal_bus(event_loop: &mut EventLoop, signal_bus: &EventLoopBus<Signal>) -> io::Result<()> {
-    event_loop.register(signal_bus, BUS_TOKEN, mio::Ready::readable(), mio::PollOpt::edge())
+pub struct EventLoop {
+    events_poller: Poll,
+    events: Events,
+    running: bool
 }
 
-pub struct Reactor {
-    signal_bus: EventLoopBus<Signal>,
-    session: session::Session,
-    endpoints: EndpointCollection,
-    schedule: Schedule
-}
+impl EventLoop {
+    pub fn new() -> io::Result<EventLoop> {
+        let evts = Events::with_capacity(1024);
+        let poll = try!(Poll::new());
+        let event_loop = EventLoop {
+            events_poller: poll,
+            events: evts,
+            running: false
+        };
 
-impl Reactor {
-    fn new(bus: EventLoopBus<Signal>, reply_tx: mpsc::Sender<session::Reply>) -> Reactor {
-        let seq = Sequence::new();
-        Reactor {
-            signal_bus: bus,
-            session: session::Session::new(seq.clone(), reply_tx),
-            endpoints: EndpointCollection::new(seq.clone()),
-            schedule: Schedule::new(seq.clone())
-        }
+        Ok(event_loop)
     }
-    fn process_request(&mut self, event_loop: &mut EventLoop, request: Request) {
-        match request {
-            Request::Session(req) => self.process_session_request(req),
-            Request::Socket(id, req) => self.process_socket_request(event_loop, id, req),
-            _ => {}
-        }
+
+    pub fn shutdown(&mut self) {
+        self.running = false;
     }
-    fn process_session_request(&mut self, request: session::Request) {
-        match request {
-            session::Request::CreateSocket(ctor) => self.session.add_socket(ctor),
-            _ => {}
-        }
+
+    pub fn is_running(&self) -> bool {
+        self.running
     }
-    fn process_socket_request(&mut self, event_loop: &mut EventLoop, id: SocketId, request: socket::Request) {
-        match request {
-            socket::Request::Connect(url) => self.apply_on_socket(event_loop, id, |socket, ctx| socket.connect(ctx, url)),
-            socket::Request::Bind(url)    => self.apply_on_socket(event_loop, id, |socket, ctx| socket.bind(ctx, url)),
-            socket::Request::Send(msg)    => self.apply_on_socket(event_loop, id, |socket, ctx| socket.send(ctx, msg)),
-            socket::Request::Recv         => self.apply_on_socket(event_loop, id, |socket, ctx| socket.recv(ctx)),
-            socket::Request::SetOption(x) => self.apply_on_socket(event_loop, id, |socket, ctx| socket.set_opt(ctx, x))
-        }
-    }
-    fn process_timeout(&mut self, event_loop: &mut EventLoop, task: context::Schedulable) {
-        match task {
-            context::Schedulable::Reconnect(sid, spec) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.reconnect(ctx, spec)),
-            context::Schedulable::Rebind(sid, spec)    => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.rebind(ctx, spec)),
-            context::Schedulable::SendTimeout(sid)     => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_timeout(ctx)),
-            context::Schedulable::RecvTimeout(sid)     => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_recv_timeout(ctx))
+
+    pub fn run<H: EventHandler>(&mut self, event_handler: &mut H) -> io::Result<()> {
+        self.running = true;
+
+        while self.running {
+            try!(self.run_once(event_handler));
         }
 
+        Ok(())
     }
-    fn process_endpoint_readiness(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::Ready) {
-        let eid = EndpointId::from(tok);
-        {
-            if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
-                pipe.ready(event_loop, &mut self.signal_bus, events);
-                return;
-            } 
-        }
-        {
-            if let Some(acceptor) = self.endpoints.get_acceptor_mut(eid) {
-                acceptor.ready(event_loop, &mut self.signal_bus, events);
-                return;
-            }
-        }
-    }
-    fn process_signal_bus_readiness(&mut self, event_loop: &mut EventLoop) {
-        while let Some(signal) = self.signal_bus.recv() {
-            self.process_signal(event_loop, signal);
-        }
-    }
-    fn process_signal(&mut self, event_loop: &mut EventLoop, signal: Signal) {
-        match signal {
-            Signal::PipeCmd(_, eid, cmd)       => self.process_pipe_cmd(event_loop, eid, cmd),
-            Signal::AcceptorCmd(_, eid, cmd)   => self.process_acceptor_cmd(event_loop, eid, cmd),
-            Signal::PipeEvt(sid, eid, evt)     => self.process_pipe_evt(event_loop, sid, eid, evt),
-            Signal::AcceptorEvt(sid, eid, evt) => self.process_acceptor_evt(event_loop, sid, eid, evt),
-            Signal::SocketEvt(_, _) => {}
-        }
-    }
-    fn process_pipe_cmd(&mut self, event_loop: &mut EventLoop, eid: EndpointId, cmd: pipe::Command) {
-        if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {
-            pipe.process(event_loop, &mut self.signal_bus, cmd);
-        }
-    }
-    fn process_acceptor_cmd(&mut self, event_loop: &mut EventLoop, eid: EndpointId, cmd: acceptor::Command) {
-        if let Some(acceptor) = self.endpoints.get_acceptor_mut(eid) {
-            acceptor.process(event_loop, &mut self.signal_bus, cmd);
-        }
-    }
-    fn process_pipe_evt(&mut self, event_loop: &mut EventLoop, sid: SocketId, eid: EndpointId, evt: pipe::Event) {
-        match evt {
-            pipe::Event::Opened        => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
-            pipe::Event::CanSend       => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_ready(ctx, eid)),
-            pipe::Event::Sent          => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
-            pipe::Event::CanRecv       => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_recv_ready(ctx, eid)),
-            pipe::Event::Received(msg) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
-            pipe::Event::Error(err)    => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_error(ctx, eid, err)),
-            pipe::Event::Closed        => self.endpoints.remove_pipe(eid)
-        }
-    }
-    fn process_acceptor_evt(&mut self, event_loop: &mut EventLoop, sid: SocketId, aid: EndpointId, evt: acceptor::Event) {
-        match evt {
-            // Maybe the controller should be removed from the endpoint collection
-            acceptor::Event::Error(e) => self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_acceptor_error(ctx, aid, e)),
-            acceptor::Event::Accepted(pipes) => {
-                for pipe in pipes {
-                    let pipe_id = self.endpoints.insert_pipe(sid, pipe);
 
-                    self.apply_on_socket(event_loop, sid, |socket, ctx| socket.on_pipe_accepted(ctx, aid, pipe_id));
+    pub fn run_once<H: EventHandler>(&mut self, event_handler: &mut H) -> io::Result<()> {
+        let event_count = match self.poll_events() {
+            Ok(count) => count,
+            Err(err) => {
+                if err.kind() == io::ErrorKind::Interrupted {
+                    0
+                } else {
+                    return Err(err);
                 }
-            },
-            _ => {}
-        }
-    }
-    fn apply_on_socket<F>(&mut self, event_loop: &mut EventLoop, id: SocketId, f: F) 
-    where F : FnOnce(&mut socket::Socket, &mut SocketEventLoopContext) {
-        if let Some(socket) = self.session.get_socket_mut(id) {
-            let mut ctx = SocketEventLoopContext::new(id, &mut self.signal_bus, &mut self.endpoints, &mut self.schedule, event_loop);
+            }
+        };
 
-            f(socket, &mut ctx);
-        }
-    }
-}
+        self.process_events(event_handler, event_count);
 
-impl mio::deprecated::Handler for Reactor {
-    type Timeout = context::Schedulable;
-    type Message = Request;
-
-    fn notify(&mut self, event_loop: &mut EventLoop, request: Self::Message) {
-        self.process_request(event_loop, request);
+        Ok(())
     }
 
-    fn ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::Ready) {
-        if tok == BUS_TOKEN {
-            self.process_signal_bus_readiness(event_loop);
-        } else {
-            self.process_endpoint_readiness(event_loop, tok, events);
+    fn poll_events(&mut self) -> io::Result<usize> {
+        self.events_poller.poll(&mut self.events, None)
+    }
+
+    fn process_events<H: EventHandler>(&mut self, event_handler: &mut H, count: usize) {
+        let mut i = 0;
+
+        while i < count {
+            let event = self.events.get(i).unwrap();
+
+            event_handler.handle(self, event.token(), event.kind());
+
+            i += 1;
         }
     }
 
-    fn timeout(&mut self, event_loop: &mut EventLoop, timeout: Self::Timeout) {
-        self.process_timeout(event_loop, timeout);
+    pub fn register(&mut self, io: &Evented, token: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
+        self.events_poller.register(io, token, interest, opt)
     }
-
-    fn interrupted(&mut self, _: &mut EventLoop) {
+    pub fn reregister(&mut self, io: &Evented, token: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
+        self.events_poller.reregister(io, token, interest, opt)
+    }
+    pub fn deregister(&mut self, io: &Evented) -> io::Result<()> {
+        self.events_poller.deregister(io)
     }
 }

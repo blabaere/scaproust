@@ -7,13 +7,12 @@
 use std::io;
 use std::thread;
 use std::sync::mpsc;
-use std::time;
 
 use mio;
 
 use super::*;
 use ctrl;
-use ctrl::reactor;
+use ctrl::dispatcher;
 use core::session::{Request, Reply};
 use core::socket::{Protocol, ProtocolCtor};
 use core;
@@ -33,7 +32,7 @@ impl RequestSender {
         socket::RequestSender::new(self.req_tx.clone(), socket_id)
     }
     fn send(&self, req: Request) -> io::Result<()> {
-        self.req_tx.send(ctrl::Request::Session(req)).map_err(from_notify_error)
+        self.req_tx.send(ctrl::Request::Session(req)).map_err(from_send_error)
     }
 }
 
@@ -43,7 +42,16 @@ impl SessionBuilder {
 
     pub fn build() -> io::Result<Session> {
 
-        let mut builder = mio::deprecated::EventLoopBuilder::new();
+        let (reply_tx, reply_rx) = mpsc::channel();
+        let (request_tx, request_rx) = mio::channel::channel();
+        let session = Session::new(RequestSender::new(request_tx), reply_rx);
+
+        thread::spawn(move || {
+            let mut dispatcher = dispatcher::Dispatcher::new(request_rx, reply_tx);
+
+            dispatcher.run()
+        });
+        /*let mut builder = mio::deprecated::EventLoopBuilder::new();
 
         builder.
             notify_capacity(4_096).
@@ -53,11 +61,10 @@ impl SessionBuilder {
             timer_capacity(4_096);
 
         let event_loop = try!(builder.build());
-        let (reply_tx, reply_rx) = mpsc::channel();
         let request_tx = RequestSender::new(event_loop.channel());
         let session = Session::new(request_tx, reply_rx);
 
-        thread::spawn(move || reactor::run_event_loop(event_loop, reply_tx));
+        thread::spawn(move || reactor::run_event_loop(event_loop, reply_tx));*/
 
         Ok(session)
     }}

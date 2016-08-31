@@ -11,8 +11,7 @@ use std::io;
 use std::time::Duration;
 
 use mio::{Evented, Token, Ready, PollOpt};
-use mio::timer::{Timeout};
-use mio::deprecated::{EventLoop, Handler};
+use mio::timer::{Timer, Timeout};
 
 use core::context;
 use core::network::Network;
@@ -26,6 +25,7 @@ use ctrl::bus::EventLoopBus;
 use ctrl::Signal;
 use sequence::Sequence;
 use io_error::*;
+use super::reactor::EventLoop;
 
 pub trait Registrar {
     fn register(&mut self, io: &Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()>;
@@ -33,17 +33,12 @@ pub trait Registrar {
     fn deregister(&mut self, io: &Evented) -> io::Result<()>;
 }
 
-pub trait Timer {
-    fn schedule(&mut self, task: context::Schedulable, delay: Duration) -> io::Result<Timeout>;
-    fn cancel(&mut self, timeout: &Timeout);
-}
-
-pub struct SocketEventLoopContext<'a, 'b> {
+pub struct SocketEventLoopContext<'a> {
     socket_id: SocketId,
     signal_tx: &'a mut EventLoopBus<Signal>,
     endpoints: &'a mut EndpointCollection,
     schedule: &'a mut Schedule,
-    timer: &'b mut Timer
+    timer: &'a mut Timer<context::Schedulable>
 }
 
 pub struct EndpointEventLoopContext<'a, 'b> {
@@ -76,7 +71,7 @@ pub struct Schedule {
     items: HashMap<context::Scheduled, Timeout>
 }
 
-impl<T:Handler> Registrar for EventLoop<T> {
+impl Registrar for EventLoop {
     fn register(&mut self, io: &Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
         self.register(io, tok, interest, opt)
     }
@@ -87,7 +82,7 @@ impl<T:Handler> Registrar for EventLoop<T> {
         self.deregister(io)
     }
 }
-
+/*
 impl<T:Handler<Timeout=context::Schedulable>> Timer for EventLoop<T> {
     fn schedule(&mut self, task: context::Schedulable, delay: Duration) -> io::Result<Timeout> {
         self.timeout(task, delay).map_err(from_timer_error)
@@ -96,7 +91,7 @@ impl<T:Handler<Timeout=context::Schedulable>> Timer for EventLoop<T> {
         self.clear_timeout(timeout);
     }
 }
-
+*/
 /*****************************************************************************/
 /*                                                                           */
 /* Endpoint collection                                                       */
@@ -238,13 +233,13 @@ impl Schedule {
 /*                                                                           */
 /*****************************************************************************/
 
-impl<'a, 'b> SocketEventLoopContext<'a, 'b> {
+impl<'a> SocketEventLoopContext<'a> {
     pub fn new(
         sid: SocketId,
         tx: &'a mut EventLoopBus<Signal>,
         eps: &'a mut EndpointCollection,
         sched: &'a mut Schedule,
-        timer: &'b mut Timer) -> SocketEventLoopContext<'a, 'b> {
+        timer: &'a mut Timer<context::Schedulable>) -> SocketEventLoopContext<'a> {
         SocketEventLoopContext {
             socket_id: sid,
             signal_tx: tx,
@@ -310,7 +305,7 @@ impl<'a, 'b> SocketEventLoopContext<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Network for SocketEventLoopContext<'a, 'b> {
+impl<'a> Network for SocketEventLoopContext<'a> {
 
     fn connect(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
         let pipe = try!(self.connect(url, pids));
@@ -359,27 +354,27 @@ impl<'a, 'b> Network for SocketEventLoopContext<'a, 'b> {
 
 }
 
-impl<'a, 'b> context::Scheduler for SocketEventLoopContext<'a, 'b> {
+impl<'a> context::Scheduler for SocketEventLoopContext<'a> {
     fn schedule(&mut self, schedulable: context::Schedulable, delay: Duration) -> io::Result<context::Scheduled> {
-        let handle = try!(self.timer.schedule(schedulable, delay));
+        let handle = try!(self.timer.set_timeout(delay, schedulable).map_err(from_timer_error));
         let scheduled = self.schedule.insert(handle);
         
         Ok(scheduled)
     }
     fn cancel(&mut self, scheduled: context::Scheduled) {
         if let Some(handle) = self.schedule.remove(scheduled) {
-            self.timer.cancel(&handle);
+            self.timer.cancel_timeout(&handle);
         }
     }
 }
 
-impl<'a, 'b> fmt::Debug for SocketEventLoopContext<'a, 'b> {
+impl<'a> fmt::Debug for SocketEventLoopContext<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Socket:{:?}", self.socket_id)
     }
 }
 
-impl<'a, 'b> context::Context for SocketEventLoopContext<'a, 'b> {
+impl<'a> context::Context for SocketEventLoopContext<'a> {
     fn raise(&mut self, evt: context::Event) {
         self.send_socket_evt(evt);
     }

@@ -29,5 +29,5 @@ impl<T> Receiver<T> for mpsc::Receiver<T> {
     }
 }
 
-pub type EventLoopRequestSender = mio::deprecated::Sender<ctrl::Request>;
+pub type EventLoopRequestSender = mio::channel::Sender<ctrl::Request>;
 
