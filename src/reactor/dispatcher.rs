@@ -175,7 +175,7 @@ impl Dispatcher {
             socket::Request::Bind(url)    => self.apply_on_socket(id, |socket, ctx| socket.bind(ctx, url)),
             socket::Request::Send(msg)    => self.apply_on_socket(id, |socket, ctx| socket.send(ctx, msg)),
             socket::Request::Recv         => self.apply_on_socket(id, |socket, ctx| socket.recv(ctx)),
-            socket::Request::SetOption(x) => self.apply_on_socket(id, |socket, ctx| socket.set_opt(ctx, x))
+            socket::Request::SetOption(x) => self.apply_on_socket(id, |socket, ctx| socket.set_option(ctx, x))
         }
     }
 

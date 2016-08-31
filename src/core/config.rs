@@ -7,6 +7,8 @@
 use std::io::Result;
 use std::time::Duration;
 
+use io_error::*;
+
 pub struct Config {
     pub send_timeout: Option<Duration>,
     pub send_priority: u8,
@@ -17,12 +19,17 @@ pub struct Config {
 }
 
 pub enum ConfigOption {
+    // generic options, apply to all sockets
     SendTimeout(Option<Duration>),
     SendPriority(u8),
     RecvTimeout(Option<Duration>),
     RecvPriority(u8),
     RetryIvl(Duration),
     RetryIvlMax(Option<Duration>),
+
+    // specific options, apply to some protocols
+    Subscribe(String),
+    Unubscribe(String)
 }
 
 impl Config {
@@ -44,9 +51,23 @@ impl Config {
             ConfigOption::RecvTimeout(timeout) => self.recv_timeout = timeout,
             ConfigOption::RecvPriority(priority) => self.recv_priority = priority,
             ConfigOption::RetryIvl(ivl) => self.retry_ivl = ivl,
-            ConfigOption::RetryIvlMax(ivl) => self.retry_ivl_max = ivl
+            ConfigOption::RetryIvlMax(ivl) => self.retry_ivl_max = ivl,
+            _ => return Err(invalid_input_io_error("option not supported"))
         }
         Ok(())
     }
+}
 
+impl ConfigOption {
+    pub fn is_generic(&self) -> bool {
+        match *self {
+            ConfigOption::SendTimeout(_)  |
+            ConfigOption::SendPriority(_) |
+            ConfigOption::RecvTimeout(_)  |
+            ConfigOption::RecvPriority(_) |
+            ConfigOption::RetryIvl(_)     |
+            ConfigOption::RetryIvlMax(_)  => true,
+            _ => false
+        }
+    }
 }

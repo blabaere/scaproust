@@ -14,6 +14,7 @@ use super::{SocketId, EndpointId, Message, EndpointSpec};
 use super::endpoint::{Pipe, Acceptor};
 use super::config::{Config, ConfigOption};
 use super::context::{Context, Schedulable, Scheduled};
+use io_error::*;
 
 pub enum Request {
     Connect(String),
@@ -63,6 +64,10 @@ pub trait Protocol {
     fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message);
     fn on_recv_timeout(&mut self, ctx: &mut Context);
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId);
+
+    fn set_option(&mut self, opt: ConfigOption) -> io::Result<()> {
+        Err(invalid_input_io_error("option not supported"))
+    }
 }
 
 pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
@@ -360,8 +365,13 @@ impl Socket {
 /*                                                                           */
 /*****************************************************************************/
 
-    pub fn set_opt(&mut self, _: &mut Context, opt: ConfigOption) {
-        let reply = match self.config.set(opt) {
+    pub fn set_option(&mut self, _: &mut Context, opt: ConfigOption) {
+        let res = if opt.is_generic() {
+            self.config.set(opt)
+        } else {
+            self.protocol.set_option(opt)
+        };
+        let reply = match res {
             Ok(()) => Reply::SetOption,
             Err(e) => Reply::Err(e)
         };
