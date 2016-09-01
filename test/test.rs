@@ -14,8 +14,9 @@ extern crate scaproust;
 
 mod socket;
 mod fair_queue;
-mod pipeline;
 mod pair;
+mod pipeline;
+mod reqrep;
 mod pubsub;
 mod bus;
 
