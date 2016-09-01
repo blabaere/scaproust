@@ -87,8 +87,8 @@ impl From<usize> for SocketId {
 /*****************************************************************************/
 
 pub struct Message {
-    header: Vec<u8>,
-    body: Vec<u8>
+    pub header: Vec<u8>,
+    pub body: Vec<u8>
 }
 
 impl Message {
@@ -124,10 +124,20 @@ impl Message {
     pub fn get_body(&self) -> &[u8] {
         &self.body
     }
+
+    pub fn split(self) -> (Vec<u8>, Vec<u8>) {
+        (self.header, self.body)
+    }
 }
 
 impl Into<Vec<u8>> for Message {
     fn into(self) -> Vec<u8> {
         self.body
+    }
+}
+
+impl From<Vec<u8>> for Message {
+    fn from(value: Vec<u8>) -> Message {
+        Message::from_body(value)
     }
 }

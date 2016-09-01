@@ -108,7 +108,10 @@ impl Socket {
 /*****************************************************************************/
 
     pub fn send(&mut self, buffer: Vec<u8>) -> io::Result<()> {
-        let msg = Message::from_body(buffer);
+        self.send_msg(Message::from_body(buffer))
+    }
+
+    pub fn send_msg(&mut self, msg: Message) -> io::Result<()> {
         let request = Request::Send(msg);
 
         self.call(request, |reply| self.on_send_reply(reply))
@@ -129,14 +132,18 @@ impl Socket {
 /*****************************************************************************/
 
     pub fn recv(&mut self) -> io::Result<Vec<u8>> {
+        self.recv_msg().map(|msg| msg.into())
+    }
+
+    pub fn recv_msg(&mut self) -> io::Result<Message> {
         let request = Request::Recv;
 
         self.call(request, |reply| self.on_recv_reply(reply))
     }
 
-    fn on_recv_reply(&self, reply: Reply) -> io::Result<Vec<u8>> {
+    fn on_recv_reply(&self, reply: Reply) -> io::Result<Message> {
         match reply {
-            Reply::Recv(msg) => Ok(msg.into()),
+            Reply::Recv(msg) => Ok(msg),
             Reply::Err(e) => Err(e),
             _ => self.unexpected_reply()
         }

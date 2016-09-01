@@ -25,6 +25,7 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 
 ## Progress
 - [ ] Features
+  - [x] Socket
   - [ ] Device
   - [ ] Examples
   - [ ] Documentation
@@ -33,7 +34,7 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 
 - [ ] Protocols
   - [x] PAIR
-  - [ ] BUS
+  - [x] BUS
   - [ ] REQREP
     - [ ] REQ
     - [ ] REQ resend

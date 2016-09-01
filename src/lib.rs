@@ -35,6 +35,7 @@ mod io_error;
 pub use facade::session::SessionBuilder;
 pub use facade::session::Session;
 pub use facade::socket::Socket;
+pub use core::Message;
 pub use core::config::ConfigOption;
 
 pub use proto::pair::Pair;
@@ -42,6 +43,7 @@ pub use proto::publ::Pub;
 pub use proto::sub::Sub;
 pub use proto::push::Push;
 pub use proto::pull::Pull;
+pub use proto::bus::Bus;
 
 #[cfg(test)]
 mod tests {

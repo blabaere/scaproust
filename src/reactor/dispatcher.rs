@@ -43,7 +43,8 @@ impl Dispatcher {
         dispatcher.run()
     }
     pub fn new(rx: Receiver<Request>, tx: Sender<session::Reply>) -> Dispatcher {
-        let seq = Sequence::new();
+        let id_seq = Sequence::new();
+        let timeout_eq = Sequence::new();
         let clock = Builder::default().
             tick_duration(Duration::from_millis(25)).
             num_slots(1_024).
@@ -54,9 +55,9 @@ impl Dispatcher {
             channel: rx,
             bus: EventLoopBus::new(),
             timer: clock,
-            sockets: session::Session::new(seq.clone(), tx),
-            endpoints: EndpointCollection::new(seq.clone()),
-            schedule: Schedule::new(seq.clone())
+            sockets: session::Session::new(id_seq.clone(), tx),
+            endpoints: EndpointCollection::new(id_seq.clone()),
+            schedule: Schedule::new(timeout_eq)
         }
     }
 

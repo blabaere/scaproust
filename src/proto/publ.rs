@@ -54,7 +54,7 @@ impl Protocol for Pub {
         self.bc.remove(&eid);
         self.pipes.remove(&eid)
     }
-    fn send(&mut self, ctx: &mut Context, msg: Message, _: Timeout) {
+    fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Timeout) {
         let msg = Rc::new(msg);
 
         for id in self.bc.drain() {
@@ -62,6 +62,9 @@ impl Protocol for Pub {
         }
 
         let _ = self.reply_tx.send(Reply::Send);
+        if let Some(sched) = timeout {
+            ctx.cancel(sched);
+        }
     }
     fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {
     }

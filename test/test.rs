@@ -17,6 +17,7 @@ mod fair_queue;
 mod pipeline;
 mod pair;
 mod pubsub;
+mod bus;
 
 pub use std::time::Duration;
 pub use std::thread;
