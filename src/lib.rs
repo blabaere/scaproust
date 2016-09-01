@@ -41,6 +41,8 @@ pub use core::config::ConfigOption;
 pub use proto::pair::Pair;
 pub use proto::publ::Pub;
 pub use proto::sub::Sub;
+pub use proto::req::Req;
+pub use proto::rep::Rep;
 pub use proto::push::Push;
 pub use proto::pull::Pull;
 pub use proto::bus::Bus;

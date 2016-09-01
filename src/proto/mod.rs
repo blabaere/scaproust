@@ -7,6 +7,8 @@
 pub mod pair;
 pub mod push;
 pub mod pull;
+pub mod req;
+pub mod rep;
 pub mod publ;
 pub mod sub;
 pub mod bus;
