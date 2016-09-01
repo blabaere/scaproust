@@ -199,6 +199,9 @@ impl State {
 /*****************************************************************************/
 
     fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout, retry: bool) -> State {
+        if let State::Active(p) = self {
+            inner.cancel(ctx, p);
+        }
         if let Some(eid) = inner.send(ctx, msg.clone()) {
             State::Sending(eid, msg, timeout, retry)
         } else {
@@ -209,12 +212,12 @@ impl State {
         match self {
             State::Sending(id, msg, timeout, retry) => {
                 if id == eid {
-                    inner.on_send_ack(ctx, timeout, retry);
+                    let retry_timeout = inner.on_send_ack(ctx, timeout, retry);
 
                     State::Active(PendingRequest {
                         eid: eid,
                         req: msg,
-                        retry_timeout: None
+                        retry_timeout: retry_timeout
                     })
                 } else {
                     State::Sending(id, msg, timeout, retry)
@@ -355,6 +358,11 @@ impl Inner {
     fn on_send_timeout(&self) {
         let error = timedout_io_error("Send timed out");
         let _ = self.reply_tx.send(Reply::Err(error));
+    }
+    fn cancel(&self, ctx: &mut Context, p: PendingRequest) {
+        if let Some(sched) = p.retry_timeout {
+            ctx.cancel(sched);
+        }
     }
 
     fn recv_from(&mut self, ctx: &mut Context, eid: EndpointId) -> bool {
