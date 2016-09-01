@@ -36,10 +36,10 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
   - [x] PAIR
   - [x] BUS
   - [ ] REQREP
-    - [ ] REQ
+    - [x] REQ
     - [ ] REQ resend
     - [ ] REQ prefetch replies
-    - [ ] REP
+    - [x] REP
   - [x] PUBSUB
     - [x] PUB
     - [x] SUB
@@ -48,9 +48,9 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
     - [x] PUSH
     - [x] PULL
   - [ ] SURVEY
-    - [ ] SURVEYOR
+    - [x] SURVEYOR
     - [ ] SURVEYOR deadline
-    - [ ] RESPONDENT  
+    - [x] RESPONDENT  
 
 - [ ] Transports
   - [x] TCP
