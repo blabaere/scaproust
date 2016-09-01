@@ -37,7 +37,7 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
   - [x] BUS
   - [ ] REQREP
     - [x] REQ
-    - [ ] REQ resend
+    - [x] REQ resend
     - [ ] REQ prefetch replies
     - [x] REP
   - [x] PUBSUB

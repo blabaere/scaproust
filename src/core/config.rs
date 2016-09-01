@@ -29,7 +29,8 @@ pub enum ConfigOption {
 
     // specific options, apply to some protocols
     Subscribe(String),
-    Unsubscribe(String)
+    Unsubscribe(String),
+    ReqResendIvl(Duration)
 }
 
 impl Config {

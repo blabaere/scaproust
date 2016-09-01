@@ -30,5 +30,8 @@ pub enum Request {
     Shutdown
 }
 
+pub enum Task {
+    Socket(SocketId, context::Schedulable)
+}
 // If there are more tasks to  schedule than core::context::Schedulable
 // A 'Task' enum should go there and follow the design of Signal

@@ -7,6 +7,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
+use std::io;
+use std::time::Duration;
 
 use time;
 
@@ -14,8 +16,9 @@ use byteorder::*;
 
 use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
+use core::config::ConfigOption;
 use core::endpoint::Pipe;
-use core::context::Context;
+use core::context::{Context, Schedulable};
 use super::priolist::Priolist;
 use super::{Timeout, REQ, REP};
 use io_error::*;
@@ -27,8 +30,8 @@ pub struct Req {
 
 enum State {
     Idle,
-    Sending(EndpointId, Rc<Message>, Timeout),
-    SendOnHold(Rc<Message>, Timeout),
+    Sending(EndpointId, Rc<Message>, Timeout, bool),
+    SendOnHold(Rc<Message>, Timeout, bool),
     Active(PendingRequest),
     Receiving(PendingRequest, Timeout),
     RecvOnHold(PendingRequest, Timeout)
@@ -39,12 +42,13 @@ struct Inner {
     pipes: HashMap<EndpointId, Pipe>,
     lb: Priolist,
     req_id_seq: u32,
-    is_device_item: bool
+    is_device_item: bool,
+    resend_ivl: Duration
 }
 
 struct PendingRequest {
     eid: EndpointId,
-    req: Rc<Message>, // req to be resent if no reply is received before the retry timeout
+    req: Rc<Message>,
     retry_timeout: Timeout
 }
 
@@ -104,7 +108,7 @@ impl Protocol for Req {
     fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Timeout) {
         let raw_msg = self.inner.msg_to_raw_msg(msg);
 
-        self.apply(ctx, |s, ctx, inner| s.send(ctx, inner, Rc::new(raw_msg), timeout))
+        self.apply(ctx, |s, ctx, inner| s.send(ctx, inner, Rc::new(raw_msg), timeout, false))
     }
     fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_ack(ctx, inner, eid))
@@ -131,6 +135,20 @@ impl Protocol for Req {
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
     }
+    fn set_option(&mut self, opt: ConfigOption) -> io::Result<()> {
+        match opt {
+            ConfigOption::ReqResendIvl(ivl) => Ok(self.inner.set_resend_ivl(ivl)),
+            _ => Err(invalid_input_io_error("option not supported"))
+        }
+    }
+    fn on_timer_tick(&mut self, ctx: &mut Context, task: Schedulable) {
+        match task {
+            Schedulable::Resend => {
+                self.apply(ctx, |s, ctx, inner| s.on_retry_timeout(ctx, inner))
+            },
+            _ => ()
+        }
+    }
 }
 
 /*****************************************************************************/
@@ -144,22 +162,23 @@ impl State {
     #[cfg(debug_assertions)]
     fn name(&self) -> &'static str {
         match *self {
-            State::Idle             => "Idle",
-            State::Sending(_, _, _) => "Sending",
-            State::SendOnHold(_, _) => "SendOnHold",
-            State::Active(_)        => "Active",
-            State::Receiving(_, _)  => "Receiving",
-            State::RecvOnHold(_, _) => "RecvOnHold"
+            State::Idle                    => "Idle",
+            State::Sending(_, _, _, false) => "Sending",
+            State::Sending(_, _, _, true)  => "Resending",
+            State::SendOnHold(_, _, _)     => "SendOnHold",
+            State::Active(_)               => "Active",
+            State::Receiving(_, _)         => "Receiving",
+            State::RecvOnHold(_, _)        => "RecvOnHold"
         }
     }
 
     fn on_pipe_removed(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
         match self {
-            State::Sending(id, msg, timeout) => {
+            State::Sending(id, msg, timeout, retry) => {
                 if id == eid {
-                    State::Idle.send(ctx, inner, msg, timeout)
+                    State::Idle.send(ctx, inner, msg, timeout, retry)
                 } else {
-                    State::Sending(id, msg, timeout)
+                    State::Sending(id, msg, timeout, retry)
                 }
             },
             State::Receiving(p, timeout) => {
@@ -179,18 +198,18 @@ impl State {
 /*                                                                           */
 /*****************************************************************************/
 
-    fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout) -> State {
+    fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout, retry: bool) -> State {
         if let Some(eid) = inner.send(ctx, msg.clone()) {
-            State::Sending(eid, msg, timeout)
+            State::Sending(eid, msg, timeout, retry)
         } else {
-            State::SendOnHold(msg, timeout)
+            State::SendOnHold(msg, timeout, retry)
         }
     }
     fn on_send_ack(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
         match self {
-            State::Sending(id, msg, timeout) => {
+            State::Sending(id, msg, timeout, retry) => {
                 if id == eid {
-                    inner.on_send_ack(ctx, timeout);
+                    inner.on_send_ack(ctx, timeout, retry);
 
                     State::Active(PendingRequest {
                         eid: eid,
@@ -198,7 +217,7 @@ impl State {
                         retry_timeout: None
                     })
                 } else {
-                    State::Sending(id, msg, timeout)
+                    State::Sending(id, msg, timeout, retry)
                 }
             },
             any => any
@@ -213,7 +232,7 @@ impl State {
         inner.on_send_ready(eid);
 
         match self {
-            State::SendOnHold(msg, timeout) => State::Idle.send(ctx, inner, msg, timeout),
+            State::SendOnHold(msg, timeout, retry) => State::Idle.send(ctx, inner, msg, timeout, retry),
             any => any
         }
     }
@@ -278,6 +297,13 @@ impl State {
             any => any
         }
     }
+    fn on_retry_timeout(self, ctx: &mut Context, inner: &mut Inner) -> State {
+        if let State::Active(p) = self {
+            State::Idle.send(ctx, inner, p.req, None, true)
+        } else {
+            self
+        }
+    }
 }
 
 /*****************************************************************************/
@@ -293,7 +319,8 @@ impl Inner {
             pipes: HashMap::new(),
             lb: Priolist::new(),
             req_id_seq: time::get_time().nsec as u32,
-            is_device_item: false
+            is_device_item: false,
+            resend_ivl: Duration::from_secs(60)
         }
     }
     fn add_pipe(&mut self, eid: EndpointId, pipe: Pipe) {
@@ -316,11 +343,14 @@ impl Inner {
     fn on_send_ready(&mut self, eid: EndpointId) {
         self.lb.activate(&eid)
     }
-    fn on_send_ack(&self, ctx: &mut Context, timeout: Timeout) {
+    fn on_send_ack(&self, ctx: &mut Context, timeout: Timeout, retry: bool) -> Timeout {
+        if !retry {
         let _ = self.reply_tx.send(Reply::Send);
+        }
         if let Some(sched) = timeout {
             ctx.cancel(sched);
         }
+        ctx.schedule(Schedulable::Resend ,self.resend_ivl).ok()
     }
     fn on_send_timeout(&self) {
         let error = timedout_io_error("Send timed out");
@@ -381,6 +411,9 @@ impl Inner {
     fn next_req_id(&mut self) -> u32 {
         self.req_id_seq += 1;
         self.req_id_seq | 0x80000000
+    }
+    fn set_resend_ivl(&mut self, ivl: Duration) {
+        self.resend_ivl = ivl;
     }
 }
 

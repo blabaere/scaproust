@@ -124,7 +124,6 @@ impl Protocol for Sub {
             ConfigOption::Unsubscribe(x) => Ok(self.inner.unsubscribe(x)),
             _ => Err(invalid_input_io_error("option not supported"))
         }
-        
     }
 }
 

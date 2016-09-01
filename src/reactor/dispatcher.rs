@@ -14,7 +14,7 @@ use mio::channel::{Receiver};
 
 use core::{SocketId, EndpointId, session, socket, context};
 use transport::{pipe, acceptor};
-use super::{Signal, Request};
+use super::{Signal, Request, Task};
 use super::event_loop::{EventLoop, EventHandler};
 use super::bus::EventLoopBus;
 use super::adapter::{EndpointCollection, Schedule, SocketEventLoopContext};
@@ -28,7 +28,7 @@ pub struct Dispatcher {
     // request inputs
     channel: Receiver<Request>,
     bus: EventLoopBus<Signal>,
-    timer: Timer<context::Schedulable>,
+    timer: Timer<Task>,
 
     // request handlers
     sockets: session::Session,
@@ -128,12 +128,19 @@ impl Dispatcher {
 /* process timed requests                                                    */
 /*                                                                           */
 /*****************************************************************************/
-    fn process_tick(&mut self, _: &mut EventLoop, timeout: context::Schedulable) {
-        match timeout {
-            context::Schedulable::Reconnect(sid, spec) => self.apply_on_socket(sid, |socket, ctx| socket.reconnect(ctx, spec)),
-            context::Schedulable::Rebind(sid, spec)    => self.apply_on_socket(sid, |socket, ctx| socket.rebind(ctx, spec)),
-            context::Schedulable::SendTimeout(sid)     => self.apply_on_socket(sid, |socket, ctx| socket.on_send_timeout(ctx)),
-            context::Schedulable::RecvTimeout(sid)     => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_timeout(ctx))
+    fn process_tick(&mut self, _: &mut EventLoop, task: Task) {
+        match task {
+            Task::Socket(sid, schedulable) => self.process_socket_task(sid, schedulable)
+        }
+    }
+
+    fn process_socket_task(&mut self, sid: SocketId, task: context::Schedulable) {
+        match task {
+            context::Schedulable::Reconnect(spec) => self.apply_on_socket(sid, |socket, ctx| socket.reconnect(ctx, spec)),
+            context::Schedulable::Rebind(spec)    => self.apply_on_socket(sid, |socket, ctx| socket.rebind(ctx, spec)),
+            context::Schedulable::SendTimeout     => self.apply_on_socket(sid, |socket, ctx| socket.on_send_timeout(ctx)),
+            context::Schedulable::RecvTimeout     => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_timeout(ctx)),
+            other @ _                             => self.apply_on_socket(sid, |socket, ctx| socket.on_timer_tick(ctx, other))
         }
     }
 

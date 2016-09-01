@@ -68,6 +68,8 @@ pub trait Protocol {
     fn set_option(&mut self, _: ConfigOption) -> io::Result<()> {
         Err(invalid_input_io_error("option not supported"))
     }
+    fn on_timer_tick(&mut self, _: &mut Context, _: Schedulable) {
+    }
 }
 
 pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
@@ -128,7 +130,7 @@ impl Socket {
     }
 
     fn schedule_reconnect(&mut self, ctx: &mut Context, spec: EndpointSpec) {
-        let task = Schedulable::Reconnect(self.id, spec);
+        let task = Schedulable::Reconnect(spec);
         let delay = self.config.retry_ivl;
         let _ = ctx.schedule(task, delay); 
         // TODO maybe we should keep track of the scheduled reconnection
@@ -181,7 +183,7 @@ impl Socket {
     }
 
     fn schedule_rebind(&mut self, ctx: &mut Context, spec: EndpointSpec) {
-        let task = Schedulable::Rebind(self.id, spec);
+        let task = Schedulable::Rebind(spec);
         let delay = self.config.retry_ivl;
         let _ = ctx.schedule(task, delay); 
         // TODO maybe we should keep track of the scheduled reconnection
@@ -297,7 +299,7 @@ impl Socket {
 
     pub fn send(&mut self, ctx: &mut Context, msg: Message) {
         if let Some(delay) = self.get_send_timeout() {
-            let task = Schedulable::SendTimeout(self.id);
+            let task = Schedulable::SendTimeout;
 
             match ctx.schedule(task, delay) {
                 Ok(timeout) => self.protocol.send(ctx, msg, Some(timeout)),
@@ -332,7 +334,7 @@ impl Socket {
 
     pub fn recv(&mut self, ctx: &mut Context) {
         if let Some(delay) = self.get_recv_timeout() {
-            let task = Schedulable::RecvTimeout(self.id);
+            let task = Schedulable::RecvTimeout;
 
             match ctx.schedule(task, delay) {
                 Ok(timeout) => self.protocol.recv(ctx, Some(timeout)),
@@ -379,6 +381,9 @@ impl Socket {
         self.send_reply(reply);
     }
 
+    pub fn on_timer_tick(&mut self, ctx: &mut Context, task: Schedulable) {
+        self.protocol.on_timer_tick(ctx, task)
+    }
 }
 
 /*****************************************************************************/

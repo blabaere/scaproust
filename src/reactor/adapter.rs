@@ -22,7 +22,7 @@ use transport::pipe;
 use transport::acceptor;
 use transport::tcp::Tcp;
 use super::bus::EventLoopBus;
-use super::Signal;
+use super::{Signal, Task};
 use sequence::Sequence;
 use io_error::*;
 use super::event_loop::EventLoop;
@@ -38,7 +38,7 @@ pub struct SocketEventLoopContext<'a> {
     signal_tx: &'a mut EventLoopBus<Signal>,
     endpoints: &'a mut EndpointCollection,
     schedule: &'a mut Schedule,
-    timer: &'a mut Timer<context::Schedulable>
+    timer: &'a mut Timer<Task>
 }
 
 pub struct EndpointEventLoopContext<'a, 'b> {
@@ -82,16 +82,7 @@ impl Registrar for EventLoop {
         self.deregister(io)
     }
 }
-/*
-impl<T:Handler<Timeout=context::Schedulable>> Timer for EventLoop<T> {
-    fn schedule(&mut self, task: context::Schedulable, delay: Duration) -> io::Result<Timeout> {
-        self.timeout(task, delay).map_err(from_timer_error)
-    }
-    fn cancel(&mut self, timeout: &Timeout) {
-        self.clear_timeout(timeout);
-    }
-}
-*/
+
 /*****************************************************************************/
 /*                                                                           */
 /* Endpoint collection                                                       */
@@ -239,7 +230,7 @@ impl<'a> SocketEventLoopContext<'a> {
         tx: &'a mut EventLoopBus<Signal>,
         eps: &'a mut EndpointCollection,
         sched: &'a mut Schedule,
-        timer: &'a mut Timer<context::Schedulable>) -> SocketEventLoopContext<'a> {
+        timer: &'a mut Timer<Task>) -> SocketEventLoopContext<'a> {
         SocketEventLoopContext {
             socket_id: sid,
             signal_tx: tx,
@@ -356,7 +347,8 @@ impl<'a> Network for SocketEventLoopContext<'a> {
 
 impl<'a> context::Scheduler for SocketEventLoopContext<'a> {
     fn schedule(&mut self, schedulable: context::Schedulable, delay: Duration) -> io::Result<context::Scheduled> {
-        let handle = try!(self.timer.set_timeout(delay, schedulable).map_err(from_timer_error));
+        let task = Task::Socket(self.socket_id, schedulable);
+        let handle = try!(self.timer.set_timeout(delay, task).map_err(from_timer_error));
         let scheduled = self.schedule.insert(handle);
         
         Ok(scheduled)
