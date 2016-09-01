@@ -180,10 +180,10 @@ impl State {
     fn on_send_ack(self, _: &mut Context, _: &mut Inner, _: EndpointId) -> State {
         self
     }
-    fn on_send_timeout(self, _: &mut Context, inner: &mut Inner) -> State {
+    fn on_send_timeout(self, _: &mut Context, _: &mut Inner) -> State {
         self
     }
-    fn on_send_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_send_ready(self, _: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_send_ready(eid);
         self
     }

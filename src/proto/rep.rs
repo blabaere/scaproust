@@ -196,12 +196,12 @@ impl State {
             any => any
         }
     }
-    fn on_send_timeout(self, ctx: &mut Context, inner: &mut Inner) -> State {
+    fn on_send_timeout(self, _: &mut Context, inner: &mut Inner) -> State {
         inner.on_send_timeout();
 
         State::Idle
     }
-    fn on_send_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_send_ready(self, _: &mut Context, _: &mut Inner, _: EndpointId) -> State {
         self
     }
 
