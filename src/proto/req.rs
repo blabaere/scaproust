@@ -143,7 +143,7 @@ impl Protocol for Req {
     }
     fn on_timer_tick(&mut self, ctx: &mut Context, task: Schedulable) {
         match task {
-            Schedulable::Resend => {
+            Schedulable::ReqResend => {
                 self.apply(ctx, |s, ctx, inner| s.on_retry_timeout(ctx, inner))
             },
             _ => ()
@@ -350,7 +350,7 @@ impl Inner {
         if let Some(sched) = timeout {
             ctx.cancel(sched);
         }
-        ctx.schedule(Schedulable::Resend ,self.resend_ivl).ok()
+        ctx.schedule(Schedulable::ReqResend, self.resend_ivl).ok()
     }
     fn on_send_timeout(&self) {
         let error = timedout_io_error("Send timed out");

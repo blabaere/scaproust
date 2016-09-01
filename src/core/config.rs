@@ -30,7 +30,8 @@ pub enum ConfigOption {
     // specific options, apply to some protocols
     Subscribe(String),
     Unsubscribe(String),
-    ReqResendIvl(Duration)
+    ReqResendIvl(Duration),
+    SurveyDeadline(Duration)
 }
 
 impl Config {

@@ -30,7 +30,8 @@ pub enum Schedulable {
     Rebind(EndpointSpec),
     SendTimeout,
     RecvTimeout,
-    Resend
+    ReqResend,
+    SurveyCancel
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]

@@ -59,4 +59,29 @@ describe! can {
         let not_sent = rep.send(vec![66, 65, 67]).unwrap_err();
         assert_eq!(io::ErrorKind::Other, not_sent.kind());
     }
+
+    it "resend the request silently when the timeout is reached" {
+        let resend_ivl = Duration::from_secs(1);
+        rep.bind(&url).unwrap();
+        req.connect(&url).unwrap();
+        req.set_option(ConfigOption::ReqResendIvl(resend_ivl)).unwrap();
+
+        let sent_request = vec![65, 66, 67];
+        req.send(sent_request).unwrap();
+
+        let received_request1 = rep.recv().unwrap();
+        assert_eq!(vec![65, 66, 67], received_request1);
+
+        // let's ignore that request and pretend we don't care
+        thread::sleep(resend_ivl);
+        thread::sleep(Duration::from_millis(100));
+
+        let received_request2 = rep.recv().unwrap();
+        assert_eq!(vec![65, 66, 67], received_request2);
+
+        let sent_reply = vec![66, 65, 67];
+        rep.send(sent_reply).unwrap();
+        let received_reply = req.recv().unwrap();
+        assert_eq!(vec![66, 65, 67], received_reply);
+    }
 }

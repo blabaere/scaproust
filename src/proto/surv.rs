@@ -7,6 +7,8 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
+use std::time::Duration;
+use std::io;
 
 use time;
 
@@ -14,8 +16,9 @@ use byteorder::*;
 
 use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
+use core::config::ConfigOption;
 use core::endpoint::Pipe;
-use core::context::Context;
+use core::context::{Context, Schedulable};
 use super::priolist::Priolist;
 use super::{Timeout, SURVEYOR, RESPONDENT};
 use io_error::*;
@@ -38,12 +41,13 @@ struct Inner {
     bc: HashSet<EndpointId>,
     fq: Priolist,
     survey_id_seq: u32,
-    is_device_item: bool
+    is_device_item: bool,
+    deadline: Duration
 }
 
 struct PendingSurvey {
     id: u32,
-    deadline: Timeout
+    timeout: Timeout
 }
 
 /*****************************************************************************/
@@ -128,6 +132,20 @@ impl Protocol for Surveyor {
     }
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
+    }
+    fn set_option(&mut self, opt: ConfigOption) -> io::Result<()> {
+        match opt {
+            ConfigOption::SurveyDeadline(ivl) => Ok(self.inner.set_survey_deadline(ivl)),
+            _ => Err(invalid_input_io_error("option not supported"))
+        }
+    }
+    fn on_timer_tick(&mut self, ctx: &mut Context, task: Schedulable) {
+        match task {
+            Schedulable::SurveyCancel => {
+                self.apply(ctx, |s, ctx, inner| s.on_survey_timeout(ctx, inner))
+            },
+            _ => ()
+        }
     }
 }
 
@@ -243,6 +261,14 @@ impl State {
             any => any
         }
     }
+    fn on_survey_timeout(self, _: &mut Context, _: &mut Inner) -> State {
+        if let State::Active(_) = self {
+            State::Idle
+        } else {
+            self
+        }
+    }
+
 }
 
 /*****************************************************************************/
@@ -259,7 +285,8 @@ impl Inner {
             bc: HashSet::new(),
             fq: Priolist::new(),
             survey_id_seq: time::get_time().nsec as u32,
-            is_device_item: false
+            is_device_item: false,
+            deadline: Duration::from_secs(1)
         }
     }
     fn add_pipe(&mut self, eid: EndpointId, pipe: Pipe) {
@@ -283,7 +310,7 @@ impl Inner {
 
         PendingSurvey {
             id: self.cur_survey_id(),
-            deadline: None
+            timeout: ctx.schedule(Schedulable::SurveyCancel, self.deadline).ok()
         }
     }
     fn on_send_ready(&mut self, eid: EndpointId) {
@@ -325,7 +352,7 @@ impl Inner {
     }
 
     fn cancel(&self, ctx: &mut Context, mut pending_survey: PendingSurvey) {
-        if let Some(timeout) = pending_survey.deadline.take() {
+        if let Some(timeout) = pending_survey.timeout.take() {
             ctx.cancel(timeout);
         }
     }
@@ -353,6 +380,10 @@ impl Inner {
     fn next_survey_id(&mut self) -> u32 {
         self.survey_id_seq += 1;
         self.survey_id_seq | 0x80000000
+    }
+
+    fn set_survey_deadline(&mut self, ivl: Duration) {
+        self.deadline = ivl;
     }
 }
 
