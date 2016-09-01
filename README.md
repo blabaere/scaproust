@@ -29,8 +29,8 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
   - [ ] Device
   - [ ] Examples
   - [ ] Documentation
-  - [x] User defined protocols
-  - [ ] User defined transports
+  - [x] Pluggable protocols
+  - [ ] Pluggable transports
 
 - [ ] Protocols
   - [x] PAIR
@@ -47,14 +47,14 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
   - [x] PIPELINE
     - [x] PUSH
     - [x] PULL
-  - [ ] SURVEY
+  - [x] SURVEY
     - [x] SURVEYOR
-    - [ ] SURVEYOR deadline
+    - [x] SURVEYOR deadline
     - [x] RESPONDENT  
 
 - [ ] Transports
   - [x] TCP
-  - [ ] IPC (*nix only)
+  - [ ] IPC (*nix only) See: [mio-uds](https://github.com/alexcrichton/mio-uds)
   - [ ] IPC (Windows)
 
 - [ ] Socket options
@@ -69,9 +69,9 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
   - [ ] IPV4 only
   - [ ] Socket name
 
-- [ ] Protocol options
-  - [ ] REQ resend interval
-  - [ ] SURVEYOR deadline
+- [x] Protocol options
+  - [x] REQ resend interval
+  - [x] SURVEYOR deadline
   - [x] SUB subscribe
   - [x] SUB unsubscribe
 
