@@ -16,7 +16,7 @@ use super::priolist::Priolist;
 use super::{Timeout, SURVEYOR, RESPONDENT};
 use io_error::*;
 
-pub struct Rep {
+pub struct Respondent {
     inner: Inner,
     state: Option<State>
 }
@@ -41,11 +41,11 @@ struct Inner {
 
 /*****************************************************************************/
 /*                                                                           */
-/* Rep                                                                      */
+/* Respondent                                                                      */
 /*                                                                           */
 /*****************************************************************************/
 
-impl Rep {
+impl Respondent {
 
     fn apply<F>(&mut self, ctx: &mut Context, transition: F) where F : FnOnce(State, &mut Context, &mut Inner) -> State {
         if let Some(old_state) = self.state.take() {
@@ -61,9 +61,9 @@ impl Rep {
 
 }
 
-impl From<Sender<Reply>> for Rep {
-    fn from(tx: Sender<Reply>) -> Rep {
-        Rep {
+impl From<Sender<Reply>> for Respondent {
+    fn from(tx: Sender<Reply>) -> Respondent {
+        Respondent {
             inner: Inner::new(tx),
             state: Some(State::Idle)
         }
@@ -76,7 +76,7 @@ impl From<Sender<Reply>> for Rep {
 /*                                                                           */
 /*****************************************************************************/
 
-impl Protocol for Rep {
+impl Protocol for Respondent {
     fn id(&self)      -> u16 { RESPONDENT }
     fn peer_id(&self) -> u16 { SURVEYOR }
 

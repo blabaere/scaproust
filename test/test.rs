@@ -18,6 +18,7 @@ mod pair;
 mod pipeline;
 mod reqrep;
 mod pubsub;
+mod survey;
 mod bus;
 
 pub use std::time::Duration;

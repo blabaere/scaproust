@@ -216,7 +216,7 @@ impl State {
                 if id == eid {
                     if p.id == survey_id {
                         inner.on_recv_ack(ctx, timeout, msg);
-                        State::Idle
+                        State::Active(p)
                     } else {
                         State::Idle.recv_reply_for(ctx, inner, timeout, p)
                     }

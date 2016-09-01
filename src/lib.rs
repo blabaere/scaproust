@@ -45,6 +45,8 @@ pub use proto::req::Req;
 pub use proto::rep::Rep;
 pub use proto::push::Push;
 pub use proto::pull::Pull;
+pub use proto::surv::Surveyor;
+pub use proto::resp::Respondent;
 pub use proto::bus::Bus;
 
 #[cfg(test)]
