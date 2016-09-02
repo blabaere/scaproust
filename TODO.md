@@ -1,17 +1,19 @@
-### REQ resend 
-Resend must be scheduled when a regular send succeeds, and cancelled when the matching recv occurs.
-What if a user command is received is when a resend is in progress (some bytes sent, but not all) ?
-
-BONUS: if the pipe that the request was sent to is removed, the request could be resent right away ...
-
 ### Next tasks
-- LINGER !!!
+- Device
+- Recv max buffer size
+- Documentation
+- Reconnect interval max 
+- Linger
 - Handle accept error
+- Pluggable transport
+- Req prefetch replies
 
 ### AUTOMATE ALL THE THINGS (test) !!!
-Test reconnect feature
+- Test reconnect feature
 
 ### Features:
+- Websocket transport
+- TLS transport
 - Implement nanocat
 - STAR protocol ?
 
@@ -34,4 +36,8 @@ https://github.com/tailhook/rotor
 https://github.com/dwrensha/gj  
 https://github.com/zonyitoo/simplesched  
 https://github.com/alexcrichton/wio (for appveyor ci script and doc publication too)  
-https://github.com/burrows-labs/mio-websockets  
+
+
+Websocket
+https://github.com/housleyjk/ws-rs  
+https://github.com/cyderize/rust-websocket  

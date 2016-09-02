@@ -69,6 +69,12 @@ impl Session {
         }
     }
 
+/*****************************************************************************/
+/*                                                                           */
+/* Create socket                                                             */
+/*                                                                           */
+/*****************************************************************************/
+
     pub fn create_socket<T>(&mut self) -> io::Result<socket::Socket>
     where T : Protocol + From<mpsc::Sender<core::socket::Reply>> + 'static
     {
@@ -99,6 +105,22 @@ impl Session {
         }
     }
 
+/*****************************************************************************/
+/*                                                                           */
+/* Create device                                                             */
+/*                                                                           */
+/*****************************************************************************/
+
+    pub fn create_relay_device(&self, socket: socket::Socket) -> io::Result<Box<device::Device>> {
+        Ok(box device::Relay::new(socket))
+    }
+
+/*****************************************************************************/
+/*                                                                           */
+/* backend                                                                   */
+/*                                                                           */
+/*****************************************************************************/
+
     fn unexpected_reply<T>(&self) -> io::Result<T> {
         Err(other_io_error("unexpected reply"))
     }
@@ -117,5 +139,12 @@ impl Session {
 
     fn recv_reply(&self) -> io::Result<Reply> {
         self.reply_receiver.receive()
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        let _ = self.send_request(Request::Shutdown);
+        let _ = self.recv_reply();
     }
 }

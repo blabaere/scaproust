@@ -11,7 +11,7 @@ function testcase_pubsub1 {
     $EXAMPLE_PATH/pubsub server $URL > /tmp/pubsub_tc1_server.log & server=$!
     nanocat --sub --connect $URL --ascii > /tmp/pubsub_tc1_nanocat1.log & ncat1=$!
     nanocat --sub --connect $URL --ascii > /tmp/pubsub_tc1_nanocat2.log & ncat2=$!
-    sleep 3.5 && kill $ncat1 && kill $ncat2 && kill $server
+    sleep 3.5 && kill $ncat1 $ncat2 $server
     result_server=`cat /tmp/pubsub_tc1_server.log`
     expected_server=`cat $COMPAT_PATH/pubsub_tc1_server_expected.log`
     result_nanocat1=`cat /tmp/pubsub_tc1_nanocat1.log`
@@ -34,7 +34,7 @@ function testcase_pubsub2 {
     nanocat --pub --bind $URL --data "retrolaser" -d 1 -i 1 > /dev/null & ncat=$!
     $EXAMPLE_PATH/pubsub client $URL "raoul" > /tmp/pubsub_tc2_client1.log & client1=$!
     $EXAMPLE_PATH/pubsub client $URL "simone" > /tmp/pubsub_tc2_client2.log & client2=$!
-    sleep 3.5 && kill $client1 && kill $client2 && kill $ncat
+    sleep 3.5 && kill $client1 $client2 $ncat
 
     result_client1=`cat /tmp/pubsub_tc2_client1.log`
     expected_client1=`cat $COMPAT_PATH/pubsub_tc2_client1_expected.log`
@@ -58,5 +58,4 @@ if [[ -f "/tmp/pubsub_test.ipc" ]]; then
 fi
 
 test_pubsub "tcp://127.0.0.1:5454"
-test_pubsub "ipc:///tmp/pubsub_test.ipc"
-
+#test_pubsub "ipc:///tmp/pubsub_test.ipc"

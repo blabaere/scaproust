@@ -27,7 +27,7 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 - [ ] Features
   - [x] Socket
   - [ ] Device
-  - [ ] Examples
+  - [x] Examples
   - [ ] Documentation
   - [x] Pluggable protocols
   - [ ] Pluggable transports
@@ -59,7 +59,7 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 
 - [ ] Socket options
   - [ ] Linger
-  - [ ] Recv buffer size max
+  - [ ] Recv max buffer size
   - [x] Send timeout
   - [x] Recv timeout
   - [x] Reconnect interval

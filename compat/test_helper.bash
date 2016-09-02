@@ -12,4 +12,6 @@ function echo_test_case_succeeded {
 
 function echo_test_case_failed {
     echo -e "$1 ${RED_COLOR}FAILED !${NO_COLOR}" 
+    ps auxwww | grep ${EXAMPLE_PATH} | grep -v grep
+    ps auxwww | grep nanocat | grep -v grep
 }

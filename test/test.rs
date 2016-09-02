@@ -20,6 +20,7 @@ mod reqrep;
 mod pubsub;
 mod survey;
 mod bus;
+mod device;
 
 pub use std::time::Duration;
 pub use std::thread;

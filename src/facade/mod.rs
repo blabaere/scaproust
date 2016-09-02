@@ -7,6 +7,7 @@
 pub mod session;
 pub mod socket;
 pub mod endpoint;
+pub mod device;
 
 use std::sync::mpsc;
 use std::io;
