@@ -12,6 +12,7 @@ use core::{SocketId, EndpointId};
 use core::endpoint::Request;
 use io_error::*;
 
+#[doc(hidden)]
 pub struct RequestSender {
     req_tx: EventLoopRequestSender,
     socket_id: SocketId,
@@ -31,6 +32,12 @@ impl RequestSender {
     }
 }
 
+/// Endpoint of a socket.
+///   
+/// Obtained via the socket [bind](struct.Socket.html#method.bind) or 
+/// [connect](struct.Socket.html#method.connect) methods.  
+/// Can only be used to close an endpoint.  
+/// Note that `drop(Endpoint)` will **NOT** close it.
 pub struct Endpoint {
     request_sender: RequestSender,
     remote: bool

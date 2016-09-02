@@ -14,24 +14,13 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 * Support for all of nanomsg's protocols.
 * Support for TCP and IPC transports.
 * Idiomatic rust API first, mimic the original C API second.
+* Extensibility: allow user code to define additional protocols and transports
 
-## Maybe, later
-* Nonblocking operations.
-* Polling, on several sockets.
+## Undecided
 * Other transports (TLS, WebSockets).
-
-## Non goals
-* Ability to use a socket as a raw file descriptor with system level functions.
+* Readiness polling.
 
 ## Progress
-- [ ] Features
-  - [x] Socket
-  - [ ] Device
-  - [x] Examples
-  - [ ] Documentation
-  - [x] Pluggable protocols
-  - [ ] Pluggable transports
-
 - [ ] Protocols
   - [x] PAIR
   - [x] BUS
@@ -54,12 +43,12 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 
 - [ ] Transports
   - [x] TCP
-  - [ ] IPC (*nix only) See: [mio-uds](https://github.com/alexcrichton/mio-uds)
+  - [ ] IPC (*nix) See: [mio-uds](https://github.com/alexcrichton/mio-uds)
   - [ ] IPC (Windows)
 
 - [ ] Socket options
   - [ ] Linger
-  - [ ] Recv max buffer size
+  - [ ] Recv max size
   - [x] Send timeout
   - [x] Recv timeout
   - [x] Reconnect interval

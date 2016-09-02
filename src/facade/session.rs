@@ -18,8 +18,10 @@ use core::socket::{Protocol, ProtocolCtor};
 use core;
 use io_error::*;
 
+#[doc(hidden)]
 type ReplyReceiver = mpsc::Receiver<Reply>;
 
+#[doc(hidden)]
 struct RequestSender {
     req_tx: EventLoopRequestSender
 }
@@ -39,6 +41,7 @@ impl RequestSender {
     }
 }
 
+/// Creates the session and starts the I/O thread.
 pub struct SessionBuilder;
 
 impl SessionBuilder {
@@ -58,6 +61,7 @@ impl SessionBuilder {
         Ok(session)
     }}
 
+/// Creates sockets and devices.
 pub struct Session {
     request_sender: RequestSender,
     reply_receiver: ReplyReceiver
@@ -78,6 +82,11 @@ impl Session {
 /*                                                                           */
 /*****************************************************************************/
 
+    /// Creates a socket with the specified protocol, which in turn determines its exact semantics.
+    /// See [the proto module](proto/index.html) for a list of built-in protocols.
+    /// The newly created socket is initially not associated with any endpoints.
+    /// In order to establish a message flow at least one endpoint has to be added to the socket 
+    /// using [connect](struct.Socket.html#method.connect) and [bind](struct.Socket.html#method.bind) methods.
     pub fn create_socket<T>(&mut self) -> io::Result<socket::Socket>
     where T : Protocol + From<mpsc::Sender<core::socket::Reply>> + 'static
     {
@@ -114,10 +123,13 @@ impl Session {
 /*                                                                           */
 /*****************************************************************************/
 
+    /// Creates a loopback device that loops and sends any messages received from the socket back to itself.
     pub fn create_relay_device(&self, socket: socket::Socket) -> io::Result<Box<device::Device>> {
         Ok(box device::Relay::new(socket))
     }
 
+    /// Creates a bridge device to forward messages between two sockets. 
+    /// It loops and sends any messages received from `left` to `right` and vice versa.
     pub fn create_bridge_device(&mut self, left: socket::Socket, right: socket::Socket) -> io::Result<Box<device::Device>> {
         let request = Request::CreateDevice(left.id(), right.id());
 

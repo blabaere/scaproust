@@ -14,7 +14,12 @@ use core::DeviceId;
 use core::device::{Request, Reply};
 use io_error::*;
 
+/// A device to forward messages between sockets, working like a message broker.
+/// It can be used to build complex network topologies.
 pub trait Device : Send {
+    /// This function loops until it hits an error.
+    /// To break the loop and make the `run` function exit, 
+    /// drop the session that created the device.
     fn run(self: Box<Self>) -> io::Result<()>;
 }
 
@@ -24,6 +29,7 @@ pub trait Device : Send {
 /*                                                                           */
 /*****************************************************************************/
 
+#[doc(hidden)]
 pub struct Relay {
     socket: Option<socket::Socket>
 }
@@ -49,8 +55,10 @@ impl Device for Relay {
 /*                                                                           */
 /*****************************************************************************/
 
+#[doc(hidden)]
 pub type ReplyReceiver = mpsc::Receiver<Reply>;
 
+#[doc(hidden)]
 pub struct RequestSender {
     req_tx: EventLoopRequestSender,
     device_id: DeviceId
@@ -68,6 +76,7 @@ impl RequestSender {
     }
 }
 
+#[doc(hidden)]
 pub struct Bridge {
     request_sender: RequestSender,
     reply_receiver: ReplyReceiver,

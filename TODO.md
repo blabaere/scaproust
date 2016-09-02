@@ -1,7 +1,7 @@
 ### Next tasks
-- Device
+- Check if Rust stable can be used to fix stainless build error
+- Close endpoint
 - Recv max buffer size
-- Documentation
 - Reconnect interval max 
 - Linger
 - Handle accept error
