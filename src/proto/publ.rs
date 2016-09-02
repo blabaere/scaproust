@@ -86,4 +86,9 @@ impl Protocol for Pub {
     }
     fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {
     }
+    fn close(&mut self, ctx: &mut Context) {
+        for (_, pipe) in self.pipes.drain() {
+            pipe.close(ctx);
+        }
+    }
 }

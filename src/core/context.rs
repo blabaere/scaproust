@@ -22,7 +22,8 @@ pub trait Scheduler {
 
 pub enum Event {
     CanSend,
-    CanRecv
+    CanRecv,
+    Closed
 }
 
 pub enum Schedulable {

@@ -58,17 +58,21 @@ impl Session {
     pub fn get_socket_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut socket::Socket> {
         self.sockets.get_socket_mut(id)
     }
+
+    pub fn remove_socket(&mut self, sid: SocketId) {
+        self.sockets.remove(sid);
+    }
 }
 
 impl SocketCollection {
-    pub fn new(seq: Sequence) -> SocketCollection {
+    fn new(seq: Sequence) -> SocketCollection {
         SocketCollection {
             ids: seq,
             sockets: HashMap::new()
         }
     }
 
-    pub fn add(&mut self, reply_tx: mpsc::Sender<socket::Reply>, proto: Box<socket::Protocol>) -> SocketId {
+    fn add(&mut self, reply_tx: mpsc::Sender<socket::Reply>, proto: Box<socket::Protocol>) -> SocketId {
         let id = SocketId::from(self.ids.next());
         let socket = socket::Socket::new(id, reply_tx, proto);
 
@@ -77,7 +81,11 @@ impl SocketCollection {
         id
     }
 
-    pub fn get_socket_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut socket::Socket> {
+    fn get_socket_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut socket::Socket> {
         self.sockets.get_mut(&id)
+    }
+
+    fn remove(&mut self, id: SocketId) {
+        self.sockets.remove(&id);
     }
 }

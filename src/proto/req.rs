@@ -149,6 +149,9 @@ impl Protocol for Req {
             _ => ()
         }
     }
+    fn close(&mut self, ctx: &mut Context) {
+        self.inner.close(ctx)
+    }
 }
 
 /*****************************************************************************/
@@ -422,6 +425,11 @@ impl Inner {
     }
     fn set_resend_ivl(&mut self, ivl: Duration) {
         self.resend_ivl = ivl;
+    }
+    fn close(&mut self, ctx: &mut Context) {
+        for (_, pipe) in self.pipes.drain() {
+            pipe.close(ctx);
+        }
     }
 }
 

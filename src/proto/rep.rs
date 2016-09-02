@@ -126,6 +126,9 @@ impl Protocol for Rep {
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
     }
+    fn close(&mut self, ctx: &mut Context) {
+        self.inner.close(ctx)
+    }
 }
 
 /*****************************************************************************/
@@ -341,6 +344,11 @@ impl Inner {
     }
     fn clear_backtrace(&mut self) {
         self.backtrace.clear();
+    }
+    fn close(&mut self, ctx: &mut Context) {
+        for (_, pipe) in self.pipes.drain() {
+            pipe.close(ctx);
+        }
     }
 }
 

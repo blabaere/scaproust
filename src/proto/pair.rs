@@ -116,6 +116,9 @@ impl Protocol for Pair {
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
     }
+    fn close(&mut self, ctx: &mut Context) {
+        self.inner.close(ctx)
+    }
 }
 
 /*****************************************************************************/
@@ -313,5 +316,8 @@ impl Inner {
     fn on_recv_timeout(&self) {
         let error = timedout_io_error("Recv timed out");
         let _ = self.reply_tx.send(Reply::Err(error));
+    }
+    fn close(&mut self, ctx: &mut Context) {
+        self.pipe.take().map(|(_, pipe)| pipe.close(ctx));
     }
 }

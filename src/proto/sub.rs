@@ -125,6 +125,9 @@ impl Protocol for Sub {
             _ => Err(invalid_input_io_error("option not supported"))
         }
     }
+    fn close(&mut self, ctx: &mut Context) {
+        self.inner.close(ctx)
+    }
 }
 
 /*****************************************************************************/
@@ -278,5 +281,10 @@ impl Inner {
         let payload = msg.get_body();
         
         self.subscriptions.iter().any(|s| payload.starts_with(s))
+    }
+    fn close(&mut self, ctx: &mut Context) {
+        for (_, pipe) in self.pipes.drain() {
+            pipe.close(ctx);
+        }
     }
 }

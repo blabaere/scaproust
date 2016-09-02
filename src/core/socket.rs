@@ -13,7 +13,7 @@ use std::time::Duration;
 use super::{SocketId, EndpointId, Message, EndpointSpec};
 use super::endpoint::{Pipe, Acceptor};
 use super::config::{Config, ConfigOption};
-use super::context::{Context, Schedulable, Scheduled};
+use super::context::{Context, Schedulable, Scheduled, Event};
 use io_error::*;
 
 pub enum Request {
@@ -22,6 +22,7 @@ pub enum Request {
     Send(Message),
     Recv,
     SetOption(ConfigOption),
+    Close
 }
 
 pub enum Reply {
@@ -70,6 +71,7 @@ pub trait Protocol {
     }
     fn on_timer_tick(&mut self, _: &mut Context, _: Schedulable) {
     }
+    fn close(&mut self, ctx: &mut Context);
 }
 
 pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
@@ -384,6 +386,19 @@ impl Socket {
     pub fn on_timer_tick(&mut self, ctx: &mut Context, task: Schedulable) {
         self.protocol.on_timer_tick(ctx, task)
     }
+
+    pub fn close(&mut self, ctx: &mut Context) {
+        for (_, pipe) in self.pipes.drain() {
+            pipe.close(ctx);
+        }
+        for (_, acceptor) in self.acceptors.drain() {
+            acceptor.close(ctx);
+        }
+
+        self.protocol.close(ctx);
+
+        let _ = ctx.raise(Event::Closed);
+    }
 }
 
 /*****************************************************************************/
@@ -422,6 +437,7 @@ mod tests {
         fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
         fn on_recv_timeout(&mut self, _: &mut Context) {}
         fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {}
+        fn close(&mut self, _: &mut Context) {}
     }
 
     struct FailingNetwork;

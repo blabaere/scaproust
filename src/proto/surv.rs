@@ -147,6 +147,9 @@ impl Protocol for Surveyor {
             _ => ()
         }
     }
+    fn close(&mut self, ctx: &mut Context) {
+        self.inner.close(ctx)
+    }
 }
 
 /*****************************************************************************/
@@ -384,6 +387,11 @@ impl Inner {
 
     fn set_survey_deadline(&mut self, ivl: Duration) {
         self.deadline = ivl;
+    }
+    fn close(&mut self, ctx: &mut Context) {
+        for (_, pipe) in self.pipes.drain() {
+            pipe.close(ctx);
+        }
     }
 }
 

@@ -119,7 +119,7 @@ impl Dispatcher {
             Signal::AcceptorCmd(_, eid, cmd)   => self.process_acceptor_cmd(el, eid, cmd),
             Signal::PipeEvt(sid, eid, evt)     => self.process_pipe_evt(el, sid, eid, evt),
             Signal::AcceptorEvt(sid, eid, evt) => self.process_acceptor_evt(el, sid, eid, evt),
-            Signal::SocketEvt(_, _) => {}
+            Signal::SocketEvt(sid, evt)        => self.process_socket_evt(el, sid, evt),
         }
     }
 
@@ -183,7 +183,8 @@ impl Dispatcher {
             socket::Request::Bind(url)    => self.apply_on_socket(id, |socket, ctx| socket.bind(ctx, url)),
             socket::Request::Send(msg)    => self.apply_on_socket(id, |socket, ctx| socket.send(ctx, msg)),
             socket::Request::Recv         => self.apply_on_socket(id, |socket, ctx| socket.recv(ctx)),
-            socket::Request::SetOption(x) => self.apply_on_socket(id, |socket, ctx| socket.set_option(ctx, x))
+            socket::Request::SetOption(x) => self.apply_on_socket(id, |socket, ctx| socket.set_option(ctx, x)),
+            socket::Request::Close        => self.apply_on_socket(id, |socket, ctx| socket.close(ctx)),
         }
     }
 
@@ -225,6 +226,14 @@ impl Dispatcher {
                 }
             },
             _ => {}
+        }
+    }
+
+    fn process_socket_evt(&mut self, _: &mut EventLoop, sid: SocketId, evt: context::Event) {
+        match evt {
+            context::Event::CanSend => {},
+            context::Event::CanRecv => {},
+            context::Event::Closed => self.sockets.remove_socket(sid)
         }
     }
 

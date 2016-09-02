@@ -203,3 +203,10 @@ impl Socket {
         Err(other_io_error("unexpected reply"))
     }
 }
+
+impl Drop for Socket {
+    fn drop(&mut self) {
+        let _ = self.send_request(Request::Close);
+        let _ = self.recv_reply();
+    }
+}
