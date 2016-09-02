@@ -1,5 +1,4 @@
 ### Next tasks
-- Check if Rust stable can be used to fix stainless build error
 - Close endpoint
 - Recv max buffer size
 - Reconnect interval max 
@@ -7,6 +6,9 @@
 - Handle accept error
 - Pluggable transport
 - Req prefetch replies
+
+### Define release process
+- See https://github.com/dan-t/rusty-release
 
 ### AUTOMATE ALL THE THINGS (test) !!!
 - Test reconnect feature
