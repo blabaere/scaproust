@@ -1,4 +1,4 @@
-### Next tasks
+### Improvements
 - Close endpoint
 - Recv max buffer size
 - Reconnect interval max 
@@ -6,33 +6,36 @@
 - Handle accept error
 - Pluggable transport
 - Req prefetch replies
+- Use a pool for payloads and buffers (if any)
+- IPC transport See: [mio-uds](https://github.com/alexcrichton/mio-uds)
 
-### Define release process
-- See https://github.com/dan-t/rusty-release
-
-### AUTOMATE ALL THE THINGS (test) !!!
-- Test reconnect feature
-
-### Features:
+### Features
 - Websocket transport
 - TLS transport
 - Implement nanocat
 - STAR protocol ?
+- Polling and non-blocking operations
 
-### Performance
-- Use a pool for payloads and buffers (if any)
+### Tasks
+- Use github issues instead of this file
+- Document release process
+- Document contribution mode
+- AUTOMATE ALL THE THINGS !!! (compat test, benchmark ...)
+- Change copyright header to mention 'authors' and the AUTHORS file
 
-### change copyright header to mention 'authors' and the AUTHORS file
 
-### Stuff to look at:
+### Things to look at
+
+https://github.com/tokio-rs
+**mioco now has a timeout feature !**  
+https://github.com/dpc/mioco  
+https://github.com/dpc/mioco/blob/master/examples%2Fechoplus.rs  
+
 
 https://github.com/frankmcsherry/recycler
 https://github.com/zslayton/lifeguard
 http://carllerche.github.io/pool/pool/
 
-**mioco now has a timeout feature !**  
-https://github.com/dpc/mioco  
-https://github.com/dpc/mioco/blob/master/examples%2Fechoplus.rs  
 
 https://github.com/tailhook/rotor  
 https://github.com/dwrensha/gj  

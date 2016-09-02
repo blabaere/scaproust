@@ -1,8 +1,7 @@
-# scaproust <img src=albertine-like.jpg align=right width=200 height=200>
+# scaproust "Scalability Protocols" in Rust
 
 [![Linux build](https://travis-ci.org/blabaere/scaproust.svg?label=linux)](https://travis-ci.org/blabaere/scaproust)
 [![Windows build](https://ci.appveyor.com/api/projects/status/kpqdm42mhlki39fq?svg=true)](https://ci.appveyor.com/project/blabaere/scaproust)
-[![Clippy Linting Result](http://clippy.bashy.io/github/blabaere/scaproust/master/badge.svg)](http://clippy.bashy.io/github/blabaere/scaproust/master/log)
 
 Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "Scalability Protocols" in the [Rust programming language](http://www.rust-lang.org/).
 
@@ -16,9 +15,20 @@ Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "
 * Idiomatic rust API first, mimic the original C API second.
 * Extensibility: allow user code to define additional protocols and transports
 
-## Undecided
-* Other transports (TLS, WebSockets).
-* Readiness polling.
+## Usage
+
+First, add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+scaproust = "0.1.0"
+```
+
+Next, add this to your crate:
+
+```rust
+extern crate scaproust;
+```
 
 ## Progress
 - [ ] Protocols
