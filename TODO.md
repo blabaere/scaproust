@@ -4,10 +4,11 @@
 - Reconnect interval max 
 - Linger
 - Handle accept error
-- Pluggable transport
+- Make transports pluggable 
 - Req prefetch replies
 - Use a pool for payloads and buffers (if any)
-- IPC transport See: [mio-uds](https://github.com/alexcrichton/mio-uds)
+- IPC transport : See [mio-uds](https://github.com/alexcrichton/mio-uds)
+- INPROC transport : to be determined (rust channel's are probably doing a better work at this)
 
 ### Features
 - Websocket transport
