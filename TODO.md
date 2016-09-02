@@ -33,6 +33,7 @@
 ### Things to look at
 
 https://pascalhertleif.de/artikel/good-practices-for-writing-rust-libraries/
+http://keepachangelog.com
 
 https://github.com/tokio-rs
 **mioco now has a timeout feature !**  
