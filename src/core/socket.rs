@@ -4,540 +4,571 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::rc::Rc;
-use std::collections::hash_map::*;
+use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::io;
-use std::time;
+use std::boxed::FnBox;
+use std::time::Duration;
 
-use mio;
+use super::{SocketId, EndpointId, Message, EndpointSpec};
+use super::endpoint::{Pipe, Acceptor};
+use super::config::{Config, ConfigOption};
+use super::context::{Context, Schedulable, Scheduled, Event};
+use io_error::*;
 
-use global::*;
-use event_loop_msg::*;
+pub enum Request {
+    Connect(String),
+    Bind(String),
+    Send(Message),
+    Recv,
+    SetOption(ConfigOption),
+    Close
+}
 
-use protocol::Protocol;
-use transport::pipe::Pipe;
-use transport::DEFAULT_RECV_MAX_SIZE;
-use core::acceptor::Acceptor;
-use transport::{create_transport, Connection, Listener, Transport};
-
-use EventLoop;
-use Message;
+pub enum Reply {
+    Err(io::Error),
+    Connect(EndpointId),
+    Bind(EndpointId),
+    Send,
+    Recv(Message),
+    SetOption
+}
 
 pub struct Socket {
     id: SocketId,
+    reply_sender: Sender<Reply>,
     protocol: Box<Protocol>,
-    evt_sender: Rc<Sender<SocketNotify>>,
-    sig_sender: mio::Sender<EventLoopSignal>,
-    acceptors: HashMap<mio::Token, Acceptor>,
-    id_seq: IdSequence,
-    options: SocketImplOptions
+    pipes: HashMap<EndpointId, Pipe>,
+    acceptors: HashMap<EndpointId, Acceptor>,
+    config: Config
 }
+
+/*****************************************************************************/
+/*                                                                           */
+/* Protocol                                                                  */
+/*                                                                           */
+/*****************************************************************************/
+
+pub trait Protocol {
+    fn id(&self) -> u16;
+    fn peer_id(&self) -> u16;
+
+    fn add_pipe(&mut self, ctx: &mut Context, eid: EndpointId, pipe: Pipe);
+    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe>;
+
+    fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Option<Scheduled>);
+    fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId);
+    fn on_send_timeout(&mut self, ctx: &mut Context);
+    fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId);
+    
+    fn recv(&mut self, ctx: &mut Context, timeout: Option<Scheduled>);
+    fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message);
+    fn on_recv_timeout(&mut self, ctx: &mut Context);
+    fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId);
+
+    fn set_option(&mut self, _: ConfigOption) -> io::Result<()> {
+        Err(invalid_input_io_error("option not supported"))
+    }
+    fn on_timer_tick(&mut self, _: &mut Context, _: Schedulable) {
+    }
+    fn on_device_plugged(&mut self, _: &mut Context) {}
+    fn close(&mut self, ctx: &mut Context);
+}
+
+pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
+
+/*****************************************************************************/
+/*                                                                           */
+/* Socket                                                                    */
+/*                                                                           */
+/*****************************************************************************/
 
 impl Socket {
-
-    pub fn new(
-        id: SocketId, 
-        proto: Box<Protocol>, 
-        evt_tx: Rc<Sender<SocketNotify>>, 
-        sig_tx: mio::Sender<EventLoopSignal>,
-        id_seq: IdSequence) -> Socket {
+    pub fn new(id: SocketId, reply_tx: Sender<Reply>, proto: Box<Protocol>) -> Socket {
         Socket {
             id: id,
-            protocol: proto, 
-            evt_sender: evt_tx,
-            sig_sender: sig_tx,
+            reply_sender: reply_tx,
+            protocol: proto,
+            pipes: HashMap::new(),
             acceptors: HashMap::new(),
-            id_seq: id_seq,
-            options: SocketImplOptions::new()
+            config: Config::default()
         }
     }
 
-    fn next_token(&self) -> mio::Token {
-        let id = self.id_seq.next();
+    fn get_protocol_ids(&self) -> (u16, u16) {
+        let proto_id = self.protocol.id();
+        let peer_proto_id = self.protocol.peer_id();
 
-        mio::Token(id)
+        (proto_id, peer_proto_id)
     }
 
-    fn send_notify(&self, evt: SocketNotify) {
-        let send_res = self.evt_sender.send(evt);
-
-        if send_res.is_err() {
-            error!("[{:?}] failed to send notify to the facade: '{:?}'", self.id, send_res.err());
-        } 
+    fn send_reply(&self, reply: Reply) {
+        let _ = self.reply_sender.send(reply);
     }
 
-    fn send_event(&self, evt: SocketEvtSignal) {
-        let evt_sig = EvtSignal::Socket(self.id, evt);
-        let loop_sig = EventLoopSignal::Evt(evt_sig);
-        let send_res = self.sig_sender.send(loop_sig);
+/*****************************************************************************/
+/*                                                                           */
+/* connect                                                                   */
+/*                                                                           */
+/*****************************************************************************/
 
-        if send_res.is_err() {
-            error!("[{:?}] failed to send event to the session: '{:?}'", self.id, send_res.err());
-        } 
-    }
+    pub fn connect(&mut self, ctx: &mut Context, url: String) {
+        let pids = self.get_protocol_ids();
 
-    pub fn handle_cmd(&mut self, event_loop: &mut EventLoop, cmd: SocketCmdSignal) {
-        debug!("[{:?}] handle_cmd {}", self.id, cmd.name());
-
-        match cmd {
-            SocketCmdSignal::Connect(addr)  => self.connect(event_loop, addr),
-            SocketCmdSignal::Bind(addr)     => self.bind(event_loop, addr),
-            SocketCmdSignal::Shutdown(tok)  => self.shutdown(event_loop, tok),
-            SocketCmdSignal::SendMsg(msg)   => self.send(event_loop, msg),
-            SocketCmdSignal::RecvMsg        => self.recv(event_loop),
-            SocketCmdSignal::SetOption(opt) => self.set_option(event_loop, opt)
-        }
-    }
-
-    pub fn handle_evt(&mut self, event_loop: &mut EventLoop, evt: SocketEvtSignal) {
-        debug!("[{:?}] handle_evt {}", self.id, evt.name());
-        match evt {
-            SocketEvtSignal::PipeAdded(tok)     => self.open_pipe(event_loop, tok),
-            SocketEvtSignal::AcceptorAdded(tok) => self.open_acceptor(event_loop, tok),
-            _ => {}
-        }
-    }
-
-    pub fn on_pipe_evt(&mut self, event_loop: &mut EventLoop, tok: mio::Token, evt: PipeEvtSignal) {
-        debug!("[{:?}] on_pipe_evt [{:?}]: {}", self.id, tok, evt.name());
-
-        match evt {
-            PipeEvtSignal::Error(x) => self.remove_pipe_and_schedule_reconnect(event_loop, tok, x),
-            other => self.protocol.on_pipe_evt(event_loop, tok, other)
-        }
-    }
-
-    fn open_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.protocol.open_pipe(event_loop, tok)
-    }
-
-    fn open_acceptor(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        if let Some(acceptor) = self.acceptors.get_mut(&tok) {
-            acceptor.open(event_loop);
-            // TODO handle error
-        }
-    }
-
-    fn parse_url<'a>(&self, url: &'a str) -> io::Result<(Box<Transport>, &'a str)> {
-        let parts: Vec<&str> = url.split("://").collect();
-        let scheme = parts[0];
-        let addr = parts[1];
-
-        create_transport(scheme).map(|mut transport| {
-            transport.set_nodelay(self.options.tcp_nodelay);
-            transport.set_recv_max_size(self.options.recv_max_size);
-            (transport, addr)
-        })
-     }
-
-    fn connect(&mut self, event_loop: &mut EventLoop, url: String) {
-        debug!("[{:?}] connect: '{}'", self.id, url);
-
-        let conn_addr = url.clone();
-        let reconn_addr = url.clone();
-
-        self.parse_url(url.as_ref()).map(|(transport, addr)| {
-            let token = self.next_token();
-            transport.connect(addr).
-                map(|conn|{
-                    self.create_and_add_pipe(Some(conn_addr), conn, token, 0).
-                        map(|_| self.send_notify(SocketNotify::Connected(token))).
-                        unwrap_or_else(|e| self.send_notify(SocketNotify::NotConnected(e)));
-                }).
-                unwrap_or_else(|_| {
-                    self.schedule_reconnect(event_loop, token, reconn_addr, 0);
-                    self.send_notify(SocketNotify::Connected(token));
-                })
-        }).unwrap_or_else(|e| {
-            self.send_notify(SocketNotify::NotConnected(e));
-        })
-    }
-
-    pub fn reconnect(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token, count: u32) {
-        debug!("[{:?}] pipe [{:?}] reconnect: '{}'", self.id, tok, addr);
-
-        let conn_addr = addr.clone();
-        let reconn_addr = addr.clone();
-        let _ = self.create_connection(&addr).
-            and_then(|conn| self.create_and_add_pipe(Some(conn_addr), conn, tok, count)).
-            map_err(|_| self.schedule_reconnect(event_loop, tok, reconn_addr, count+1));
-    }
-
-    fn create_connection(&self, url: &str) -> io::Result<Box<Connection>> {
-        debug!("[{:?}] create_connection: '{}'", self.id, url);
-
-        match self.parse_url(url) {
-            Ok((transport, addr)) => transport.connect(addr),
-            Err(e) => Err(e)
-        }
-    }
-
-    fn create_and_add_pipe(&mut self, addr: Option<String>, conn: Box<Connection>, tok: mio::Token, error_count: u32) -> io::Result<()> {
-        debug!("[{:?}] create_and_add_pipe: '{:?}'", self.id, addr);
-        let socket_type = self.protocol.get_type();
-        let priorities = self.options.priorities();
-        let sig_sender = self.sig_sender.clone();
-        let pipe = Pipe::new(tok, addr, socket_type, priorities, conn, sig_sender, error_count);
-
-        self.protocol.add_pipe(tok, pipe).map(|_|self.send_event(SocketEvtSignal::PipeAdded(tok)))
-    }
-
-    pub fn bind(&mut self, _: &mut EventLoop, url: String) {
-        debug!("[{:?}] bind: '{}'", self.id, url);
-
-        let token = self.next_token();
-        self.parse_url(url.as_ref())
-            .and_then(|(transport, addr)| transport.bind(addr))
-            .map(|listener| {
-                self.create_and_add_acceptor(url, listener, token);
-                self.send_notify(SocketNotify::Bound(token));
-            })
-            .unwrap_or_else(|e| self.send_notify(SocketNotify::NotBound(e)))
-    }
-
-    pub fn rebind(&mut self, addr: String, event_loop: &mut EventLoop, tok: mio::Token, count: u32) {
-        debug!("[{:?}] acceptor [{:?}] rebind: '{}'", self.id, tok, addr);
-
-        let _ = self.create_listener(&addr).
-            map(|lst| self.create_and_add_acceptor(addr.clone(), lst, tok)).
-            map_err(|_| self.schedule_rebind(event_loop, tok, addr.clone(), count+1));
-    }
-
-    fn create_listener(&self, url: &str) -> io::Result<Box<Listener>> {
-        match self.parse_url(url) {
-            Ok((transport, addr)) => transport.bind(addr),
-            Err(e) => Err(e)
-        }
-    }
-
-    fn create_and_add_acceptor(&mut self, addr: String, listener: Box<Listener>, tok: mio::Token) {
-        let acceptor = Acceptor::new(tok, addr, listener);
-
-        self.add_acceptor(tok, acceptor);
-        self.send_event(SocketEvtSignal::AcceptorAdded(tok));
-    }
-
-    fn add_acceptor(&mut self, token: mio::Token, acceptor: Acceptor) {
-        self.acceptors.insert(token, acceptor);
-    }
-
-    fn remove_acceptor(&mut self, token: mio::Token) -> Option<Acceptor> {
-        self.acceptors.remove(&token)
-    }
-
-    fn shutdown(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        if self.acceptors.contains_key(&tok) {
-            self.shutdown_acceptor(event_loop, tok)
-        } else {
-            self.shutdown_pipe(event_loop, tok)
-        }
-    }
-
-    fn shutdown_acceptor(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.remove_acceptor(tok).map(|mut a| a.close(event_loop));
-    }
-
-    fn shutdown_pipe(&mut self, event_loop: &mut EventLoop, tok: mio::Token) {
-        self.protocol.remove_pipe(tok).map(|mut p| p.close(event_loop));
-    }
-
-    pub fn ready(&mut self, event_loop: &mut EventLoop, token: mio::Token, events: mio::EventSet) {
-        if self.acceptors.contains_key(&token) {
-            self.acceptor_ready(event_loop, token, events)
-        } else {
-            self.pipe_ready(event_loop, token, events)
-        }
-    }
-
-    fn acceptor_ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        debug!("[{:?}] acceptor [{:?}] ready: '{:?}'", self.id, tok, events);
-
-        self.acceptors.get_mut(&tok).unwrap().
-            ready(event_loop, events).
-            and_then(|conns| self.on_connections_accepted(conns)).
-            unwrap_or_else(|e| self.on_acceptor_error(event_loop, tok, e));
-    }
-
-    fn pipe_ready(&mut self, event_loop: &mut EventLoop, tok: mio::Token, events: mio::EventSet) {
-        debug!("[{:?}] pipe [{:?}] ready: '{:?}'", self.id, tok, events);
-
-        self.protocol.ready(event_loop, tok, events);
-
-        if self.options.is_device_item && self.protocol.can_recv() {
-            self.send_event(SocketEvtSignal::Readable);
-        }
-    }
-
-    fn remove_pipe_and_schedule_reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token, count: u32) {
-        if let Some(mut pipe) = self.protocol.remove_pipe(tok) {
-            pipe.close(event_loop);
-            if let Some(addr) = pipe.addr() {
-                self.schedule_reconnect(event_loop, tok, addr, count);
-            }
-        }
-    }
-
-    fn schedule_reconnect(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String, times: u32) {
-        debug!("[{:?}] pipe [{:?}] schedule_reconnect: '{}'", self.id, tok, addr);
-        let timespan = self.options.get_retry_ivl(times);
-        let _ = event_loop.
-            timeout(EventLoopTimeout::Reconnect(self.id, tok, addr, times), timespan).
-            map_err(|err| error!("[{:?}] pipe [{:?}] reconnect timeout failed: '{:?}'", self.id, tok, err));
-    }
-
-    fn schedule_rebind(&mut self, event_loop: &mut EventLoop, tok: mio::Token, addr: String, times: u32) {
-        debug!("[{:?}] pipe [{:?}] schedule_rebind: '{}'", self.id, tok, addr);
-        let timespan = self.options.get_retry_ivl(times);
-        let _ = event_loop.
-            timeout(EventLoopTimeout::Rebind(self.id, tok, addr, times), timespan).
-            map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok, err));
-    }
-
-    fn on_connections_accepted(&mut self, conns: Vec<Box<Connection>>) -> io::Result<()> {
-        for conn in conns {
-            let token = self.next_token();
-            try!(self.create_and_add_pipe(None, conn, token, 0));
-        }
-        Ok(())
-    }
-
-    fn on_acceptor_error(&mut self, event_loop: &mut EventLoop, tok: mio::Token, err: io::Error) {
-        debug!("[{:?}] acceptor [{:?}] error: '{:?}'", self.id, tok, err);
-
-        if let Some(mut acceptor) = self.remove_acceptor(tok) {
-            acceptor.
-                close(event_loop).
-                unwrap_or_else(|err| debug!("[{:?}] acceptor [{:?}] error while closing: '{:?}'", self.id, tok, err));
-            let timespan = time::Duration::from_millis(500);
-            let _ = event_loop.
-                timeout(EventLoopTimeout::Rebind(self.id, tok, acceptor.addr(), 0), timespan).
-                map_err(|err| error!("[{:?}] acceptor [{:?}] reconnect timeout failed: '{:?}'", self.id, tok, err));
-        }
-    }
-
-    pub fn send(&mut self, event_loop: &mut EventLoop, msg: Message) {
-        debug!("[{:?}] send", self.id);
-
-        if let Some(timeout) = self.options.send_timeout_ms {
-            event_loop.
-                timeout(EventLoopTimeout::CancelSend(self.id), time::Duration::from_millis(timeout)).
-                map(|handle| self.protocol.send(event_loop, msg, Some(handle))).
-                unwrap_or_else(|err| error!("[{:?}] failed to set timeout on send: '{:?}'", self.id, err));
-        } else {
-            self.protocol.send(event_loop, msg, None);
-        }
-    }
-
-    pub fn on_send_timeout(&mut self, event_loop: &mut EventLoop) {
-        debug!("[{:?}] on_send_timeout", self.id);
-        self.protocol.on_send_timeout(event_loop);
-    }
-
-    pub fn recv(&mut self, event_loop: &mut EventLoop) {
-        debug!("[{:?}] recv", self.id);
-
-        if let Some(timeout) = self.options.recv_timeout_ms {
-            event_loop.
-                timeout(EventLoopTimeout::CancelRecv(self.id), time::Duration::from_millis(timeout)).
-                map(|handle| self.protocol.recv(event_loop, Some(handle))).
-                unwrap_or_else(|err| error!("[{:?}] failed to set timeout on recv: '{:?}'", self.id, err));
-        } else {
-            self.protocol.recv(event_loop, None);
-        }
-    }
-
-    pub fn on_recv_timeout(&mut self, event_loop: &mut EventLoop) {
-        debug!("[{:?}] on_recv_timeout", self.id);
-        self.protocol.on_recv_timeout(event_loop);
-    }
-
-    pub fn set_option(&mut self, event_loop: &mut EventLoop, option: SocketOption) {
-        let set_res = match option {
-            SocketOption::Linger(timeout)           => self.options.set_linger(timeout),
-            SocketOption::SendTimeout(timeout)      => self.options.set_send_timeout(timeout),
-            SocketOption::RecvTimeout(timeout)      => self.options.set_recv_timeout(timeout),
-            SocketOption::SendPriority(priority)    => self.options.set_send_priority(priority),
-            SocketOption::RecvPriority(priority)    => self.options.set_recv_priority(priority),
-            SocketOption::ReconnectInterval(ivl)    => self.options.set_reconnect_ivl(ivl),
-            SocketOption::ReconnectIntervalMax(ivl) => self.options.set_reconnect_ivl_max(ivl),
-            SocketOption::TcpNoDelay(flag)          => self.options.set_tcp_nodelay(flag),
-            SocketOption::RecvMaxSize(value)        => self.options.set_recv_max_size(value),
-            SocketOption::DeviceItem(value)         => self.set_device_item(value),
-            option                                  => self.protocol.set_option(event_loop, option)
+        match ctx.connect(self.id, &url, pids) {
+            Ok(id) => self.on_connect_success(ctx, url, id),
+            Err(e) => self.on_connect_error(e)
         };
-        let evt = match set_res {
-            Ok(_)  => SocketNotify::OptionSet,
-            Err(e) => SocketNotify::OptionNotSet(e)
+    }
+
+    fn on_connect_success(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
+        let pipe = self.connect_pipe(eid, url);
+
+        self.insert_pipe(ctx, eid, pipe);
+        self.send_reply(Reply::Connect(eid));
+    }
+
+    fn on_connect_error(&mut self, err: io::Error) {
+        self.send_reply(Reply::Err(err));
+    }
+
+    fn schedule_reconnect(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        let task = Schedulable::Reconnect(spec);
+        let delay = self.config.retry_ivl;
+        let _ = ctx.schedule(task, delay); 
+        // TODO maybe we should keep track of the scheduled reconnection
+        // In case the facade wants to close the ep somewhere between the error and the timeout
+    }
+
+    pub fn reconnect(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        let pids = self.get_protocol_ids();
+
+        match ctx.reconnect(self.id, spec.id, &spec.url, pids) {
+            Ok(_)  => self.on_reconnect_success(ctx, spec),
+            Err(_) => self.on_reconnect_error(ctx, spec)
+        }
+    }
+
+    fn on_reconnect_success(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        self.insert_pipe(ctx, spec.id, Pipe::from(spec));
+    }
+
+    fn on_reconnect_error(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        self.schedule_reconnect(ctx, spec);
+    }
+
+/*****************************************************************************/
+/*                                                                           */
+/* bind                                                                      */
+/*                                                                           */
+/*****************************************************************************/
+
+    pub fn bind(&mut self, ctx: &mut Context, url: String) {
+        let pids = self.get_protocol_ids();
+
+        match ctx.bind(self.id, &url, pids) {
+            Ok(id) => self.on_bind_success(ctx, url, id),
+            Err(e) => self.on_bind_error(e)
         };
-
-        self.send_notify(evt);
     }
 
-    fn set_device_item(&mut self, value: bool) -> io::Result<()> {
-        self.options.set_device_item(value);
-        self.protocol.set_device_item(value)
+    fn on_bind_success(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
+        let acceptor = self.connect_acceptor(eid, url);
+
+        acceptor.open(ctx);
+
+        self.acceptors.insert(eid, acceptor);
+        self.send_reply(Reply::Bind(eid));
     }
 
-    pub fn on_survey_timeout(&mut self, event_loop: &mut EventLoop) {
-        self.protocol.on_survey_timeout(event_loop);
+    fn on_bind_error(&mut self, err: io::Error) {
+        self.send_reply(Reply::Err(err));
     }
 
-    pub fn resend(&mut self, event_loop: &mut EventLoop) {
-        self.protocol.resend(event_loop);
+    fn schedule_rebind(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        let task = Schedulable::Rebind(spec);
+        let delay = self.config.retry_ivl;
+        let _ = ctx.schedule(task, delay); 
+        // TODO maybe we should keep track of the scheduled reconnection
+        // In case the facade wants to close the ep somewhere between the error and the timeout
     }
 
-    pub fn destroy(&mut self, event_loop: &mut EventLoop) {
-        let _: Vec<_> = self.acceptors.drain().map(|(_, mut a)| a.close(event_loop)).collect();
-        self.protocol.destroy(event_loop);
+    pub fn rebind(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        let pids = self.get_protocol_ids();
+
+        match ctx.rebind(self.id, spec.id, &spec.url, pids) {
+            Ok(_)  => self.on_rebind_success(ctx, spec),
+            Err(_) => self.on_rebind_error(ctx, spec)
+        };
     }
 
-    pub fn get_linger_timeout(&mut self) -> Option<u64> {
-        if self.protocol.has_pending_send() {
-            self.options.linger_ms
-        } else {
-            None
-        }
+    fn on_rebind_success(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        self.insert_acceptor(ctx, spec.id, Acceptor::from(spec))
     }
-}
 
-struct SocketImplOptions {
-    pub linger_ms: Option<u64>,
-    pub send_timeout_ms: Option<u64>,
-    pub recv_timeout_ms: Option<u64>,
-    pub send_priority: u8,
-    pub recv_priority: u8,
-    pub reconnect_ivl_ms: u64,
-    pub reconnect_ivl_max_ms: u64,
-    pub tcp_nodelay: bool,
-    pub recv_max_size: u64,
-    pub is_device_item: bool
-}
+    fn on_rebind_error(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+        self.schedule_rebind(ctx, spec);
+    }
 
-impl SocketImplOptions {
-    fn new() -> SocketImplOptions {
-        SocketImplOptions {
-            linger_ms: Some(1000),
-            send_timeout_ms: None,
-            recv_timeout_ms: None,
-            send_priority: 8,
-            recv_priority: 8,
-            reconnect_ivl_ms: 100,
-            reconnect_ivl_max_ms: 0,
-            tcp_nodelay: false,
-            recv_max_size: DEFAULT_RECV_MAX_SIZE,
-            is_device_item: false
+/*****************************************************************************/
+/*                                                                           */
+/* pipe                                                                      */
+/*                                                                           */
+/*****************************************************************************/
+
+    pub fn on_pipe_opened(&mut self, ctx: &mut Context, eid: EndpointId) {
+        if let Some(pipe) = self.pipes.remove(&eid) {
+            self.protocol.add_pipe(ctx, eid, pipe);
         }
     }
 
-    fn set_linger(&mut self, timeout: time::Duration) -> io::Result<()> {
-        self.linger_ms = duration_to_timeout(timeout);
+    pub fn on_pipe_accepted(&mut self, ctx: &mut Context, aid: EndpointId, eid: EndpointId) {
+        let pipe = self.accept_pipe(aid, eid);
 
-        Ok(())
+        self.insert_pipe(ctx, eid, pipe);
     }
 
-    fn set_send_timeout(&mut self, timeout: time::Duration) -> io::Result<()> {
-        self.send_timeout_ms = duration_to_timeout(timeout);
-
-        Ok(())
-    }
-
-    fn set_recv_timeout(&mut self, timeout: time::Duration) -> io::Result<()> {
-        self.recv_timeout_ms = duration_to_timeout(timeout);
-
-        Ok(())
-    }
-
-    fn set_send_priority(&mut self, priority: u8) -> io::Result<()> {
-        if is_valid_priority(priority) {
-            self.send_priority = priority;
-            Ok(())
-        } else {
-            Err(invalid_data_io_error("Invalid priority"))
+    pub fn on_pipe_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
+        if let Some(spec) = self.remove_pipe(ctx, eid) {
+            self.schedule_reconnect(ctx, spec);
         }
     }
 
-    fn priorities(&self) -> (u8, u8) {
-        (self.send_priority, self.recv_priority)
+    fn insert_pipe(&mut self, ctx: &mut Context, eid: EndpointId, pipe: Pipe) {
+        pipe.open(ctx);
+
+        self.pipes.insert(eid, pipe);
     }
 
-    fn set_recv_priority(&mut self, priority: u8) -> io::Result<()> {
-        if is_valid_priority(priority) {
-            self.recv_priority = priority;
-            Ok(())
-        } else {
-            Err(invalid_data_io_error("Invalid priority"))
+    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointSpec> {
+        if let Some(pipe) = self.pipes.remove(&eid) {
+            return pipe.close(ctx)
         }
-    }
-
-    fn set_reconnect_ivl(&mut self, ivl: time::Duration) -> io::Result<()> {
-        let ivl_ms = duration_to_millis(ivl);
-
-        if ivl_ms == 0 {
-            Err(invalid_input_io_error("Reconnect interval must be > 0"))
-        } else {
-            self.reconnect_ivl_ms = ivl_ms;
-
-            Ok(())
+        if let Some(pipe) = self.protocol.remove_pipe(ctx, eid) {
+            return pipe.close(ctx)
         }
-    }
-
-    fn set_reconnect_ivl_max(&mut self, ivl: time::Duration) -> io::Result<()> {
-        self.reconnect_ivl_max_ms = duration_to_millis(ivl);
-
-        Ok(())
-    }
-
-    fn get_retry_ivl(&self, mut count: u32) -> time::Duration {
-        let mut ivl = self.reconnect_ivl_ms;
-        loop {
-            if ivl > self.reconnect_ivl_max_ms || count == 0 {
-                break;
-            }
-            ivl *= 2;
-            count -= 1;
-        }
-        time::Duration::from_millis(ivl)
-    }
-
-    fn set_tcp_nodelay(&mut self, value: bool) -> io::Result<()> {
-        self.tcp_nodelay = value;
-        Ok(())
-    }
-
-    fn set_recv_max_size(&mut self, value: u64) -> io::Result<()> {
-        self.recv_max_size = value;
-        Ok(())
-    }
-
-    fn set_device_item(&mut self, value: bool) {
-        self.is_device_item = value;
-    }
-}
-
-impl Default for SocketImplOptions {
-    fn default() -> Self {
-        SocketImplOptions::new()
-    }
-}
-
-fn is_valid_priority(priority: u8) -> bool {
-    priority >= 1 && priority <=16
-}
-
-fn duration_to_timeout(duration: time::Duration) -> Option<u64> {
-    let millis = duration_to_millis(duration);
-
-    if millis == 0u64 {
         None
-    } else {
-        Some(millis)
+    }
+
+    fn connect_pipe(&self, eid: EndpointId, url: String) -> Pipe {
+        Pipe::new_connected(eid, url, self.config.send_priority, self.config.recv_priority)
+    }
+
+    fn accept_pipe(&self, aid: EndpointId, eid: EndpointId) -> Pipe {
+        let (send_prio, recv_prio) = if let Some(acceptor) = self.acceptors.get(&aid) {
+            (acceptor.get_send_priority(), acceptor.get_recv_priority())
+        } else {
+            (self.config.send_priority, self.config.recv_priority)
+        };
+
+        Pipe::new_accepted(eid, send_prio, recv_prio)
+    }
+
+/*****************************************************************************/
+/*                                                                           */
+/* acceptor                                                                  */
+/*                                                                           */
+/*****************************************************************************/
+
+    pub fn on_acceptor_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
+        if let Some(spec) = self.remove_acceptor(ctx, eid) {
+            self.schedule_rebind(ctx, spec);
+        }
+    }
+
+    fn insert_acceptor(&mut self, ctx: &mut Context, eid: EndpointId, acceptor: Acceptor) {
+        acceptor.open(ctx);
+
+        self.acceptors.insert(eid, acceptor);
+    }
+
+    fn remove_acceptor(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointSpec> {
+        self.acceptors.remove(&eid).map_or(None, |acceptor| acceptor.close(ctx))
+    }
+
+    fn connect_acceptor(&self, eid: EndpointId, url: String) -> Acceptor {
+        Acceptor::new(
+            eid,
+            url,
+            self.config.send_priority,
+            self.config.recv_priority)
+    }
+
+/*****************************************************************************/
+/*                                                                           */
+/* send                                                                      */
+/*                                                                           */
+/*****************************************************************************/
+
+    pub fn send(&mut self, ctx: &mut Context, msg: Message) {
+        if let Some(delay) = self.get_send_timeout() {
+            let task = Schedulable::SendTimeout;
+
+            match ctx.schedule(task, delay) {
+                Ok(timeout) => self.protocol.send(ctx, msg, Some(timeout)),
+                Err(e) => self.send_reply(Reply::Err(e))
+            }
+        } else {
+            self.protocol.send(ctx, msg, None);
+        }
+    }
+
+    pub fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.protocol.on_send_ack(ctx, eid);
+    }
+
+    pub fn on_send_timeout(&mut self, ctx: &mut Context) {
+        self.protocol.on_send_timeout(ctx);
+    }
+
+    fn get_send_timeout(&self) -> Option<Duration> {
+        self.config.send_timeout
+    }
+
+    pub fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.protocol.on_send_ready(ctx, eid)
+    }
+
+/*****************************************************************************/
+/*                                                                           */
+/* recv                                                                      */
+/*                                                                           */
+/*****************************************************************************/
+
+    pub fn recv(&mut self, ctx: &mut Context) {
+        if let Some(delay) = self.get_recv_timeout() {
+            let task = Schedulable::RecvTimeout;
+
+            match ctx.schedule(task, delay) {
+                Ok(timeout) => self.protocol.recv(ctx, Some(timeout)),
+                Err(e) => self.send_reply(Reply::Err(e))
+            }
+        } else {
+            self.protocol.recv(ctx, None);
+        }
+    }
+
+    pub fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message) {
+        self.protocol.on_recv_ack(ctx, eid, msg);
+    }
+
+    pub fn on_recv_timeout(&mut self, ctx: &mut Context) {
+        self.protocol.on_recv_timeout(ctx);
+    }
+
+    fn get_recv_timeout(&self) -> Option<Duration> {
+        self.config.recv_timeout
+    }
+
+    pub fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.protocol.on_recv_ready(ctx, eid)
+    }
+
+/*****************************************************************************/
+/*                                                                           */
+/* options                                                                   */
+/*                                                                           */
+/*****************************************************************************/
+
+    pub fn set_option(&mut self, _: &mut Context, opt: ConfigOption) {
+        let res = if opt.is_generic() {
+            self.config.set(opt)
+        } else {
+            self.protocol.set_option(opt)
+        };
+        let reply = match res {
+            Ok(()) => Reply::SetOption,
+            Err(e) => Reply::Err(e)
+        };
+
+        self.send_reply(reply);
+    }
+
+    pub fn on_timer_tick(&mut self, ctx: &mut Context, task: Schedulable) {
+        self.protocol.on_timer_tick(ctx, task)
+    }
+
+    pub fn on_device_plugged(&mut self, ctx: &mut Context) {
+        self.protocol.on_device_plugged(ctx)
+    }
+
+    pub fn close(&mut self, ctx: &mut Context) {
+        for (_, pipe) in self.pipes.drain() {
+            pipe.close(ctx);
+        }
+        for (_, acceptor) in self.acceptors.drain() {
+            acceptor.close(ctx);
+        }
+
+        self.protocol.close(ctx);
+
+        ctx.raise(Event::Closed);
     }
 }
 
-fn duration_to_millis(duration: time::Duration) -> u64 {
-    let millis_from_secs = duration.as_secs() * 1_000;
-    let millis_from_nanos = duration.subsec_nanos() as f64 / 1_000_000f64;
+/*****************************************************************************/
+/*                                                                           */
+/* tests                                                                     */
+/*                                                                           */
+/*****************************************************************************/
 
-    millis_from_secs + millis_from_nanos as u64
+#[cfg(test)]
+mod tests {
+    use std::fmt;
+    use std::rc::Rc;
+    use std::sync::mpsc;
+    use std::io;
+    use std::time::Duration;
+
+    use super::*;
+    use core::network::Network;
+    use core::context::*;
+    use core::{SocketId, EndpointId, Message};
+    use core::endpoint::Pipe;
+    use io_error::*;
+
+    struct TestProto;
+
+    impl Protocol for TestProto {
+        fn id(&self) -> u16 {0}
+        fn peer_id(&self) -> u16 {0}
+        fn add_pipe(&mut self, _: &mut Context, _: EndpointId, _: Pipe) {}
+        fn remove_pipe(&mut self, _: &mut Context, _: EndpointId) -> Option<Pipe> {None}
+        fn send(&mut self, _: &mut Context, _: Message, _: Option<Scheduled>) {}
+        fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {}
+        fn on_send_timeout(&mut self, _: &mut Context) {}
+        fn on_send_ready(&mut self, _: &mut Context, _: EndpointId) {}
+        fn recv(&mut self, _: &mut Context, _: Option<Scheduled>) {}
+        fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
+        fn on_recv_timeout(&mut self, _: &mut Context) {}
+        fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {}
+        fn close(&mut self, _: &mut Context) {}
+    }
+
+    struct FailingNetwork;
+
+    impl Network for FailingNetwork {
+        fn connect(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
+            Err(other_io_error("FailingNetwork can only fail"))
+        }
+        fn reconnect(&mut self, _: SocketId, _: EndpointId, _: &str, _: (u16, u16)) -> io::Result<()> {
+            Err(other_io_error("FailingNetwork can only fail"))
+        }
+        fn bind(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
+            Err(other_io_error("FailingNetwork can only fail"))
+        }
+        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &str, _: (u16, u16)) -> io::Result<()> {
+            Err(other_io_error("FailingNetwork can only fail"))
+        }
+        fn open(&mut self, _: EndpointId, _: bool) {
+        }
+        fn close(&mut self, _: EndpointId, _: bool) {
+        }
+        fn send(&mut self, _: EndpointId, _: Rc<Message>) {
+        }
+        fn recv(&mut self, _: EndpointId) {
+        }
+    }
+
+    impl Scheduler for FailingNetwork {
+        fn schedule(&mut self, _: Schedulable, _: Duration) -> io::Result<Scheduled> {
+            Err(other_io_error("FailingNetwork can only fail"))
+        }
+        fn cancel(&mut self, _: Scheduled){
+        }
+    }
+
+    impl fmt::Debug for FailingNetwork {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "FailingNetwork")
+        }
+    }
+
+    impl Context for FailingNetwork {
+        fn raise(&mut self, _: Event) {
+        }
+    }
+
+    #[test]
+    fn when_connect_fails() {
+        let id = SocketId::from(1);
+        let (tx, rx) = mpsc::channel();
+        let proto = Box::new(TestProto) as Box<Protocol>;
+        let mut network = FailingNetwork;
+        let mut socket = Socket::new(id, tx, proto);
+
+        socket.connect(&mut network, String::from("test://fake"));
+
+        let reply = rx.recv().expect("Socket should have sent a reply to the connect request");
+
+        match reply {
+            Reply::Err(_) => {},
+            _ => {
+                assert!(false, "Socket should have replied an error to the connect request");
+            },
+        }
+    }
+
+    struct WorkingNetwork(EndpointId);
+
+    impl Network for WorkingNetwork {
+        fn connect(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
+            Ok(self.0)
+        }
+        fn reconnect(&mut self, _: SocketId, _: EndpointId, _: &str, _: (u16, u16)) -> io::Result<()> {
+            Ok(())
+        }
+        fn bind(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
+            Ok(self.0)
+        }
+        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &str, _: (u16, u16)) -> io::Result<()> {
+            Ok(())
+        }
+        fn open(&mut self, _: EndpointId, _: bool) {}
+        fn close(&mut self, _: EndpointId, _: bool) {}
+        fn send(&mut self, _: EndpointId, _: Rc<Message>) {}
+        fn recv(&mut self, _: EndpointId) {}
+    }
+
+    impl Scheduler for WorkingNetwork {
+        fn schedule(&mut self, _: Schedulable, _: Duration) -> io::Result<Scheduled> {
+            Ok(Scheduled::from(0))
+        }
+        fn cancel(&mut self, _: Scheduled){
+        }
+    }
+
+    impl fmt::Debug for WorkingNetwork {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "WorkingNetwork")
+        }
+    }
+
+    impl Context for WorkingNetwork {
+        fn raise(&mut self, _: Event) {
+
+        }
+    }
+
+    #[test]
+    fn when_connect_succeeds() {
+        let id = SocketId::from(1);
+        let (tx, rx) = mpsc::channel();
+        let proto = Box::new(TestProto) as Box<Protocol>;
+        let mut network = WorkingNetwork(EndpointId::from(1));
+        let mut socket = Socket::new(id, tx, proto);
+
+        socket.connect(&mut network, String::from("test://fake"));
+
+        let reply = rx.recv().expect("Socket should have sent a reply to the connect request");
+
+        match reply {
+            Reply::Connect(eid) => {
+                assert_eq!(EndpointId::from(1), eid);
+            },
+            _ => {
+                assert!(false, "Socket should have replied an ack to the connect request");
+            },
+        }
+    }
 }

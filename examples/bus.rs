@@ -16,7 +16,7 @@ use std::io::*;
 use std::time;
 use std::thread;
 
-use scaproust::{Session, SocketType};
+use scaproust::*;
 
 fn duration_ms(ms: u64) -> time::Duration {
     time::Duration::from_millis(ms)
@@ -26,14 +26,18 @@ fn sleep_ms(ms: u64) {
     thread::sleep(duration_ms(ms));
 }
 
+fn make_timeout(ms: u64) -> Option<time::Duration> {
+    Some(duration_ms(ms))
+}
+
 fn usage(program: &str) -> ! {
     let _ = writeln!(stderr(), "Usage: {} <NODE_NAME> <URL> <URL> ...", program);
     std::process::exit(1)
 }
 
 fn node(args: Vec<&str>) {
-    let session = Session::new().expect("Failed to create session !");
-    let mut socket = session.create_socket(SocketType::Bus).expect("Failed to create socket !");
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut socket = session.create_socket::<Bus>().expect("Failed to create socket !");
 
     socket.bind(args[2]).expect("Failed to bind socket !");
     sleep_ms(100);
@@ -43,7 +47,7 @@ fn node(args: Vec<&str>) {
         }
     }
     sleep_ms(1000);
-    socket.set_recv_timeout(duration_ms(100)).expect("Failed to set recv timeout !");
+    socket.set_recv_timeout(make_timeout(100)).expect("Failed to set recv timeout !");
 
     let name = args[1];
     let buffer = From::from(name.as_bytes());

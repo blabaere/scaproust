@@ -16,7 +16,7 @@ use std::io::*;
 use std::time;
 use std::thread;
 
-use scaproust::{Session, SocketType, Socket};
+use scaproust::*;
 
 const NODE0: &'static str = "node0";
 const NODE1: &'static str = "node1";
@@ -27,6 +27,10 @@ fn duration_ms(ms: u64) -> time::Duration {
 
 fn sleep_ms(ms: u64) {
     thread::sleep(duration_ms(ms));
+}
+
+fn make_timeout(ms: u64) -> Option<time::Duration> {
+    Some(duration_ms(ms))
 }
 
 fn recv_name(socket: &mut Socket, name: &str) {
@@ -46,7 +50,7 @@ fn send_name(socket: &mut Socket, name: &str) {
 }
 
 fn send_recv(mut socket: Socket, name: &str) -> ! {
-    socket.set_recv_timeout(duration_ms(100)).expect("Failed to set recv timeout !");
+    socket.set_recv_timeout(make_timeout(100)).expect("Failed to set recv timeout !");
     loop {
         recv_name(&mut socket, name);
         sleep_ms(1000);
@@ -55,16 +59,16 @@ fn send_recv(mut socket: Socket, name: &str) -> ! {
 }
 
 fn node0(url: &str) {
-    let session = Session::new().expect("Failed to create session !");
-    let mut socket = session.create_socket(SocketType::Pair).expect("Failed to create socket !");
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut socket = session.create_socket::<Pair>().expect("Failed to create socket !");
 
     socket.bind(url).expect("Failed to bind socket !");
     send_recv(socket, NODE0);
 }
 
 fn node1(url: &str) {
-    let session = Session::new().expect("Failed to create session !");
-    let mut socket = session.create_socket(SocketType::Pair).expect("Failed to create socket !");
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut socket = session.create_socket::<Pair>().expect("Failed to create socket !");
 
     socket.connect(url).expect("Failed to connect socket !");
     send_recv(socket, NODE1);

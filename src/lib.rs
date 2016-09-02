@@ -12,50 +12,56 @@
 //! * Support for all of nanomsg's protocols.
 //! * Support for TCP and IPC transports.
 //! * Idiomatic rust API first, mimic the original C API second.
+//! * Extensibility: allow user code to define additional protocols and transports
 //!
 //! # Usage
 //!
 //! First, create a [Session](struct.Session.html) 
 //! (this will start the thread performing the actual I/O operations).  
 //! Then, use the session to create some [Socket](struct.Socket.html), 
-//! specifying the communication pattern with `[SocketType](enum.SocketType.html)`.  
+//! specifying the communication pattern.  
 //! If you want, you can now [set some options](struct.Socket.html#method.set_option), like the timeouts.  
 //! To plug the sockets, use the [connect](struct.Socket.html#method.connect) and [bind](struct.Socket.html#method.bind) socket methods.  
 //! Finally, use the socket methods [send](struct.Socket.html#method.send) and
 //! [recv](struct.Socket.html#method.recv) to exchange messages between sockets.  
-//! When in doubts, refer to the [nanomsg documentation](http://nanomsg.org/v0.8/nanomsg.7.html).  
+//! When in doubts, please refer to the [nanomsg manual](http://nanomsg.org/v1.0.0/nanomsg.7.html).  
 //!
 //! # Example
 //!
 //! ```
 //! use scaproust::*;
-//! use std::time;
+//! use std::time::Duration;
 //! 
-//! let session = Session::new().unwrap();
-//! let mut pull = session.create_socket(SocketType::Pull).unwrap();
-//! let mut push = session.create_socket(SocketType::Push).unwrap();
-//! let timeout = time::Duration::from_millis(250);
+//! let mut session = SessionBuilder::build().unwrap();
+//! let mut pull = session.create_socket::<Pull>().unwrap();
+//! let mut push = session.create_socket::<Push>().unwrap();
+//! let timeout = Duration::from_millis(250);
 //! 
-//! push.set_recv_timeout(timeout).unwrap();
+//! pull.set_recv_timeout(Some(timeout)).unwrap();
 //! pull.bind("tcp://127.0.0.1:5454").unwrap();
 //! 
-//! push.set_send_timeout(timeout).unwrap();
+//! push.set_send_timeout(Some(timeout)).unwrap();
 //! push.connect("tcp://127.0.0.1:5454").unwrap();
 //! 
 //! push.send(vec![65, 66, 67]).unwrap();
 //! let received = pull.recv().unwrap();
 //! ```
 
-
 #![crate_name = "scaproust"]
 #![doc(html_root_url = "https://blabaere.github.io/scaproust/")]
 
+
 #![feature(box_syntax)]
+#![feature(fnbox)]
+#![feature(stmt_expr_attributes)]
+
+
 #![feature(plugin)]
 #![plugin(clippy)]
 #![allow(boxed_local)]
 #![allow(bool_comparison)]
-#![allow(explicit_iter_loop)]
+#![allow(len_without_is_empty)]
+//#![allow(explicit_iter_loop)]
 
 #[macro_use]
 extern crate log;
@@ -63,74 +69,73 @@ extern crate byteorder;
 extern crate mio;
 extern crate time;
 
-mod global;
-mod event_loop_msg;
+#[doc(hidden)]
+pub mod core;
+pub mod proto;
+#[doc(hidden)]
+mod reactor;
+#[doc(hidden)]
 mod facade;
-mod core;
-mod protocol;
 mod transport;
 
-pub use facade::session::Session as Session;
-pub use facade::socket::Socket as Socket;
-pub use facade::endpoint::Endpoint as Endpoint;
-pub use facade::device::Device as Device;
-
-pub use global::SocketType;
-pub use event_loop_msg::SocketOption;
-
 #[doc(hidden)]
-pub type EventLoop = mio::EventLoop<core::session::Session>;
+mod sequence;
+#[doc(hidden)]
+mod io_error;
 
-/// Message encapsulates the messages that are exchanged back and forth.  
-/// The meaning of the header and body fields, and where the splits occur, 
-/// will vary depending on the protocol.  
-/// Note however that any headers applied by transport layers 
-/// (including TCP/ethernet headers, and SP protocol independent length headers), 
-/// are *not* included in the header.
-pub struct Message {
-    pub header: Vec<u8>,
-    pub body: Vec<u8>
-}
+pub use facade::session::SessionBuilder;
+pub use facade::session::Session;
+pub use facade::socket::Socket;
+pub use facade::device::Device;
+pub use facade::endpoint::Endpoint;
+pub use core::Message;
+pub use core::config::ConfigOption;
 
-impl Message {
-    pub fn with_body(buffer: Vec<u8>) -> Message {
-        Message {
-            header: Vec::new(),
-            body: buffer
+pub use proto::pair::Pair;
+pub use proto::publ::Pub;
+pub use proto::sub::Sub;
+pub use proto::req::Req;
+pub use proto::rep::Rep;
+pub use proto::push::Push;
+pub use proto::pull::Pull;
+pub use proto::surv::Surveyor;
+pub use proto::resp::Respondent;
+pub use proto::bus::Bus;
+
+#[cfg(test)]
+mod tests {
+    struct Editable {
+        x: usize
+    }
+    struct Editor {
+        y: usize
+    }
+    struct Outter {
+        editable: Editable,
+        editor: Editor
+    }
+    impl Editable {
+        fn edit(&mut self) { self.x += 1; }
+    }
+    impl Editor {
+        fn edit(&mut self, editable: &mut Editable) { 
+            self.y += 1; 
+            editable.edit();
+        }
+    }
+    impl Outter {
+        fn test(&mut self) {
+            self.editor.edit(&mut self.editable);
         }
     }
 
-    pub fn with_header_and_body(header: Vec<u8>, buffer: Vec<u8>) -> Message {
-        Message { header: header, body: buffer }
-    }
+    #[test]
+    fn can_pass_mutable_field_ref_to_other_field() {
+        let mut master = Outter {
+            editable: Editable { x: 0 },
+            editor: Editor { y: 0 },
+        };
 
-    pub fn len(&self) -> usize {
-        self.header.len() + self.body.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.header.is_empty() && self.body.is_empty()
-    }
-
-    pub fn get_header(&self) -> &[u8] {
-        &self.header
-    }
-
-    pub fn get_body(&self) -> &[u8] {
-        &self.body
-    }
-
-    pub fn into_buffer(self) -> Vec<u8> {
-        self.body
-    }
-
-    pub fn explode(self) -> (Vec<u8>, Vec<u8>) {
-        (self.header, self.body)
-    }
-}
-
-impl Clone for Message {
-    fn clone(&self) -> Self {
-        Message::with_header_and_body(self.header.clone(), self.body.clone())
+        master.test();
     }
 }

@@ -17,7 +17,7 @@ use std::time;
 use std::thread;
 use std::fmt;
 
-use scaproust::{Session, SocketType};
+use scaproust::*;
 
 const NODE0: &'static str = "node0";
 const NODE1: &'static str = "node1";
@@ -28,8 +28,8 @@ fn sleep_ms(ms: u64) {
 }
 
 fn node0(url: &str) {
-    let session = Session::new().expect("Failed to create session !");
-    let mut socket = session.create_socket(SocketType::Rep).expect("Failed to create socket !");
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut socket = session.create_socket::<Rep>().expect("Failed to create socket !");
 
     socket.bind(url).expect("Failed to bind socket !");
 
@@ -52,8 +52,8 @@ fn node0(url: &str) {
 }
 
 fn node1(url: &str) {
-    let session = Session::new().expect("Failed to create session !");
-    let mut socket = session.create_socket(SocketType::Req).expect("Failed to create socket !");
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut socket = session.create_socket::<Req>().expect("Failed to create socket !");
     let buffer = From::from(DATE.as_bytes());
 
     socket.connect(url).expect("Failed to connect socket !");

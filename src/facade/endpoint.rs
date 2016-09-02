@@ -4,38 +4,54 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use mio;
+use std::io;
 
-use global::*;
-use event_loop_msg::*;
+use super::*;
+use reactor;
+use core::{SocketId, EndpointId};
+use core::endpoint::Request;
+use io_error::*;
 
-/// Endpoint of a socket, obtained via the socket 
-/// [bind](struct.Socket.html#method.bind) or 
-/// [connect](struct.Socket.html#method.connect) methods.  
-/// Can only be used to shutdown an endpoint.  
-/// Note that droping an endpoint will **NOT** call shutdown.
-pub struct Endpoint {
+#[doc(hidden)]
+pub struct RequestSender {
+    req_tx: EventLoopRequestSender,
     socket_id: SocketId,
-    endpoint_id: mio::Token,
-    cmd_sender: mio::Sender<EventLoopSignal>
+    id: EndpointId
+}
+
+impl RequestSender {
+    pub fn new(tx: EventLoopRequestSender, sid: SocketId, eid: EndpointId) -> RequestSender {
+        RequestSender {
+            req_tx: tx,
+            socket_id: sid,
+            id: eid,
+        }
+    }
+    fn send(&self, req: Request) -> io::Result<()> {
+        self.req_tx.send(reactor::Request::Endpoint(self.socket_id, self.id, req)).map_err(from_send_error)
+    }
+}
+
+/// Endpoint of a socket.
+///   
+/// Obtained via the socket [bind](struct.Socket.html#method.bind) or 
+/// [connect](struct.Socket.html#method.connect) methods.  
+/// Can only be used to close an endpoint.  
+/// Note that `drop(Endpoint)` will **NOT** close it.
+pub struct Endpoint {
+    request_sender: RequestSender,
+    remote: bool
 }
 
 impl Endpoint {
-    #[doc(hidden)]
-    pub fn new(id: SocketId, tok: mio::Token, cmd_tx: mio::Sender<EventLoopSignal>) -> Endpoint {
+    pub fn new(request_tx: RequestSender, remote: bool) -> Endpoint {
         Endpoint {
-            socket_id: id,
-            endpoint_id: tok,
-            cmd_sender: cmd_tx
+            request_sender: request_tx,
+            remote: remote
         }
     }
 
-    /// Removes the endpoint from the socket it belongs to.
-    pub fn shutdown(self) {
-        let cmd = SocketCmdSignal::Shutdown(self.endpoint_id);
-        let cmd_sig = CmdSignal::Socket(self.socket_id, cmd);
-        let loop_sig = EventLoopSignal::Cmd(cmd_sig);
-
-        let _ = self.cmd_sender.send(loop_sig);
+    pub fn close(self) -> io::Result<()> {
+        self.request_sender.send(Request::Close(self.remote))
     }
 }

@@ -8,8 +8,7 @@ function test_case1 {
     $EXAMPLE_PATH/bus node1 $2 $3 $4 > /tmp/bus_tc1_node1.log & node1=$!
     $EXAMPLE_PATH/bus node2 $3 $4    > /tmp/bus_tc1_node2.log & node2=$!
     nanocat --bus --bind $4 --connect $1 --ascii --data node3 -d 2 -i 10 > /tmp/bus_tc1_node3.log & node3=$!
-    sleep 5
-    kill $node0 $node1 $node2 $node3
+    sleep 3.5 && kill $node0 $node1 $node2 $node3
     result=`sort /tmp/bus_tc1_node0.log`
     expected=`sort $COMPAT_PATH/bus_tc1_node0_expected.log`
     if [[ ! $result == $expected ]]; then

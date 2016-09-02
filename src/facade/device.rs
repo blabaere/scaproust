@@ -4,17 +4,22 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+
+use std::sync::mpsc;
 use std::io;
-use std::sync::mpsc::Receiver;
 
-use mio::Sender;
+use super::*;
+use reactor;
+use core::DeviceId;
+use core::device::{Request, Reply};
+use io_error::*;
 
-use global::*;
-use event_loop_msg::*;
-use facade::socket::*;
-
-
+/// A device to forward messages between sockets, working like a message broker.
+/// It can be used to build complex network topologies.
 pub trait Device : Send {
+    /// This function loops until it hits an error.
+    /// To break the loop and make the `run` function exit, 
+    /// drop the session that created the device.
     fn run(self: Box<Self>) -> io::Result<()>;
 }
 
@@ -24,17 +29,18 @@ pub trait Device : Send {
 /*                                                                           */
 /*****************************************************************************/
 
-pub struct RelayDevice {
-    socket: Option<Socket>
+#[doc(hidden)]
+pub struct Relay {
+    socket: Option<socket::Socket>
 }
 
-impl RelayDevice {
-    pub fn new(s: Socket) -> RelayDevice {
-        RelayDevice { socket: Some(s) }
+impl Relay {
+    pub fn new(s: socket::Socket) -> Relay {
+        Relay { socket: Some(s) }
     }
 }
 
-impl Device for RelayDevice {
+impl Device for Relay {
     fn run(mut self: Box<Self>) -> io::Result<()> {
         let mut socket = self.socket.take().unwrap();
         loop {
@@ -45,97 +51,89 @@ impl Device for RelayDevice {
 
 /*****************************************************************************/
 /*                                                                           */
-/* ONE-WAY BRIDGE DEVICE                                                     */
+/* BRIDGE DEVICE                                                             */
 /*                                                                           */
 /*****************************************************************************/
 
-pub struct OneWayDevice {
-    left: Option<Socket>,
-    right: Option<Socket>
+#[doc(hidden)]
+pub type ReplyReceiver = mpsc::Receiver<Reply>;
+
+#[doc(hidden)]
+pub struct RequestSender {
+    req_tx: EventLoopRequestSender,
+    device_id: DeviceId
 }
 
-impl OneWayDevice {
-    pub fn new(l: Socket, r: Socket) -> OneWayDevice {
-        OneWayDevice {
-            left: Some(l),
-            right: Some(r)
+impl RequestSender {
+    pub fn new(tx: EventLoopRequestSender, id: DeviceId) -> RequestSender {
+        RequestSender {
+            req_tx: tx,
+            device_id: id
         }
+    }
+    fn send(&self, req: Request) -> io::Result<()> {
+        self.req_tx.send(reactor::Request::Device(self.device_id, req)).map_err(from_send_error)
     }
 }
 
-impl Device for OneWayDevice {
+#[doc(hidden)]
+pub struct Bridge {
+    request_sender: RequestSender,
+    reply_receiver: ReplyReceiver,
+    left: Option<socket::Socket>,
+    right: Option<socket::Socket>
+}
+
+impl Bridge {
+    pub fn new(
+        request_tx: RequestSender, 
+        reply_rx: ReplyReceiver,
+        left: socket::Socket,
+        right: socket::Socket) -> Bridge {
+
+        Bridge {
+            request_sender: request_tx,
+            reply_receiver: reply_rx,
+            left: Some(left),
+            right: Some(right)
+        }
+    }
+
+    fn execute_request(&self, request: Request) -> io::Result<Reply> {
+        self.send_request(request).and_then(|_| self.recv_reply())
+    }
+
+    fn send_request(&self, request: Request) -> io::Result<()> {
+        self.request_sender.send(request)
+    }
+
+    fn recv_reply(&self) -> io::Result<Reply> {
+        self.reply_receiver.receive()
+    }
+}
+
+impl Device for Bridge {
     fn run(mut self: Box<Self>) -> io::Result<()> {
         let mut left = self.left.take().unwrap();
         let mut right = self.right.take().unwrap();
 
         loop {
-            try!(left.forward_msg(&mut right))
-        }
-    }
-}
+            let reply = try!(self.execute_request(Request::Check));
 
-/*****************************************************************************/
-/*                                                                           */
-/* TWO-WAY BRIDGE DEVICE                                                     */
-/*                                                                           */
-/*****************************************************************************/
-
-pub struct TwoWayDevice {
-    id: ProbeId,
-    cmd_sender: Sender<EventLoopSignal>,
-    evt_receiver: Receiver<ProbeNotify>,
-    left: Option<Socket>,
-    right: Option<Socket>
-}
-
-impl TwoWayDevice {
-    pub fn new(id: ProbeId, cmd_tx: Sender<EventLoopSignal>, evt_tx: Receiver<ProbeNotify>, l: Socket, r: Socket) -> TwoWayDevice {
-        TwoWayDevice {
-            id: id,
-            cmd_sender: cmd_tx,
-            evt_receiver: evt_tx,
-            left: Some(l),
-            right: Some(r)
-        }
-    }
-
-    fn send_cmd(&self, cmd: ProbeCmdSignal) -> Result<(), io::Error> {
-        let cmd_sig = CmdSignal::Probe(self.id, cmd);
-        let loop_sig = EventLoopSignal::Cmd(cmd_sig);
-
-        self.cmd_sender.send(loop_sig).map_err(convert_notify_err)
-    }
-}
-
-impl Device for TwoWayDevice {
-    fn run(mut self: Box<Self>) -> io::Result<()> {
-        let mut left = self.left.take().unwrap();
-        let mut right = self.right.take().unwrap();
-
-        try!(self.send_cmd(ProbeCmdSignal::PollReadable));
-
-        loop {
-            match self.evt_receiver.recv() {
-                Ok(ProbeNotify::Ok(l, r)) => {
+            match reply {
+                Reply::Check(l, r) => {
                     if l {
-                        try!(left.forward_msg(&mut right));
+                        try!(forward_msg(&mut left, &mut right));
                     }
                     if r {
-                        try!(right.forward_msg(&mut left));
+                        try!(forward_msg(&mut right, &mut left));
                     }
                 }
-                Err(_) => return Err(other_io_error("evt channel closed")),
-            };
+            }
         }
     }
 }
 
-impl Drop for TwoWayDevice {
-    fn drop(&mut self) {
-        let cmd = SessionCmdSignal::DestroyProbe(self.id);
-        let cmd_sig = CmdSignal::Session(cmd);
-        let loop_sig = EventLoopSignal::Cmd(cmd_sig);
-
-        let _ = self.cmd_sender.send(loop_sig);
-    }
+fn forward_msg(from: &mut socket::Socket, to: &mut socket::Socket) -> io::Result<()> {
+    from.recv_msg().and_then(|msg| to.send_msg(msg))
 }

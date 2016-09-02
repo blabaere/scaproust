@@ -17,7 +17,7 @@ use std::time;
 use std::thread;
 use std::fmt;
 
-use scaproust::{Session, SocketType, SocketOption};
+use scaproust::*;
 
 const SERVER: &'static str = "server";
 const CLIENT: &'static str = "client";
@@ -27,8 +27,8 @@ fn sleep_ms(ms: u64) {
 }
 
 fn server(url: &str) {
-    let session = Session::new().expect("Failed to create session !");
-    let mut socket = session.create_socket(SocketType::Pub).expect("Failed to create socket !");
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut socket = session.create_socket::<Pub>().expect("Failed to create socket !");
 
     socket.bind(url).expect("Failed to bind socket !");
     loop {
@@ -44,10 +44,10 @@ fn server(url: &str) {
 }
 
 fn client(url: &str, name: &str) {
-    let session = Session::new().expect("Failed to create session !");
-    let mut socket = session.create_socket(SocketType::Sub).expect("Failed to create socket !");
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut socket = session.create_socket::<Sub>().expect("Failed to create socket !");
 
-    socket.set_option(SocketOption::Subscribe("".to_string())).expect("Failed to subscribe !");
+    socket.set_option(ConfigOption::Subscribe("".to_string())).expect("Failed to subscribe !");
     socket.connect(url).expect("Failed to connect socket !");
 
     loop {

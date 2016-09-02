@@ -16,7 +16,7 @@ use std::io::*;
 use std::time;
 use std::thread;
 
-use scaproust::{Session, SocketType};
+use scaproust::*;
 
 const SERVER: &'static str = "server";
 const CLIENT: &'static str = "client";
@@ -27,8 +27,8 @@ fn sleep_ms(ms: u64) {
 }
 
 fn server(url: &str) {
-    let session = Session::new().expect("Failed to create session !");
-    let mut socket = session.create_socket(SocketType::Surveyor).expect("Failed to create socket !");
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut socket = session.create_socket::<Surveyor>().expect("Failed to create socket !");
     let buffer = From::from(DATE.as_bytes());
 
     println!("SERVER: SENDING DATE SURVEY REQUEST");
@@ -53,8 +53,8 @@ fn server(url: &str) {
 }
 
 fn client(url: &str, name: &str) {
-    let session = Session::new().expect("Failed to create session !");
-    let mut socket = session.create_socket(SocketType::Respondent).expect("Failed to create socket !");
+    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut socket = session.create_socket::<Respondent>().expect("Failed to create socket !");
 
     socket.connect(url).expect("Failed to connect socket !");
 
