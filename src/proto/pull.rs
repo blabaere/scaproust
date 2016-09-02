@@ -11,7 +11,7 @@ use std::sync::mpsc::Sender;
 use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
-use core::context::Context;
+use core::context::{Context, Event};
 use super::priolist::Priolist;
 use super::{Timeout, PUSH, PULL};
 use io_error::*;
@@ -203,7 +203,10 @@ impl State {
 
         match self {
             State::RecvOnHold(timeout) => State::Idle.recv(ctx, inner, timeout),
-            any => any
+            any => {
+                ctx.raise(Event::CanRecv);
+                any
+            }
         }
     }
 }

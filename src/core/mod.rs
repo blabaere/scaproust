@@ -10,6 +10,7 @@ pub mod config;
 pub mod socket;
 pub mod session;
 pub mod endpoint;
+pub mod device;
 
 use std::fmt;
 
@@ -77,6 +78,27 @@ impl fmt::Debug for SocketId {
 impl From<usize> for SocketId {
     fn from(value: usize) -> SocketId {
         SocketId(value)
+    }
+}
+
+/*****************************************************************************/
+/*                                                                           */
+/* DeviceId                                                                  */
+/*                                                                           */
+/*****************************************************************************/
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct DeviceId(usize);
+
+impl fmt::Debug for DeviceId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<usize> for DeviceId {
+    fn from(value: usize) -> DeviceId {
+        DeviceId(value)
     }
 }
 

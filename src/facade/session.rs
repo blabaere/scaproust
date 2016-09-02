@@ -28,8 +28,11 @@ impl RequestSender {
     fn new(tx: EventLoopRequestSender) -> RequestSender {
         RequestSender { req_tx: tx }
     }
-    fn child_sender(&self, socket_id: core::SocketId) -> socket::RequestSender {
+    fn socket_sender(&self, socket_id: core::SocketId) -> socket::RequestSender {
         socket::RequestSender::new(self.req_tx.clone(), socket_id)
+    }
+    fn device_sender(&self, device_id: core::DeviceId) -> device::RequestSender {
+        device::RequestSender::new(self.req_tx.clone(), device_id)
     }
     fn send(&self, req: Request) -> io::Result<()> {
         self.req_tx.send(reactor::Request::Session(req)).map_err(from_send_error)
@@ -95,7 +98,7 @@ impl Session {
     fn on_create_socket_reply(&self, reply: Reply) -> io::Result<socket::Socket> {
         match reply {
             Reply::SocketCreated(id, rx) => {
-                let sender = self.request_sender.child_sender(id);
+                let sender = self.request_sender.socket_sender(id);
                 let sock = socket::Socket::new(sender, rx);
                 
                 Ok(sock)
@@ -114,6 +117,26 @@ impl Session {
     pub fn create_relay_device(&self, socket: socket::Socket) -> io::Result<Box<device::Device>> {
         Ok(box device::Relay::new(socket))
     }
+
+    pub fn create_bridge_device(&mut self, left: socket::Socket, right: socket::Socket) -> io::Result<Box<device::Device>> {
+        let request = Request::CreateDevice(left.id(), right.id());
+
+        self.call(request, |reply| self.on_create_device_reply(reply, left, right))
+    }
+
+    fn on_create_device_reply(&self, reply: Reply, left: socket::Socket, right: socket::Socket) -> io::Result<Box<device::Device>> {
+        match reply {
+            Reply::DeviceCreated(id, rx) => {
+                let sender = self.request_sender.device_sender(id);
+                let bridge = device::Bridge::new(sender, rx, left, right);
+                
+                Ok(box bridge)
+            },
+            Reply::Err(e) => Err(e),
+            _ => self.unexpected_reply()
+        }
+    }
+
 
 /*****************************************************************************/
 /*                                                                           */

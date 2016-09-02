@@ -12,7 +12,7 @@ use mio::{Token, Ready, PollOpt};
 use mio::timer::{Timer, Builder};
 use mio::channel::{Receiver};
 
-use core::{SocketId, EndpointId, session, socket, context};
+use core::{SocketId, EndpointId, DeviceId, session, socket, context, device};
 use transport::{pipe, acceptor};
 use super::{Signal, Request, Task};
 use super::event_loop::{EventLoop, EventHandler};
@@ -110,6 +110,7 @@ impl Dispatcher {
         match request {
             Request::Session(req) => self.process_session_request(el, req),
             Request::Socket(id, req) => self.process_socket_request(el, id, req),
+            Request::Device(id, req) => self.process_device_request(el, id, req),
             _ => {}
         }
     }
@@ -173,8 +174,12 @@ impl Dispatcher {
     fn process_session_request(&mut self, el: &mut EventLoop, request: session::Request) {
         match request {
             session::Request::CreateSocket(ctor) => self.sockets.add_socket(ctor),
-            session::Request::Shutdown => el.shutdown(),
-            _ => {}
+            session::Request::CreateDevice(l, r) => {
+                self.apply_on_socket(l, |socket, ctx| socket.on_device_plugged(ctx));
+                self.apply_on_socket(r, |socket, ctx| socket.on_device_plugged(ctx));
+                self.sockets.add_device(l, r);
+            },
+            session::Request::Shutdown => el.shutdown()
         }
     }
     fn process_socket_request(&mut self, _: &mut EventLoop, id: SocketId, request: socket::Request) {
@@ -186,6 +191,13 @@ impl Dispatcher {
             socket::Request::SetOption(x) => self.apply_on_socket(id, |socket, ctx| socket.set_option(ctx, x)),
             socket::Request::Close        => self.apply_on_socket(id, |socket, ctx| socket.close(ctx)),
         }
+    }
+    fn process_device_request(&mut self, _: &mut EventLoop, id: DeviceId, request: device::Request) {
+        match request {
+            device::Request::Check => self.apply_on_device(id, |device| device.check()),
+            _ => {}
+        }
+        
     }
 
 /*****************************************************************************/
@@ -231,8 +243,8 @@ impl Dispatcher {
 
     fn process_socket_evt(&mut self, _: &mut EventLoop, sid: SocketId, evt: context::Event) {
         match evt {
+            context::Event::CanRecv => self.apply_on_device_link(sid, |device| device.on_socket_can_recv(sid)),
             context::Event::CanSend => {},
-            context::Event::CanRecv => {},
             context::Event::Closed => self.sockets.remove_socket(sid)
         }
     }
@@ -248,6 +260,20 @@ impl Dispatcher {
                 &mut self.timer);
 
             f(socket, &mut ctx);
+        }
+    }
+
+    fn apply_on_device<F>(&mut self, id: DeviceId, f: F) 
+    where F : FnOnce(&mut device::Device) {
+        if let Some(device) = self.sockets.get_device_mut(id) {
+            f(device);
+        }
+    }
+
+    fn apply_on_device_link<F>(&mut self, id: SocketId, f: F) 
+    where F : FnOnce(&mut device::Device) {
+        if let Some(device) = self.sockets.find_device_mut(id) {
+            f(device);
         }
     }
 }

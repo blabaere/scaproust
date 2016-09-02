@@ -11,7 +11,7 @@ use std::sync::mpsc::Sender;
 use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
-use core::context::Context;
+use core::context::{Context, Event};
 use super::priolist::Priolist;
 use super::{Timeout, REQ, REP};
 use io_error::*;
@@ -125,6 +125,9 @@ impl Protocol for Rep {
     }
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
+    }
+    fn on_device_plugged(&mut self, _: &mut Context) {
+        self.inner.is_device_item = true;
     }
     fn close(&mut self, ctx: &mut Context) {
         self.inner.close(ctx)
@@ -242,7 +245,10 @@ impl State {
 
         match self {
             State::RecvOnHold(timeout) => State::Idle.recv(ctx, inner, timeout),
-            any => any
+            any => {
+                ctx.raise(Event::CanRecv);
+                any
+            }
         }
     }
 }

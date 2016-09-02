@@ -71,6 +71,7 @@ pub trait Protocol {
     }
     fn on_timer_tick(&mut self, _: &mut Context, _: Schedulable) {
     }
+    fn on_device_plugged(&mut self, _: &mut Context) {}
     fn close(&mut self, ctx: &mut Context);
 }
 
@@ -385,6 +386,10 @@ impl Socket {
 
     pub fn on_timer_tick(&mut self, ctx: &mut Context, task: Schedulable) {
         self.protocol.on_timer_tick(ctx, task)
+    }
+
+    pub fn on_device_plugged(&mut self, ctx: &mut Context) {
+        self.protocol.on_device_plugged(ctx)
     }
 
     pub fn close(&mut self, ctx: &mut Context) {

@@ -18,7 +18,7 @@ use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::config::ConfigOption;
 use core::endpoint::Pipe;
-use core::context::{Context, Schedulable};
+use core::context::{Context, Schedulable, Event};
 use super::priolist::Priolist;
 use super::{Timeout, SURVEYOR, RESPONDENT};
 use io_error::*;
@@ -147,6 +147,9 @@ impl Protocol for Surveyor {
             _ => ()
         }
     }
+    fn on_device_plugged(&mut self, _: &mut Context) {
+        self.inner.is_device_item = true;
+    }
     fn close(&mut self, ctx: &mut Context) {
         self.inner.close(ctx)
     }
@@ -259,9 +262,13 @@ impl State {
     }
     fn on_recv_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_recv_ready(eid);
+
         match self {
             State::RecvOnHold(p, timeout) => State::Active(p).recv(ctx, inner, timeout),
-            any => any
+            any => {
+                ctx.raise(Event::CanRecv);
+                any
+            }
         }
     }
     fn on_survey_timeout(self, _: &mut Context, _: &mut Inner) -> State {

@@ -9,7 +9,7 @@ mod event_loop;
 mod bus;
 mod adapter;
 
-use core::{SocketId, EndpointId, context, session, socket, endpoint};
+use core::{SocketId, EndpointId, DeviceId, context, session, socket, endpoint, device};
 use transport::{pipe, acceptor};
 
 /// Commands and events flowing between the controller and transport or core components.
@@ -27,11 +27,10 @@ pub enum Request {
     Session(session::Request),
     Socket(SocketId, socket::Request),
     Endpoint(SocketId, EndpointId, endpoint::Request),
+    Device(DeviceId, device::Request),
     Shutdown
 }
 
 pub enum Task {
     Socket(SocketId, context::Schedulable)
 }
-// If there are more tasks to  schedule than core::context::Schedulable
-// A 'Task' enum should go there and follow the design of Signal

@@ -18,7 +18,7 @@ use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::config::ConfigOption;
 use core::endpoint::Pipe;
-use core::context::{Context, Schedulable};
+use core::context::{Context, Schedulable, Event};
 use super::priolist::Priolist;
 use super::{Timeout, REQ, REP};
 use io_error::*;
@@ -148,6 +148,9 @@ impl Protocol for Req {
             },
             _ => ()
         }
+    }
+    fn on_device_plugged(&mut self, _: &mut Context) {
+        self.inner.is_device_item = true;
     }
     fn close(&mut self, ctx: &mut Context) {
         self.inner.close(ctx)
@@ -300,7 +303,10 @@ impl State {
                     State::RecvOnHold(p, timeout)
                 }
             },
-            any => any
+            any => {
+                ctx.raise(Event::CanRecv);
+                any
+            }
         }
     }
     fn on_retry_timeout(self, ctx: &mut Context, inner: &mut Inner) -> State {

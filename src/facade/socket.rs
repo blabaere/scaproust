@@ -51,6 +51,10 @@ impl Socket {
         }
     }
 
+    pub fn id(&self) -> SocketId {
+        self.request_sender.socket_id
+    }
+
 /*****************************************************************************/
 /*                                                                           */
 /* connect                                                                   */
