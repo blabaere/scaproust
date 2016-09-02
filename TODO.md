@@ -1,3 +1,6 @@
+### Urgent
+- Activate back integration tests when stainless is fixed
+
 ### Improvements
 - Close endpoint
 - Recv max buffer size
@@ -23,9 +26,13 @@
 - Document contribution mode
 - AUTOMATE ALL THE THINGS !!! (compat test, benchmark ...)
 - Change copyright header to mention 'authors' and the AUTHORS file
+- Check [travis-cargo](https://github.com/huonw/travis-cargo)
+- Adds some coverage to the build
 
 
 ### Things to look at
+
+https://pascalhertleif.de/artikel/good-practices-for-writing-rust-libraries/
 
 https://github.com/tokio-rs
 **mioco now has a timeout feature !**  
