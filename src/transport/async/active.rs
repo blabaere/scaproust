@@ -164,9 +164,9 @@ mod tests {
         assert_eq!(&edge, poll_opt);
 
         assert_eq!(1, ctx.get_raised_events().len());
-        let ref evt = ctx.get_raised_events()[0];
-        let is_opened = match evt {
-            &pipe::Event::Opened => true,
+        let evt = &ctx.get_raised_events()[0];
+        let is_opened = match *evt {
+            pipe::Event::Opened => true,
             _ => false,
         };
 
@@ -201,9 +201,9 @@ mod tests {
         assert_eq!("Active", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
 
-        let ref evt = ctx.get_raised_events()[0];
-        let is_sent = match evt {
-            &pipe::Event::Sent => true,
+        let evt = &ctx.get_raised_events()[0];
+        let is_sent = match *evt {
+            pipe::Event::Sent => true,
             _ => false,
         };
 
@@ -233,9 +233,9 @@ mod tests {
         assert_eq!("Active", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
 
-        let ref evt = ctx.get_raised_events()[0];
-        let is_sent = match evt {
-            &pipe::Event::Sent => true,
+        let evt = &ctx.get_raised_events()[0];
+        let is_sent = match *evt {
+            pipe::Event::Sent => true,
             _ => false,
         };
 
@@ -254,9 +254,9 @@ mod tests {
         assert_eq!("Active", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
 
-        let ref evt = ctx.get_raised_events()[0];
-        let is_can_send = match evt {
-            &pipe::Event::CanSend => true,
+        let evt = &ctx.get_raised_events()[0];
+        let is_can_send = match *evt {
+            pipe::Event::CanSend => true,
             _ => false,
         };
 
@@ -292,9 +292,9 @@ mod tests {
         assert_eq!("Dead", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
 
-        let ref evt = ctx.get_raised_events()[0];
-        let is_error = match evt {
-            &pipe::Event::Error(_) => true,
+        let evt = &ctx.get_raised_events()[0];
+        let is_error = match *evt {
+            pipe::Event::Error(_) => true,
             _ => false,
         };
 

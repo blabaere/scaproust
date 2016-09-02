@@ -90,13 +90,13 @@ impl Registrar for EventLoop {
 /*****************************************************************************/
 
 impl PipeController {
-    pub fn ready<'a, 'b>(&mut self, registrar: &'a mut Registrar, signal_bus: &'b mut EventLoopBus<Signal>, events: Ready) {
+    pub fn ready(&mut self, registrar: &mut Registrar, signal_bus: &mut EventLoopBus<Signal>, events: Ready) {
         let mut ctx = self.create_context(registrar, signal_bus);
 
         self.pipe.ready(&mut ctx, events);
     }
 
-    pub fn process<'a, 'b>(&mut self, registrar: &'a mut Registrar, signal_bus: &'b mut EventLoopBus<Signal>, cmd: pipe::Command) {
+    pub fn process(&mut self, registrar: &mut Registrar, signal_bus: &mut EventLoopBus<Signal>, cmd: pipe::Command) {
         let mut ctx = self.create_context(registrar, signal_bus);
 
         match cmd {
@@ -118,13 +118,13 @@ impl PipeController {
 }
 
 impl AcceptorController {
-    pub fn ready<'a, 'b>(&mut self, registrar: &'a mut Registrar, signal_bus: &'b mut EventLoopBus<Signal>, events: Ready) {
+    pub fn ready(&mut self, registrar: &mut Registrar, signal_bus: &mut EventLoopBus<Signal>, events: Ready) {
         let mut ctx = self.create_context(registrar, signal_bus);
 
         self.acceptor.ready(&mut ctx, events);
     }
 
-    pub fn process<'a, 'b>(&mut self, registrar: &'a mut Registrar, signal_bus: &'b mut EventLoopBus<Signal>, cmd: acceptor::Command) {
+    pub fn process(&mut self, registrar: &mut Registrar, signal_bus: &mut EventLoopBus<Signal>, cmd: acceptor::Command) {
         let mut ctx = self.create_context(registrar, signal_bus);
 
         match cmd {
@@ -152,7 +152,7 @@ impl EndpointCollection {
         }
     }
 
-    pub fn get_pipe_mut<'a>(&'a mut self, eid: EndpointId) -> Option<&'a mut PipeController> {
+    pub fn get_pipe_mut(&mut self, eid: EndpointId) -> Option<&mut PipeController> {
         self.pipes.get_mut(&eid)
     }
 
@@ -178,7 +178,7 @@ impl EndpointCollection {
         self.pipes.remove(&eid);
     }
 
-    pub fn get_acceptor_mut<'a>(&'a mut self, eid: EndpointId) -> Option<&'a mut AcceptorController> {
+    pub fn get_acceptor_mut(&mut self, eid: EndpointId) -> Option<&mut AcceptorController> {
         self.acceptors.get_mut(&eid)
     }
 
@@ -304,23 +304,21 @@ impl<'a> Network for SocketEventLoopContext<'a> {
 
         Ok(eid)
     }
-    fn reconnect(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> io::Result<()> {
-        let pipe = try!(self.connect(url, pids));
-        let void = self.endpoints.insert_pipe_controller(sid, eid, pipe);
-        
-        Ok(void)
-    }
     fn bind(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
         let acceptor = try!(self.bind(url, pids));
         let eid = self.endpoints.insert_acceptor(sid, acceptor);
 
         Ok(eid)
     }
+    fn reconnect(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> io::Result<()> {
+        let pipe = try!(self.connect(url, pids));
+
+        Ok(self.endpoints.insert_pipe_controller(sid, eid, pipe))
+    }
     fn rebind(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> io::Result<()> {
         let acceptor = try!(self.bind(url, pids));
-        let void = self.endpoints.insert_acceptor_controller(sid, eid, acceptor);
 
-        Ok(void)
+        Ok(self.endpoints.insert_acceptor_controller(sid, eid, acceptor))
     }
     fn open(&mut self, endpoint_id: EndpointId, remote: bool) {
         if remote {

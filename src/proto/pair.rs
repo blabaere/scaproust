@@ -134,7 +134,7 @@ impl State {
         match *self {
             State::Idle             => "Idle",
             State::Sending(_, _, _) => "Sending",
-            State::SendOnHold(_, _) => "Sending",
+            State::SendOnHold(_, _) => "SendOnHold",
             State::Receiving(_, _)  => "Receiving",
             State::RecvOnHold(_)    => "RecvOnHold"
         }
@@ -265,7 +265,7 @@ impl Inner {
             }
         }
 
-        return None
+        None
     }
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>) -> Option<EndpointId> {
         if self.send_ready == false {

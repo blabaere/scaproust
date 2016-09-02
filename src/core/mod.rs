@@ -108,6 +108,7 @@ impl From<usize> for DeviceId {
 /*                                                                           */
 /*****************************************************************************/
 
+#[derive(Default)]
 pub struct Message {
     pub header: Vec<u8>,
     pub body: Vec<u8>

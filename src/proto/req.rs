@@ -142,11 +142,8 @@ impl Protocol for Req {
         }
     }
     fn on_timer_tick(&mut self, ctx: &mut Context, task: Schedulable) {
-        match task {
-            Schedulable::ReqResend => {
-                self.apply(ctx, |s, ctx, inner| s.on_retry_timeout(ctx, inner))
-            },
-            _ => ()
+        if let Schedulable::ReqResend = task {
+            self.apply(ctx, |s, ctx, inner| s.on_retry_timeout(ctx, inner))
         }
     }
     fn on_device_plugged(&mut self, _: &mut Context) {
@@ -287,7 +284,7 @@ impl State {
     }
     fn on_recv_timeout(self, ctx: &mut Context, inner: &mut Inner) -> State {
         match self {
-            State::Receiving(p, _) => inner.on_recv_timeout(ctx, p.retry_timeout),
+            State::Receiving(p, _) |
             State::RecvOnHold(p, _) => inner.on_recv_timeout(ctx, p.retry_timeout),
             _ => {}
         }
@@ -344,7 +341,7 @@ impl Inner {
         self.pipes.remove(&eid)
     }
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>) -> Option<EndpointId> {
-        self.lb.next().map_or(None, |eid| self.send_to(ctx, msg, eid))
+        self.lb.pop().map_or(None, |eid| self.send_to(ctx, msg, eid))
     }
     fn send_to(&mut self, ctx: &mut Context, msg: Rc<Message>, eid: EndpointId) -> Option<EndpointId> {
         self.pipes.get_mut(&eid).map_or(None, |pipe| {

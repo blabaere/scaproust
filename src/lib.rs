@@ -50,14 +50,17 @@
 #![crate_name = "scaproust"]
 #![doc(html_root_url = "https://blabaere.github.io/scaproust/")]
 
+
 #![feature(box_syntax)]
 #![feature(fnbox)]
 #![feature(stmt_expr_attributes)]
 
-//#![feature(plugin)]
-//#![plugin(clippy)]
-//#![allow(boxed_local)]
-//#![allow(bool_comparison)]
+
+#![feature(plugin)]
+#![plugin(clippy)]
+#![allow(boxed_local)]
+#![allow(bool_comparison)]
+#![allow(len_without_is_empty)]
 //#![allow(explicit_iter_loop)]
 
 #[macro_use]

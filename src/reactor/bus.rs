@@ -28,7 +28,7 @@ impl<T> EventLoopBus<T> {
     }
 
     pub fn send(&mut self, t: T) {
-        if self.queue.len() == 0 {
+        if self.queue.is_empty() {
             self.set_readiness(Ready::readable());
         }
 
@@ -58,7 +58,7 @@ impl<T> Evented for EventLoopBus<T> {
 
         let (registration, readiness) = Registration::new(poll, token, interest, opts);
 
-        if self.queue.len() > 0 {
+        if self.queue.is_empty() == false {
             let _ = readiness.set_readiness(Ready::readable());
         }
 

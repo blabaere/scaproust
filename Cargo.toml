@@ -21,12 +21,12 @@ log = "0.3.6"
 byteorder = "0.5.3"
 time = "0.1.35"
 clippy = "*"
-mio = { git = "https://github.com/carllerche/mio", rev = "ce5d4fb5cde330c8486ddf3d91142ac03134c6d7" }
+mio = "0.6.0"
 
 [dev-dependencies]
 env_logger = "0.3.4"
 stainless = "*"
 
-[[test]]
-name = "test"
-path = "test/test.rs"
+#[[test]]
+#name = "test"
+#path = "test/test.rs"

@@ -305,7 +305,7 @@ impl Inner {
     }
 
     fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
-        self.fq.next().map_or(None, |eid| self.recv_from(ctx, eid))
+        self.fq.pop().map_or(None, |eid| self.recv_from(ctx, eid))
     }
     fn recv_from(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointId> {
         self.pipes.get_mut(&eid).map_or(None, |pipe| {

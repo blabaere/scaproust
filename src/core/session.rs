@@ -69,7 +69,7 @@ impl Session {
         self.send_reply(Reply::SocketCreated(id, rx));
     }
 
-    pub fn get_socket_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut socket::Socket> {
+    pub fn get_socket_mut(&mut self, id: SocketId) -> Option<&mut socket::Socket> {
         self.sockets.get_socket_mut(id)
     }
 
@@ -90,11 +90,11 @@ impl Session {
         self.send_reply(Reply::DeviceCreated(id, rx));
     }
 
-    pub fn get_device_mut<'a>(&'a mut self, id: DeviceId) -> Option<&'a mut device::Device> {
+    pub fn get_device_mut(&mut self, id: DeviceId) -> Option<&mut device::Device> {
         self.devices.get_device_mut(id)
     }
 
-    pub fn find_device_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut device::Device> {
+    pub fn find_device_mut(&mut self, id: SocketId) -> Option<&mut device::Device> {
         self.devices.find_device_mut(id)
     }
 
@@ -120,7 +120,7 @@ impl SocketCollection {
         id
     }
 
-    fn get_socket_mut<'a>(&'a mut self, id: SocketId) -> Option<&'a mut socket::Socket> {
+    fn get_socket_mut(&mut self, id: SocketId) -> Option<&mut socket::Socket> {
         self.sockets.get_mut(&id)
     }
 
@@ -149,11 +149,11 @@ impl DeviceCollection {
         id
     }
 
-    fn get_device_mut<'a>(&'a mut self, id: DeviceId) -> Option<&'a mut device::Device> {
+    fn get_device_mut(&mut self, id: DeviceId) -> Option<&mut device::Device> {
         self.devices.get_mut(&id)
     }
 
-    fn find_device_mut<'a>(&'a mut self, sid: SocketId) -> Option<&'a mut device::Device> {
+    fn find_device_mut(&mut self, sid: SocketId) -> Option<&mut device::Device> {
         if let Some(did) = self.mapping.get(&sid) {
             self.devices.get_mut(did)
         } else {

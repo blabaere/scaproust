@@ -140,11 +140,8 @@ impl Protocol for Surveyor {
         }
     }
     fn on_timer_tick(&mut self, ctx: &mut Context, task: Schedulable) {
-        match task {
-            Schedulable::SurveyCancel => {
-                self.apply(ctx, |s, ctx, inner| s.on_survey_timeout(ctx, inner))
-            },
-            _ => ()
+        if let Schedulable::SurveyCancel = task {
+            self.apply(ctx, |s, ctx, inner| s.on_survey_timeout(ctx, inner))
         }
     }
     fn on_device_plugged(&mut self, _: &mut Context) {
@@ -255,7 +252,7 @@ impl State {
         inner.on_recv_timeout();
 
         match self {
-            State::Receiving(_, p, _) => State::Active(p),
+            State::Receiving(_, p, _) |
             State::RecvOnHold(p, _)   => State::Active(p),
             _ => State::Idle
         }
@@ -328,7 +325,7 @@ impl Inner {
     }
 
     fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
-        self.fq.next().map_or(None, |eid| self.recv_from(ctx, eid))
+        self.fq.pop().map_or(None, |eid| self.recv_from(ctx, eid))
     }
     fn recv_from(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointId> {
         self.pipes.get_mut(&eid).map_or(None, |pipe| {

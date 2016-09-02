@@ -91,7 +91,7 @@ impl Socket {
             protocol: proto,
             pipes: HashMap::new(),
             acceptors: HashMap::new(),
-            config: Config::new()
+            config: Config::default()
         }
     }
 
@@ -322,7 +322,7 @@ impl Socket {
     }
 
     fn get_send_timeout(&self) -> Option<Duration> {
-        self.config.send_timeout.clone()
+        self.config.send_timeout
     }
 
     pub fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
@@ -357,7 +357,7 @@ impl Socket {
     }
 
     fn get_recv_timeout(&self) -> Option<Duration> {
-        self.config.recv_timeout.clone()
+        self.config.recv_timeout
     }
 
     pub fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
@@ -402,7 +402,7 @@ impl Socket {
 
         self.protocol.close(ctx);
 
-        let _ = ctx.raise(Event::Closed);
+        ctx.raise(Event::Closed);
     }
 }
 

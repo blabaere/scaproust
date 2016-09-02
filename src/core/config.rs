@@ -77,8 +77,8 @@ pub enum ConfigOption {
     SurveyDeadline(Duration)
 }
 
-impl Config {
-    pub fn new() -> Config {
+impl Default for Config {
+    fn default() -> Config {
         Config {
             send_timeout: None,
             send_priority: 8,
@@ -88,7 +88,9 @@ impl Config {
             retry_ivl_max: None
         }
     }
+}
 
+impl Config {
     pub fn set(&mut self, cfg_opt: ConfigOption) -> Result<()> {
         match cfg_opt {
             ConfigOption::SendTimeout(timeout) => self.send_timeout = timeout,

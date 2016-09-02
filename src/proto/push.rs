@@ -226,7 +226,7 @@ impl Inner {
         self.pipes.remove(&eid)
     }
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>) -> Option<EndpointId> {
-        self.lb.next().map_or(None, |eid| self.send_to(ctx, msg, eid))
+        self.lb.pop().map_or(None, |eid| self.send_to(ctx, msg, eid))
     }
     fn send_to(&mut self, ctx: &mut Context, msg: Rc<Message>, eid: EndpointId) -> Option<EndpointId> {
         self.pipes.get_mut(&eid).map_or(None, |pipe| {

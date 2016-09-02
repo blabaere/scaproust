@@ -141,7 +141,7 @@ impl Dispatcher {
             context::Schedulable::Rebind(spec)    => self.apply_on_socket(sid, |socket, ctx| socket.rebind(ctx, spec)),
             context::Schedulable::SendTimeout     => self.apply_on_socket(sid, |socket, ctx| socket.on_send_timeout(ctx)),
             context::Schedulable::RecvTimeout     => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_timeout(ctx)),
-            other @ _                             => self.apply_on_socket(sid, |socket, ctx| socket.on_timer_tick(ctx, other))
+            other                                 => self.apply_on_socket(sid, |socket, ctx| socket.on_timer_tick(ctx, other))
         }
     }
 
@@ -193,11 +193,9 @@ impl Dispatcher {
         }
     }
     fn process_device_request(&mut self, _: &mut EventLoop, id: DeviceId, request: device::Request) {
-        match request {
-            device::Request::Check => self.apply_on_device(id, |device| device.check()),
-            _ => {}
+        if let device::Request::Check = request { 
+            self.apply_on_device(id, |device| device.check()) 
         }
-        
     }
 
 /*****************************************************************************/

@@ -20,7 +20,7 @@ pub struct EventLoop {
 
 impl EventLoop {
     pub fn new() -> io::Result<EventLoop> {
-        let evts = Events::new();
+        let evts = Events::with_capacity(1024);
         let poll = try!(Poll::new());
         let event_loop = EventLoop {
             events_poller: poll,

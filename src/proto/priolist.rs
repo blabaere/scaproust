@@ -148,7 +148,7 @@ impl Priolist {
         self.items[index].active = active;
     }
 
-    pub fn next(&mut self) -> Option<EndpointId> {
+    pub fn pop(&mut self) -> Option<EndpointId> {
         if let Some((index, priority)) = self.current.take() {
             self.set_index_active(index, false);
             self.compute_next(index, priority);
@@ -208,12 +208,12 @@ impl Priolist {
         for i in range {
             let item = &self.items[i];
 
-            if predicate(&item) {
+            if predicate(item) {
                 return Some(i);
             }
         }
 
-        return None;
+        None
     }
 }
 
@@ -240,7 +240,7 @@ mod tests {
         let eid = EndpointId::from(0);
 
         priolist.insert(eid, 8);
-        assert!(priolist.next().is_none());
+        assert!(priolist.pop().is_none());
     }
 
     #[test]
@@ -250,7 +250,7 @@ mod tests {
 
         priolist.insert(eid, 8);
         priolist.activate(&eid);
-        assert_eq!(Some(eid), priolist.next());
+        assert_eq!(Some(eid), priolist.pop());
     }
 
     #[test]
@@ -263,7 +263,7 @@ mod tests {
         priolist.insert(second, 8);
         priolist.activate(&first);
         priolist.activate(&second);
-        assert_eq!(Some(first), priolist.next());
+        assert_eq!(Some(first), priolist.pop());
     }
 
     #[test]
@@ -276,8 +276,8 @@ mod tests {
         priolist.insert(second, 8);
         priolist.activate(&first);
         priolist.activate(&second);
-        assert_eq!(Some(first), priolist.next());
-        assert_eq!(Some(second), priolist.next());
+        assert_eq!(Some(first), priolist.pop());
+        assert_eq!(Some(second), priolist.pop());
     }
 
     #[test]
@@ -297,10 +297,10 @@ mod tests {
         priolist.activate(&four);
         priolist.activate(&one);
         priolist.activate(&two);
-        assert_eq!(Some(three), priolist.next());
-        assert_eq!(Some(four), priolist.next());
-        assert_eq!(Some(one), priolist.next());
-        assert_eq!(Some(two), priolist.next());
+        assert_eq!(Some(three), priolist.pop());
+        assert_eq!(Some(four), priolist.pop());
+        assert_eq!(Some(one), priolist.pop());
+        assert_eq!(Some(two), priolist.pop());
     }
 
     #[test]
@@ -310,8 +310,8 @@ mod tests {
 
         priolist.insert(eid, 8);
         priolist.activate(&eid);
-        assert_eq!(Some(eid), priolist.next());
-        assert_eq!(None, priolist.next());
+        assert_eq!(Some(eid), priolist.pop());
+        assert_eq!(None, priolist.pop());
     }
 
     #[test]
@@ -332,8 +332,8 @@ mod tests {
         priolist.activate(&one);
         priolist.activate(&two);
 
-        assert_eq!(Some(three), priolist.next());
-        assert_eq!(Some(one), priolist.next());
+        assert_eq!(Some(three), priolist.pop());
+        assert_eq!(Some(one), priolist.pop());
     }
 
     #[test]
@@ -351,7 +351,7 @@ mod tests {
 
         priolist.activate(&three);
         priolist.remove(&three);
-        assert_eq!(None, priolist.next());
+        assert_eq!(None, priolist.pop());
     }
 
     #[test]
@@ -370,7 +370,7 @@ mod tests {
         priolist.activate(&three);
         priolist.activate(&four);
         priolist.remove(&three);
-        assert_eq!(Some(four), priolist.next());
+        assert_eq!(Some(four), priolist.pop());
     }
 
     #[test]
@@ -389,7 +389,7 @@ mod tests {
         priolist.activate(&three);
         priolist.activate(&two);
         priolist.remove(&three);
-        assert_eq!(Some(two), priolist.next());
+        assert_eq!(Some(two), priolist.pop());
     }
 
     #[test]
@@ -410,7 +410,7 @@ mod tests {
         priolist.activate(&two);
         priolist.activate(&four);
         priolist.remove(&three);
-        assert_eq!(Some(one), priolist.next());
+        assert_eq!(Some(one), priolist.pop());
     }
 
     #[test]
@@ -428,19 +428,12 @@ mod tests {
 
         priolist.activate(&one);
         priolist.activate(&four);
-        assert_eq!(Some(one), priolist.next());
+        assert_eq!(Some(one), priolist.pop());
 
         priolist.activate(&two);
-        assert_eq!(Some(two), priolist.next());
+        assert_eq!(Some(two), priolist.pop());
 
         priolist.activate(&three);
-        assert_eq!(Some(three), priolist.next());
-    }
-
-    #[test]
-    fn for_on_empty_range() {
-        for _ in 1..1 {
-            assert!(false, "Iteration should not have occured");
-        }
+        assert_eq!(Some(three), priolist.pop());
     }
 }

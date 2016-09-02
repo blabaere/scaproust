@@ -41,7 +41,7 @@ pub type Timeout = Option<Scheduled>;
 /// Each party can send messages at any time. 
 /// If the peer is not available or send buffer is full subsequent calls to [send](struct.Socket.html#method.send) 
 /// will block until it’s possible to send the message.
-pub const PAIR:       u16 = (1 * 16)    ;
+pub const PAIR:       u16 = (    16)    ;
 
 
 /// **Publish/subscribe protocol**   
@@ -53,7 +53,7 @@ pub const PAIR:       u16 = (1 * 16)    ;
 /// The `Sub` socket will determine whether a message should be delivered 
 /// to the user by comparing the subscribed topics to the bytes initial bytes 
 /// in the incomming message, up to the size of the topic.  
-/// Subscribing via [Socket::set_option](struct.Socket.html#method.set_option) and [ConfigOption::Subscribe](../enum.ConfigOption.html#variant.Subscribe)
+/// Subscribing via [`Socket::set_option`](struct.Socket.html#method.set_option) and [`ConfigOption::Subscribe`](../enum.ConfigOption.html#variant.Subscribe)
 /// Will match any message with intial 5 bytes being "Hello", for example, message "Hello, World!" will match.
 /// Topic with zero length matches any message.
 /// If the socket is subscribed to multiple topics, 

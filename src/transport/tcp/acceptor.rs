@@ -48,7 +48,7 @@ impl TcpAcceptor {
             }
         }
 
-        if pipes.len() > 0 {
+        if pipes.is_empty() == false {
             ctx.raise(Event::Accepted(pipes));
         }
     }
@@ -56,9 +56,8 @@ impl TcpAcceptor {
     fn create_pipe(&self, stream: TcpStream) -> Box<pipe::Pipe> {
         let pids = self.proto_ids;
         let stub = TcpPipeStub::new(stream);
-        let pipe = box AsyncPipe::new(stub, pids);
 
-        pipe
+        box AsyncPipe::new(stub, pids)
     }
 }
 

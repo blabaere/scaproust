@@ -42,6 +42,7 @@ impl RequestSender {
 }
 
 /// Creates the session and starts the I/O thread.
+#[derive(Default)]
 pub struct SessionBuilder;
 
 impl SessionBuilder {
