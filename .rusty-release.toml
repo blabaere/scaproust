@@ -16,4 +16,4 @@ tag_name = "<PROJ_NAME>-<NEW_VERSION>"
 # editor command should be able to open multiple files in a split view,
 # first the environment variables $EDITOR and $VISUAL are checked and if
 # they aren't available then "gvim -o" is used
-editor = "vim"
+editor = "subl"
