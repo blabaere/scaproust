@@ -10,6 +10,7 @@
 - Make transports pluggable 
 - Req prefetch replies
 - Use a pool for payloads and buffers (if any)
+- Find something for efficient than a channel for sending replies from the event loop back to the facade (a mailbox?)
 - IPC transport : See [mio-uds](https://github.com/alexcrichton/mio-uds)
 - INPROC transport : to be determined (rust channel's are probably doing a better work at this)
 
@@ -27,7 +28,7 @@
 - AUTOMATE ALL THE THINGS !!! (compat test, benchmark ...)
 - Change copyright header to mention 'authors' and the AUTHORS file
 - Check [travis-cargo](https://github.com/huonw/travis-cargo)
-- Adds some coverage to the build
+- Adds coverage to the build and display it
 
 
 ### Things to look at
