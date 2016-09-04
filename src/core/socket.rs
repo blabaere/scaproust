@@ -228,6 +228,10 @@ impl Socket {
         self.insert_pipe(ctx, eid, pipe);
     }
 
+    pub fn close_pipe(&mut self, ctx: &mut Context, eid: EndpointId) {
+        let _ = self.remove_pipe(ctx, eid);
+    }
+
     pub fn on_pipe_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
         if let Some(spec) = self.remove_pipe(ctx, eid) {
             self.schedule_reconnect(ctx, spec);
@@ -274,6 +278,10 @@ impl Socket {
         if let Some(spec) = self.remove_acceptor(ctx, eid) {
             self.schedule_rebind(ctx, spec);
         }
+    }
+
+    pub fn close_acceptor(&mut self, ctx: &mut Context, eid: EndpointId) {
+        let _ = self.remove_acceptor(ctx, eid);
     }
 
     fn insert_acceptor(&mut self, ctx: &mut Context, eid: EndpointId, acceptor: Acceptor) {

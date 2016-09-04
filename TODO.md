@@ -2,12 +2,10 @@
 - Activate back integration tests when stainless is fixed
 
 ### Improvements
-- Close endpoint
 - Recv max buffer size
 - Reconnect interval max 
 - Linger
 - Handle accept error
-- Make transports pluggable 
 - Req prefetch replies
 - Use a pool for payloads and buffers (if any)
 - Find something for efficient than a channel for sending replies from the event loop back to the facade (a mailbox?)
@@ -19,7 +17,10 @@
 - TLS transport
 - Implement nanocat
 - STAR protocol ?
-- Polling and non-blocking operations
+- Polling and non-blocking operations ? Maybe not, see below
+
+### Vision
+- Expose async io using future-rs
 
 ### Tasks
 - Use github issues instead of this file

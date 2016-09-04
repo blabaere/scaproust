@@ -46,7 +46,8 @@ impl<S : AsyncPipeStub> PipeState<S> for HandshakeTx<S> {
     fn enter(&self, ctx: &mut Context) {
         ctx.register(self.stub.deref(), Ready::writable(), PollOpt::level());
     }
-    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+    fn close(mut self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        self.stub.shutdown();
         ctx.deregister(self.stub.deref());
 
         box Dead
@@ -95,7 +96,8 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for HandshakeRx<S> {
     fn enter(&self, ctx: &mut Context) {
         ctx.reregister(self.stub.deref(), Ready::readable(), PollOpt::level());
     }
-    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+    fn close(mut self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        self.stub.shutdown();
         ctx.deregister(self.stub.deref());
 
         box Dead
@@ -104,14 +106,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for HandshakeRx<S> {
         if events.is_readable() {
             let res = self.recv_handshake();
             
-            /*if events.is_hup() && res.is_ok() {
-                let active = transition::<HandshakeRx<S>, Active<S>, S>(self, ctx);
-                let next = active.ready(ctx, events);
-
-                next
-            } else*/ {
-                transition_if_ok::<HandshakeRx<S>, Active<S>, S>(self, ctx, res)
-            }
+            transition_if_ok::<HandshakeRx<S>, Active<S>, S>(self, ctx, res)
         } else {
             self
         }

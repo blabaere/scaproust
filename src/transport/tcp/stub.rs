@@ -140,4 +140,7 @@ impl Handshake for TcpPipeStub {
 }
 
 impl AsyncPipeStub for TcpPipeStub {
+    fn shutdown(&mut self) {
+        let _ = self.stream.shutdown(Shutdown::Both);
+    }
 }

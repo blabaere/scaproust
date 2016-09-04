@@ -13,7 +13,7 @@ use mio::{Token, Ready, PollOpt};
 use mio::timer::{Timer, Builder};
 use mio::channel::{Receiver};
 
-use core::{SocketId, EndpointId, DeviceId, session, socket, context, device};
+use core::{SocketId, EndpointId, DeviceId, session, socket, context, endpoint, device};
 use transport::{Transport, pipe, acceptor};
 use super::{Signal, Request, Task};
 use super::event_loop::{EventLoop, EventHandler};
@@ -120,6 +120,7 @@ impl Dispatcher {
         match request {
             Request::Session(req) => self.process_session_request(el, req),
             Request::Socket(id, req) => self.process_socket_request(el, id, req),
+            Request::Endpoint(sid, eid, req) => self.process_endpoint_request(el, sid, eid, req),
             Request::Device(id, req) => self.process_device_request(el, id, req),
             _ => {}
         }
@@ -201,6 +202,15 @@ impl Dispatcher {
             socket::Request::SetOption(x) => self.apply_on_socket(id, |socket, ctx| socket.set_option(ctx, x)),
             socket::Request::Close        => self.apply_on_socket(id, |socket, ctx| socket.close(ctx)),
         }
+    }
+    fn process_endpoint_request(&mut self, _: &mut EventLoop, sid: SocketId, eid: EndpointId, request: endpoint::Request) {
+        let endpoint::Request::Close(remote) = request;
+
+        self.apply_on_socket(sid, |socket, ctx| if remote {
+            socket.close_pipe(ctx, eid)
+        } else {
+            socket.close_acceptor(ctx, eid)
+        });
     }
     fn process_device_request(&mut self, _: &mut EventLoop, id: DeviceId, request: device::Request) {
         if let device::Request::Check = request { 
