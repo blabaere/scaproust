@@ -77,6 +77,7 @@ describe! can {
         let device_thread = thread::spawn(move || device.run());
 
         sleep_some();
+        sleep_some();
 
         push.send(vec![65, 66, 67]).unwrap();
         let received = pull.recv().unwrap();
@@ -113,6 +114,7 @@ describe! can {
         let device = session.create_bridge_device(d_rep, d_req).unwrap();
         let device_thread = thread::spawn(move || device.run());
 
+        sleep_some();
         sleep_some();
 
         let sent_request = vec![65, 66, 67];
