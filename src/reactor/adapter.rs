@@ -20,7 +20,6 @@ use transport::Transport;
 use transport::endpoint::*;
 use transport::pipe;
 use transport::acceptor;
-use transport::tcp::Tcp;
 use super::bus::EventLoopBus;
 use super::{Signal, Task};
 use sequence::Sequence;
@@ -62,6 +61,7 @@ pub struct AcceptorController {
 
 pub struct EndpointCollection {
     ids: Sequence,
+    transports: HashMap<String, Box<Transport + Send>>,
     pipes: HashMap<EndpointId, PipeController>,
     acceptors: HashMap<EndpointId, AcceptorController>
 }
@@ -144,12 +144,19 @@ impl AcceptorController {
 }
 
 impl EndpointCollection {
-    pub fn new(seq: Sequence) -> EndpointCollection {
+    pub fn new(seq: Sequence, transports: HashMap<String, Box<Transport + Send>>) -> EndpointCollection {
         EndpointCollection {
             ids: seq,
+            transports: transports,
             pipes: HashMap::new(),
             acceptors: HashMap::new()
         }
+    }
+
+    fn get_transport(&self, scheme: &str) -> io::Result<&Box<Transport + Send>> {
+        self.transports.
+            get(scheme).
+            ok_or_else(|| invalid_input_io_error("invalid scheme"))
     }
 
     pub fn get_pipe_mut(&mut self, eid: EndpointId) -> Option<&mut PipeController> {
@@ -262,11 +269,12 @@ impl<'a> SocketEventLoopContext<'a> {
         self.send_signal(signal);
     }
 
-    fn get_transport(&self, scheme: &str) -> io::Result<Box<Transport>> {
-        match scheme {
+    fn get_transport(&self, scheme: &str) -> io::Result<&Box<Transport + Send>> {
+        self.endpoints.get_transport(scheme)
+        /*match scheme {
             "tcp" => Ok(Box::new(Tcp)),
             _ => Err(invalid_input_io_error(scheme.to_owned()))
-        }
+        }*/
     }
 
     fn connect(&mut self, url: &str, pids: (u16, u16)) -> io::Result<Box<pipe::Pipe>> {

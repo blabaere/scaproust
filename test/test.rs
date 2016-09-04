@@ -44,6 +44,13 @@ pub fn make_timeout() -> Option<Duration> {
     Some(Duration::from_millis(SYS_TIMEOUT))
 }
 
+pub fn make_session() -> Session {
+    SessionBuilder::new().
+        with("tcp", Tcp).
+        build().
+        expect("Failed to create session !")
+}
+
 pub mod urls {
     pub mod tcp {
         // shamelessly copied from mio test module
@@ -72,5 +79,24 @@ pub mod urls {
 
     mod ipc {
 
+    }
+}
+
+#[test]
+fn can_use_custom_transport() {
+    SessionBuilder::new().
+        with("subway", Subway).
+        build().
+        expect("Failed to create session !");
+}
+
+struct Subway;
+
+impl transport::Transport for Subway {
+    fn connect(&self, _: &str, _: (u16, u16)) -> io::Result<Box<transport::pipe::Pipe>> {
+        Err(io::Error::new(io::ErrorKind::Other, "test only"))
+    }
+    fn bind(&self, _: &str, _: (u16, u16)) -> io::Result<Box<transport::acceptor::Acceptor>> {
+        Err(io::Error::new(io::ErrorKind::Other, "test only"))
     }
 }

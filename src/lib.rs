@@ -32,7 +32,7 @@
 //! use scaproust::*;
 //! use std::time::Duration;
 //! 
-//! let mut session = SessionBuilder::build().unwrap();
+//! let mut session = SessionBuilder::new().with("tcp", Tcp).build().unwrap();
 //! let mut pull = session.create_socket::<Pull>().unwrap();
 //! let mut push = session.create_socket::<Push>().unwrap();
 //! let timeout = Duration::from_millis(250);
@@ -72,11 +72,12 @@ extern crate time;
 #[doc(hidden)]
 pub mod core;
 pub mod proto;
+pub mod transport;
+
 #[doc(hidden)]
 mod reactor;
 #[doc(hidden)]
 mod facade;
-mod transport;
 
 #[doc(hidden)]
 mod sequence;
@@ -90,6 +91,8 @@ pub use facade::device::Device;
 pub use facade::endpoint::Endpoint;
 pub use core::Message;
 pub use core::config::ConfigOption;
+
+pub use transport::tcp::Tcp;
 
 pub use proto::pair::Pair;
 pub use proto::publ::Pub;

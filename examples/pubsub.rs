@@ -27,7 +27,7 @@ fn sleep_ms(ms: u64) {
 }
 
 fn server(url: &str) {
-    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut session = SessionBuilder::new().with("tcp", Tcp).build().expect("Failed to create session !");
     let mut socket = session.create_socket::<Pub>().expect("Failed to create socket !");
 
     socket.bind(url).expect("Failed to bind socket !");
@@ -44,7 +44,7 @@ fn server(url: &str) {
 }
 
 fn client(url: &str, name: &str) {
-    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut session = SessionBuilder::new().with("tcp", Tcp).build().expect("Failed to create session !");
     let mut socket = session.create_socket::<Sub>().expect("Failed to create socket !");
 
     socket.set_option(ConfigOption::Subscribe("".to_string())).expect("Failed to subscribe !");

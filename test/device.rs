@@ -11,13 +11,13 @@ pub use std::io;
 pub use scaproust::*;
 
 pub use super::urls;
-pub use super::{sleep_some, make_timeout};
+pub use super::{make_session, make_timeout, sleep_some};
 
 describe! can {
 
     before_each {
         let _ = ::env_logger::init();
-        let mut session = SessionBuilder::build().expect("Failed to create session !");
+        let mut session = make_session();
         let timeout = make_timeout();
     }
 

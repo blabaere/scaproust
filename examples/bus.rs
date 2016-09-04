@@ -36,7 +36,7 @@ fn usage(program: &str) -> ! {
 }
 
 fn node(args: Vec<&str>) {
-    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut session = SessionBuilder::new().with("tcp", Tcp).build().expect("Failed to create session !");
     let mut socket = session.create_socket::<Bus>().expect("Failed to create socket !");
 
     socket.bind(args[2]).expect("Failed to bind socket !");

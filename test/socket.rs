@@ -10,14 +10,13 @@ pub use std::io;
 
 pub use scaproust::*;
 
-pub use super::urls;
-pub use super::{sleep_some, make_timeout};
+pub use super::{urls, make_session, make_timeout, sleep_some};
 
 describe! send {
 
     before_each {
         let _ = ::env_logger::init();
-        let mut session = SessionBuilder::build().expect("Failed to create session !");
+        let mut session = make_session();
         let url = urls::tcp::get();
     }
 
@@ -58,7 +57,7 @@ describe! send {
 describe! recv {
 
     before_each {
-        let mut session = SessionBuilder::build().expect("Failed to create session !");
+        let mut session = make_session();
         let url = urls::tcp::get();
     }
 

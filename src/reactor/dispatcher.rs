@@ -4,6 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::io;
 use std::time::Duration;
@@ -13,7 +14,7 @@ use mio::timer::{Timer, Builder};
 use mio::channel::{Receiver};
 
 use core::{SocketId, EndpointId, DeviceId, session, socket, context, device};
-use transport::{pipe, acceptor};
+use transport::{Transport, pipe, acceptor};
 use super::{Signal, Request, Task};
 use super::event_loop::{EventLoop, EventHandler};
 use super::bus::EventLoopBus;
@@ -37,12 +38,20 @@ pub struct Dispatcher {
 }
 
 impl Dispatcher {
-    pub fn dispatch(rx: Receiver<Request>, tx: Sender<session::Reply>) -> io::Result<()> {
-        let mut dispatcher = Dispatcher::new(rx, tx);
+    pub fn dispatch(
+        transports: HashMap<String, Box<Transport + Send>>,
+        rx: Receiver<Request>,
+        tx: Sender<session::Reply>) -> io::Result<()> {
+
+        let mut dispatcher = Dispatcher::new(transports, rx, tx);
 
         dispatcher.run()
     }
-    pub fn new(rx: Receiver<Request>, tx: Sender<session::Reply>) -> Dispatcher {
+    pub fn new(
+        transports: HashMap<String, Box<Transport + Send>>,
+        rx: Receiver<Request>, 
+        tx: Sender<session::Reply>) -> Dispatcher {
+
         let id_seq = Sequence::new();
         let timeout_eq = Sequence::new();
         let clock = Builder::default().
@@ -56,9 +65,10 @@ impl Dispatcher {
             bus: EventLoopBus::new(),
             timer: clock,
             sockets: session::Session::new(id_seq.clone(), tx),
-            endpoints: EndpointCollection::new(id_seq.clone()),
+            endpoints: EndpointCollection::new(id_seq.clone(), transports),
             schedule: Schedule::new(timeout_eq)
         }
+
     }
 
 /*****************************************************************************/

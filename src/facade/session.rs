@@ -4,6 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::collections::HashMap;
 use std::io;
 use std::thread;
 use std::sync::mpsc;
@@ -11,6 +12,7 @@ use std::sync::mpsc;
 use mio;
 
 use super::*;
+use transport::Transport;
 use reactor;
 use reactor::dispatcher;
 use core::session::{Request, Reply};
@@ -43,24 +45,35 @@ impl RequestSender {
 
 /// Creates the session and starts the I/O thread.
 #[derive(Default)]
-pub struct SessionBuilder;
+pub struct SessionBuilder {
+    transports: HashMap<String, Box<Transport + Send>>
+}
 
 impl SessionBuilder {
 
     pub fn new() -> SessionBuilder {
-        SessionBuilder
+        SessionBuilder {
+            transports: HashMap::new()
+        }
     }
 
-    pub fn build() -> io::Result<Session> {
+    pub fn with<T>(mut self, scheme: &str, transport: T)  -> SessionBuilder
+    where T : Transport + Send + 'static {
+        self.transports.insert(scheme.into(), Box::new(transport));
+        self
+    }
+
+    pub fn build(self) -> io::Result<Session> {
 
         let (reply_tx, reply_rx) = mpsc::channel();
         let (request_tx, request_rx) = mio::channel::channel();
         let session = Session::new(RequestSender::new(request_tx), reply_rx);
 
-        thread::spawn(move || dispatcher::Dispatcher::dispatch(request_rx, reply_tx));
+        thread::spawn(move || dispatcher::Dispatcher::dispatch(self.transports, request_rx, reply_tx));
 
         Ok(session)
-    }}
+    }
+}
 
 /// Creates sockets and devices.
 pub struct Session {

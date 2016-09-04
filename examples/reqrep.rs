@@ -28,7 +28,7 @@ fn sleep_ms(ms: u64) {
 }
 
 fn node0(url: &str) {
-    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut session = SessionBuilder::new().with("tcp", Tcp).build().expect("Failed to create session !");
     let mut socket = session.create_socket::<Rep>().expect("Failed to create socket !");
 
     socket.bind(url).expect("Failed to bind socket !");
@@ -52,7 +52,7 @@ fn node0(url: &str) {
 }
 
 fn node1(url: &str) {
-    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut session = SessionBuilder::new().with("tcp", Tcp).build().expect("Failed to create session !");
     let mut socket = session.create_socket::<Req>().expect("Failed to create socket !");
     let buffer = From::from(DATE.as_bytes());
 

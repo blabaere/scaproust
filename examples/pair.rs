@@ -59,7 +59,7 @@ fn send_recv(mut socket: Socket, name: &str) -> ! {
 }
 
 fn node0(url: &str) {
-    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut session = SessionBuilder::new().with("tcp", Tcp).build().expect("Failed to create session !");
     let mut socket = session.create_socket::<Pair>().expect("Failed to create socket !");
 
     socket.bind(url).expect("Failed to bind socket !");
@@ -67,7 +67,7 @@ fn node0(url: &str) {
 }
 
 fn node1(url: &str) {
-    let mut session = SessionBuilder::build().expect("Failed to create session !");
+    let mut session = SessionBuilder::new().with("tcp", Tcp).build().expect("Failed to create session !");
     let mut socket = session.create_socket::<Pair>().expect("Failed to create socket !");
 
     socket.connect(url).expect("Failed to connect socket !");
