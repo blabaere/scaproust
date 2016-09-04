@@ -60,9 +60,9 @@ mod tests {
         assert_eq!(0, ctx.get_deregistrations());
 
         assert_eq!(1, ctx.get_raised_events().len());
-        let ref evt = ctx.get_raised_events()[0];
-        let is_closed = match evt {
-            &pipe::Event::Closed => true,
+        let evt = &ctx.get_raised_events()[0];
+        let is_closed = match *evt {
+            pipe::Event::Closed => true,
             _ => false,
         };
 

@@ -316,9 +316,9 @@ mod tests {
         assert_eq!("Active", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
 
-        let ref evt = ctx.get_raised_events()[0];
-        let is_recv = match evt {
-            &pipe::Event::Received(_) => true,
+        let evt = &ctx.get_raised_events()[0];
+        let is_recv = match *evt {
+            pipe::Event::Received(_) => true,
             _ => false,
         };
 
@@ -346,9 +346,9 @@ mod tests {
         assert_eq!("Active", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
 
-        let ref evt = ctx.get_raised_events()[0];
-        let is_recv = match evt {
-            &pipe::Event::Received(_) => true,
+        let evt = &ctx.get_raised_events()[0];
+        let is_recv = match *evt {
+            pipe::Event::Received(_) => true,
             _ => false,
         };
 
@@ -367,9 +367,9 @@ mod tests {
         assert_eq!("Active", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
 
-        let ref evt = ctx.get_raised_events()[0];
-        let is_can_recv = match evt {
-            &pipe::Event::CanRecv => true,
+        let evt = &ctx.get_raised_events()[0];
+        let is_can_recv = match *evt {
+            pipe::Event::CanRecv => true,
             _ => false,
         };
 
@@ -388,9 +388,9 @@ mod tests {
         assert_eq!("Dead", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
 
-        let ref evt = ctx.get_raised_events()[0];
-        let is_error = match evt {
-            &pipe::Event::Error(_) => true,
+        let evt = &ctx.get_raised_events()[0];
+        let is_error = match *evt {
+            pipe::Event::Error(_) => true,
             _ => false,
         };
 
