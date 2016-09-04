@@ -61,8 +61,8 @@ describe! can {
         let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
         let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
 
-        let d_push_url = urls::tcp::get();
-        let d_pull_url = urls::tcp::get();
+        let d_push_url = "tcp://127.0.0.1:5454";
+        let d_pull_url = "tcp://127.0.0.1:5455";
 
         d_push.bind(&d_push_url).unwrap();
         d_pull.bind(&d_pull_url).unwrap();
@@ -76,7 +76,6 @@ describe! can {
         let device = session.create_bridge_device(d_pull, d_push).unwrap();
         let device_thread = thread::spawn(move || device.run());
 
-        sleep_some();
         sleep_some();
 
         push.send(vec![65, 66, 67]).unwrap();
@@ -97,8 +96,8 @@ describe! can {
         let mut req = session.create_socket::<Req>().expect("Failed to create socket !");
         let mut rep = session.create_socket::<Rep>().expect("Failed to create socket !");
 
-        let d_req_url = urls::tcp::get();
-        let d_rep_url = urls::tcp::get();
+        let d_req_url = "tcp://127.0.0.1:5456";
+        let d_rep_url = "tcp://127.0.0.1:5457";
 
         d_req.bind(&d_req_url).unwrap();
         d_rep.bind(&d_rep_url).unwrap();
@@ -114,7 +113,6 @@ describe! can {
         let device = session.create_bridge_device(d_rep, d_req).unwrap();
         let device_thread = thread::spawn(move || device.run());
 
-        sleep_some();
         sleep_some();
 
         let sent_request = vec![65, 66, 67];
