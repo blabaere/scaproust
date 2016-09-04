@@ -8,7 +8,7 @@
 - Handle accept error
 - Req prefetch replies
 - Use a pool for payloads and buffers (if any)
-- Find something for efficient than a channel for sending replies from the event loop back to the facade (a mailbox?)
+- Find something more efficient than a channel for sending replies from the event loop back to the facade (a mailbox?)
 - IPC transport : See [mio-uds](https://github.com/alexcrichton/mio-uds)
 - INPROC transport : to be determined (rust channel's are probably doing a better work at this)
 
@@ -20,7 +20,7 @@
 - Polling and non-blocking operations ? Maybe not, see below
 
 ### Vision
-- Expose async io using future-rs
+- Expose async io using future-rs ?
 
 ### Tasks
 - Use github issues instead of this file
