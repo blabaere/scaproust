@@ -113,8 +113,6 @@ impl TestStepStream {
 }
 
 impl stub::AsyncPipeStub for TestStepStream {
-    fn shutdown(&mut self) {
-    }
 }
 
 impl mio::Evented for TestStepStream {

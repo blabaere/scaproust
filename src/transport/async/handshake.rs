@@ -46,8 +46,7 @@ impl<S : AsyncPipeStub> PipeState<S> for HandshakeTx<S> {
     fn enter(&self, ctx: &mut Context) {
         ctx.register(self.stub.deref(), Ready::writable(), PollOpt::level());
     }
-    fn close(mut self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
-        self.stub.shutdown();
+    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         ctx.deregister(self.stub.deref());
 
         box Dead
@@ -96,8 +95,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for HandshakeRx<S> {
     fn enter(&self, ctx: &mut Context) {
         ctx.reregister(self.stub.deref(), Ready::readable(), PollOpt::level());
     }
-    fn close(mut self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
-        self.stub.shutdown();
+    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         ctx.deregister(self.stub.deref());
 
         box Dead

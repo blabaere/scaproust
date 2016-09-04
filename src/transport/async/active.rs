@@ -96,8 +96,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
         ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
         ctx.raise(Event::Opened);
     }
-    fn close(mut self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
-        self.stub.shutdown();
+    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         ctx.deregister(self.stub.deref());
 
         box Dead

@@ -16,7 +16,6 @@ use core::Message;
 use io_error::*;
 
 pub trait AsyncPipeStub : Sender + Receiver + Handshake + Deref<Target=Evented> {
-    fn shutdown(&mut self);
 }
 
 pub trait Sender {
