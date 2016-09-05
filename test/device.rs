@@ -7,6 +7,7 @@
 pub use std::time::Duration;
 pub use std::thread;
 pub use std::io;
+use std::sync::{Arc, Barrier};
 
 pub use scaproust::*;
 
@@ -69,17 +70,25 @@ describe! can {
 
         push.connect(&d_pull_url).unwrap();
         pull.connect(&d_push_url).unwrap();
+        sleep_some();
 
         push.set_send_timeout(timeout).unwrap();
         pull.set_recv_timeout(timeout).unwrap();
 
         let device = session.create_bridge_device(d_pull, d_push).unwrap();
-        let device_thread = thread::spawn(move || device.run());
+        let device_thread = thread::spawn(move || {
+            println!("DEVICE THREAD: before run");
+            let res = device.run();
+            println!("DEVICE THREAD: after run");
+            res
+        });
 
+        println!("TEST THREAD: before sleep");
         sleep_some();
+        println!("TEST THREAD: after sleep");
 
-        push.send(vec![65, 66, 67]).unwrap();
-        let received = pull.recv().unwrap();
+        push.send(vec![65, 66, 67]).expect("Push should have sent a message");
+        let received = pull.recv().expect("Pull should have received a message");
         assert_eq!(vec![65, 66, 67], received);
 
         let err = pull.recv().unwrap_err();
@@ -104,6 +113,7 @@ describe! can {
 
         req.connect(&d_rep_url).unwrap();
         rep.connect(&d_req_url).unwrap();
+        sleep_some();
 
         req.set_send_timeout(timeout).unwrap();
         req.set_recv_timeout(timeout).unwrap();
@@ -111,18 +121,25 @@ describe! can {
         rep.set_recv_timeout(timeout).unwrap();
 
         let device = session.create_bridge_device(d_rep, d_req).unwrap();
-        let device_thread = thread::spawn(move || device.run());
+        let device_thread = thread::spawn(move || {
+            println!("DEVICE THREAD: before run");
+            let res = device.run();
+            println!("DEVICE THREAD: after run");
+            res
+        });
 
+        println!("TEST THREAD: before sleep");
         sleep_some();
+        println!("TEST THREAD: after sleep");
 
         let sent_request = vec![65, 66, 67];
-        req.send(sent_request).unwrap();
-        let received_request = rep.recv().unwrap();
+        req.send(sent_request).expect("Req should have sent a request");
+        let received_request = rep.recv().expect("Rep should have received a request");
         assert_eq!(vec![65, 66, 67], received_request);
 
         let sent_reply = vec![66, 65, 67];
-        rep.send(sent_reply).unwrap();
-        let received_reply = req.recv().unwrap();
+        rep.send(sent_reply).expect("Rep should have sent a reply");
+        let received_reply = req.recv().expect("Req should have received a reply");
         assert_eq!(vec![66, 65, 67], received_reply);
 
         drop(session);
