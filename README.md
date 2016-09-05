@@ -2,6 +2,7 @@
 
 [![Linux build](https://travis-ci.org/blabaere/scaproust.svg?label=linux)](https://travis-ci.org/blabaere/scaproust)
 [![Windows build](https://ci.appveyor.com/api/projects/status/kpqdm42mhlki39fq?svg=true)](https://ci.appveyor.com/project/blabaere/scaproust)
+[![Coverage Status](https://coveralls.io/repos/github/blabaere/scaproust/badge.svg?branch=master)](https://coveralls.io/github/blabaere/scaproust?branch=master)
 
 Scaproust is an implementation of the [nanomsg](http://nanomsg.org/index.html) "Scalability Protocols" in the [Rust programming language](http://www.rust-lang.org/).
 
