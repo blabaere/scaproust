@@ -7,7 +7,7 @@
 pub use std::time::Duration;
 pub use std::thread;
 pub use std::io;
-use std::sync::{Arc, Barrier};
+pub use std::sync::{Arc, Barrier};
 
 pub use scaproust::*;
 
@@ -75,17 +75,23 @@ describe! can {
         push.set_send_timeout(timeout).unwrap();
         pull.set_recv_timeout(timeout).unwrap();
 
+        let barrier = Arc::new(Barrier::new(2));
+        let d_barrier = barrier.clone();
         let device = session.create_bridge_device(d_pull, d_push).unwrap();
         let device_thread = thread::spawn(move || {
-            println!("DEVICE THREAD: before run");
+            debug!("DEVICE THREAD: before barrier");
+            d_barrier.wait();
+            debug!("DEVICE THREAD: before run");
             let res = device.run();
-            println!("DEVICE THREAD: after run");
+            debug!("DEVICE THREAD: after run");
             res
         });
 
-        println!("TEST THREAD: before sleep");
+        debug!("TEST THREAD: before barrier");
+        barrier.wait();
+        debug!("TEST THREAD: before sleep");
         sleep_some();
-        println!("TEST THREAD: after sleep");
+        debug!("TEST THREAD: after sleep");
 
         push.send(vec![65, 66, 67]).expect("Push should have sent a message");
         let received = pull.recv().expect("Pull should have received a message");
@@ -120,15 +126,21 @@ describe! can {
         rep.set_send_timeout(timeout).unwrap();
         rep.set_recv_timeout(timeout).unwrap();
 
+        let barrier = Arc::new(Barrier::new(2));
+        let d_barrier = barrier.clone();
         let device = session.create_bridge_device(d_rep, d_req).unwrap();
         let device_thread = thread::spawn(move || {
-            println!("DEVICE THREAD: before run");
+            debug!("DEVICE THREAD: before barrier");
+            d_barrier.wait();
+            debug!("DEVICE THREAD: before run");
             let res = device.run();
-            println!("DEVICE THREAD: after run");
+            debug!("DEVICE THREAD: after run");
             res
         });
 
-        println!("TEST THREAD: before sleep");
+        debug!("TEST THREAD: before barrier");
+        barrier.wait();
+        debug!("TEST THREAD: before sleep");
         sleep_some();
         println!("TEST THREAD: after sleep");
 
