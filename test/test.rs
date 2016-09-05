@@ -12,14 +12,14 @@ extern crate log;
 extern crate env_logger;
 extern crate scaproust;
 
-//mod socket;
-//mod fair_queue;
-//mod pair;
-//mod pipeline;
-//mod reqrep;
-//mod pubsub;
-//mod survey;
-//mod bus;
+mod socket;
+mod fair_queue;
+mod pair;
+mod pipeline;
+mod reqrep;
+mod pubsub;
+mod survey;
+mod bus;
 mod device;
 
 pub use std::time::Duration;

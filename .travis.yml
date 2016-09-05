@@ -5,10 +5,10 @@ sudo: required
 os:
 - linux
 
-
+#RUST_LOG=scaproust,test 
 script:
   - rustc --version --verbose
-  - RUST_TEST_THREADS=1 RUST_LOG=scaproust,test cargo test
+  - RUST_TEST_THREADS=1 cargo test
   - cargo doc
 
 after_success: ! '[ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]
