@@ -16,7 +16,7 @@
 //!
 //! # Usage
 //!
-//! First, create a [Session](struct.Session.html) 
+//! First, build a [Session](struct.Session.html) with the transports you need 
 //! (this will start the thread performing the actual I/O operations).  
 //! Then, use the session to create some [Socket](struct.Socket.html), 
 //! specifying the communication pattern.  

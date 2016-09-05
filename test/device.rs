@@ -79,19 +79,13 @@ describe! can {
         let d_barrier = barrier.clone();
         let device = session.create_bridge_device(d_pull, d_push).unwrap();
         let device_thread = thread::spawn(move || {
-            //debug!("DEVICE THREAD: before barrier");
             d_barrier.wait();
-            //debug!("DEVICE THREAD: before run");
             let res = device.run();
-            //debug!("DEVICE THREAD: after run");
             res
         });
 
-        //debug!("TEST THREAD: before barrier");
         barrier.wait();
-        //debug!("TEST THREAD: before sleep");
         sleep_some();
-        //debug!("TEST THREAD: after sleep");
 
         push.send(vec![65, 66, 67]).expect("Push should have sent a message");
         let received = pull.recv().expect("Pull should have received a message");
@@ -130,19 +124,13 @@ describe! can {
         let d_barrier = barrier.clone();
         let device = session.create_bridge_device(d_rep, d_req).unwrap();
         let device_thread = thread::spawn(move || {
-            //debug!("DEVICE THREAD: before barrier");
             d_barrier.wait();
-            //debug!("DEVICE THREAD: before run");
             let res = device.run();
-            //debug!("DEVICE THREAD: after run");
             res
         });
 
-        //debug!("TEST THREAD: before barrier");
         barrier.wait();
-        //debug!("TEST THREAD: before sleep");
         sleep_some();
-        println!("TEST THREAD: after sleep");
 
         let sent_request = vec![65, 66, 67];
         req.send(sent_request).expect("Req should have sent a request");

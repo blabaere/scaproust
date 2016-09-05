@@ -25,7 +25,7 @@ mio = "0.6.0"
 
 [dev-dependencies]
 env_logger = "0.3.4"
-stainless = { git = "https://github.com/blabaere/stainless" }
+stainless = "0.1.7"
 
 [[test]]
 name = "test"

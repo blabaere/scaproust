@@ -1,7 +1,8 @@
 ### Urgent
-- Activate back integration tests when stainless is fixed
+- Investigate why travis build works only with one test runner
 
 ### Improvements
+- publish doc without sudo : https://github.com/huonw/travis-cargo
 - Recv max buffer size
 - Reconnect interval max 
 - Linger
@@ -33,6 +34,9 @@
 
 
 ### Things to look at
+
+Windows named pipes
+https://github.com/mmacedoeu/pipetoredis.rs
 
 https://pascalhertleif.de/artikel/good-practices-for-writing-rust-libraries/
 http://keepachangelog.com
