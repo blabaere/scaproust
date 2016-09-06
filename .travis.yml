@@ -6,12 +6,13 @@ os:
 - linux
 
 before_script:
+  - rustc --version --verbose
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 
 #RUST_LOG=scaproust,test 
+#RUST_TEST_THREADS=1 
 script:
-  - rustc --version --verbose
-  - RUST_TEST_THREADS=1 cargo test && cargo doc
+  - travis-cargo test && travis-cargo doc
 
 after_success:
   - travis-cargo doc-upload
