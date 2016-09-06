@@ -12,11 +12,11 @@ before_script:
 #RUST_LOG=scaproust,test 
 #RUST_TEST_THREADS=1 
 script:
-  - travis-cargo test && travis-cargo doc
+  - cargo test && cargo --no-deps doc
 
 after_success:
   - travis-cargo doc-upload
-  - travis-cargo coveralls --no-sudo --verify
+  - travis-cargo coveralls --no-sudo --verify  --kcov-options="--coveralls-id=$TRAVIS_JOB_ID"
     
 env:
   global:
