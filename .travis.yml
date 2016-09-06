@@ -16,7 +16,6 @@ script:
 
 after_success:
   - travis-cargo doc-upload
-  - RUST_TEST_THREADS=1 travis-cargo coveralls --no-sudo --verify  --kcov-options="--coveralls-id=$TRAVIS_JOB_ID"
     
 env:
   global:

@@ -35,6 +35,9 @@
 
 ### Things to look at
 
+gather/scatter io operations
+https://github.com/seanmonstar/vecio
+
 Windows named pipes
 https://github.com/mmacedoeu/pipetoredis.rs
 
