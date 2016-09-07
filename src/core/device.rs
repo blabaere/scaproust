@@ -22,7 +22,8 @@ pub struct Device {
     left: SocketId,
     right: SocketId,
     left_recv: bool,
-    right_recv: bool
+    right_recv: bool,
+    checking: bool
 }
 
 impl Device {
@@ -32,15 +33,17 @@ impl Device {
             left: l,
             right: r,
             left_recv: false,
-            right_recv: false
+            right_recv: false,
+            checking: false
         }
     }
 
     pub fn check(&mut self) {
-        let _ = self.reply_sender.send(Reply::Check(self.left_recv, self.right_recv));
-
-        self.left_recv = false;
-        self.right_recv = false;
+        if self.left_recv | self.right_recv {
+            self.send_reply();
+        } else {
+            self.checking = true;
+        }
     }
 
     pub fn on_socket_can_recv(&mut self, sid: SocketId) {
@@ -49,5 +52,17 @@ impl Device {
         } else if sid == self.right {
             self.right_recv = true;
         }
+
+        if self.checking {
+            self.send_reply();
+        }
+    }
+
+    fn send_reply(&mut self) {
+        let _ = self.reply_sender.send(Reply::Check(self.left_recv, self.right_recv));
+
+        self.left_recv = false;
+        self.right_recv = false;
+        self.checking = false;
     }
 }

@@ -110,6 +110,17 @@ impl Bridge {
     fn recv_reply(&self) -> io::Result<Reply> {
         self.reply_receiver.receive()
     }
+
+    fn run_once(&mut self, left: &mut socket::Socket, right: &mut socket::Socket) -> io::Result<()> {
+        let Reply::Check(l, r) = try!(self.execute_request(Request::Check));
+
+        match (l, r) {
+            (true, true) => exchange_msg(left, right),
+            (true, _) => forward_msg(left, right),
+            (_, true) => forward_msg(right, left),
+            (_, _) => Ok(())
+        }
+    }
 }
 
 impl Device for Bridge {
@@ -118,22 +129,18 @@ impl Device for Bridge {
         let mut right = self.right.take().unwrap();
 
         loop {
-            let reply = try!(self.execute_request(Request::Check));
-
-            match reply {
-                Reply::Check(l, r) => {
-                    if l {
-                        try!(forward_msg(&mut left, &mut right));
-                    }
-                    if r {
-                        try!(forward_msg(&mut right, &mut left));
-                    }
-                }
-            }
+            try!(self.run_once(&mut left, &mut right));
         }
     }
 }
 
 fn forward_msg(from: &mut socket::Socket, to: &mut socket::Socket) -> io::Result<()> {
     from.recv_msg().and_then(|msg| to.send_msg(msg))
+}
+
+fn exchange_msg(left: &mut socket::Socket, right: &mut socket::Socket) -> io::Result<()> {
+    let from_left = try!(left.recv_msg());
+    let from_right = try!(right.recv_msg());
+
+    right.send_msg(from_left).and_then(|_| left.send_msg(from_right))
 }
