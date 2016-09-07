@@ -31,7 +31,7 @@ pub use env_logger::*;
 pub use scaproust::*;
 
 #[cfg(not(windows))]
-pub const SYS_TIMEOUT: u64 = 600;
+pub const SYS_TIMEOUT: u64 = 300;
 
 #[cfg(windows)]
 pub const SYS_TIMEOUT: u64 = 500;
