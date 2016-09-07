@@ -116,9 +116,9 @@ impl Bridge {
 
         match (l, r) {
             (true, true) => exchange_msg(left, right),
-            (true, _) => forward_msg(left, right),
-            (_, true) => forward_msg(right, left),
-            (_, _) => Ok(())
+            (true, _)    => forward_msg(left, right),
+            (_, true)    => forward_msg(right, left),
+            (_, _)       => Ok(())
         }
     }
 }
