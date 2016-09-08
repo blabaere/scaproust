@@ -94,6 +94,7 @@ pub use core::Message;
 pub use core::config::ConfigOption;
 
 pub use transport::tcp::Tcp;
+pub use transport::ipc::Ipc;
 
 pub use proto::pair::Pair;
 pub use proto::publ::Pub;

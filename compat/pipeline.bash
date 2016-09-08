@@ -44,10 +44,7 @@ function test_pipeline {
     testcase_pipeline2 $1
 }
 
-if [[ -f "/tmp/pipeline_test.ipc" ]]; then
-    rm -f "/tmp/pipeline_test.ipc"
-fi
+rm -f /tmp/pipeline* > /dev/null
 
 test_pipeline "tcp://127.0.0.1:5454"
-#test_pipeline "ipc:///tmp/pipeline_test.ipc"
-
+test_pipeline "ipc:///tmp/pipeline_test.ipc"

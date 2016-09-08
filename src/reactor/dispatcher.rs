@@ -162,6 +162,7 @@ impl Dispatcher {
 /*                                                                           */
 /*****************************************************************************/
     fn process_io(&mut self, el: &mut EventLoop, token: Token, events: Ready) {
+        debug!("process_io {:?} {:?}", token, events);
         let eid = EndpointId::from(token);
         {
             if let Some(pipe) = self.endpoints.get_pipe_mut(eid) {

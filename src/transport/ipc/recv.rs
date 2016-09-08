@@ -19,7 +19,7 @@ pub struct RecvOperation {
 impl RecvOperation {
     pub fn new(recv_max_size: u64) -> RecvOperation {
         RecvOperation {
-            step: Some(RecvOperationStep::Header([0; 8], 0, recv_max_size))
+            step: Some(RecvOperationStep::Header([0; 9], 0, recv_max_size))
         }
     }
 
@@ -51,7 +51,7 @@ impl RecvOperation {
 }
 
 enum RecvOperationStep {
-    Header([u8; 8], usize, u64),
+    Header([u8; 9], usize, u64),
     Payload(Vec<u8>, usize),
     Terminal(Message)
 }
@@ -66,7 +66,7 @@ impl RecvOperationStep {
     }
 }
 
-fn read_header<T:io::Read>(stream: &mut T, mut buffer: [u8; 8], mut read: usize, max_size: u64) -> io::Result<(bool, RecvOperationStep)> {
+fn read_header<T:io::Read>(stream: &mut T, mut buffer: [u8; 9], mut read: usize, max_size: u64) -> io::Result<(bool, RecvOperationStep)> {
     read += try!(stream.read_buffer(&mut buffer[read..]));
 
     if read == 9 {
