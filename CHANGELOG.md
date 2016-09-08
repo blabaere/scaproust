@@ -3,11 +3,12 @@
 ### Added
 - Make the transports pluggable
 - Let the user close individual endpoints
+- Add IPC transport on *nix, using unix socket.
 
 ### Changed
 
 ### Fixed
-- Fixes potential infinite wait in device
+- Fix potential infinite wait in device
 
 ---
 

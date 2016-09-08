@@ -6,6 +6,8 @@
 
 pub mod async;
 pub mod tcp;
+#[cfg(not(windows))]
+pub mod ipc;
 pub mod endpoint;
 pub mod pipe;
 pub mod acceptor;
