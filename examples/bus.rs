@@ -18,6 +18,13 @@ use std::thread;
 
 use scaproust::*;
 
+fn create_session() -> Session {
+    SessionBuilder::new().
+        with("tcp", Tcp).
+        with("ipc", Ipc).
+        build().expect("Failed to create session !")
+}
+
 fn duration_ms(ms: u64) -> time::Duration {
     time::Duration::from_millis(ms)
 }
@@ -36,7 +43,7 @@ fn usage(program: &str) -> ! {
 }
 
 fn node(args: Vec<&str>) {
-    let mut session = SessionBuilder::new().with("tcp", Tcp).build().expect("Failed to create session !");
+    let mut session = create_session();
     let mut socket = session.create_socket::<Bus>().expect("Failed to create socket !");
 
     socket.bind(args[2]).expect("Failed to bind socket !");

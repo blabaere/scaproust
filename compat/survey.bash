@@ -50,9 +50,7 @@ function test_survey {
     testcase_survey2 $1
 }
 
-if [[ -f "/tmp/survey_test.ipc" ]]; then
-    rm -f "/tmp/survey_test.ipc"
-fi
+rm -f /tmp/survey* > /dev/null
 
 test_survey "tcp://127.0.0.1:5454"
-#test_survey "ipc:///tmp/survey_test.ipc"
+test_survey "ipc:///tmp/survey_test.ipc"

@@ -26,9 +26,7 @@ function test_pair {
     testcase_pair1 $1
 }
 
-if [[ -f "/tmp/pair_test.ipc" ]]; then
-    rm -f "/tmp/pair_test.ipc"
-fi
+rm -f /tmp/pair* > /dev/null
 
 test_pair "tcp://127.0.0.1:5454"
-#test_pair "ipc:///tmp/pair_test.ipc"
+test_pair "ipc:///tmp/pair_test.ipc"

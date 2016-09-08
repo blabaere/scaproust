@@ -21,6 +21,13 @@ use scaproust::*;
 const NODE0: &'static str = "node0";
 const NODE1: &'static str = "node1";
 
+fn create_session() -> Session {
+    SessionBuilder::new().
+        with("tcp", Tcp).
+        with("ipc", Ipc).
+        build().expect("Failed to create session !")
+}
+
 fn duration_ms(ms: u64) -> time::Duration {
     time::Duration::from_millis(ms)
 }
@@ -59,7 +66,7 @@ fn send_recv(mut socket: Socket, name: &str) -> ! {
 }
 
 fn node0(url: &str) {
-    let mut session = SessionBuilder::new().with("tcp", Tcp).build().expect("Failed to create session !");
+    let mut session = create_session();
     let mut socket = session.create_socket::<Pair>().expect("Failed to create socket !");
 
     socket.bind(url).expect("Failed to bind socket !");
@@ -67,7 +74,7 @@ fn node0(url: &str) {
 }
 
 fn node1(url: &str) {
-    let mut session = SessionBuilder::new().with("tcp", Tcp).build().expect("Failed to create session !");
+    let mut session = create_session();
     let mut socket = session.create_socket::<Pair>().expect("Failed to create socket !");
 
     socket.connect(url).expect("Failed to connect socket !");

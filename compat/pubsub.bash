@@ -53,9 +53,7 @@ function test_pubsub {
     testcase_pubsub2 $1
 }
 
-if [[ -f "/tmp/pubsub_test.ipc" ]]; then
-    rm -f "/tmp/pubsub_test.ipc"
-fi
+rm -f /tmp/pubsub* > /dev/null
 
 test_pubsub "tcp://127.0.0.1:5454"
-#test_pubsub "ipc:///tmp/pubsub_test.ipc"
+test_pubsub "ipc:///tmp/pubsub_test.ipc"

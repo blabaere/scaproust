@@ -47,9 +47,7 @@ function test_reqrep {
     testcase_reqrep2 $1
 }
 
-if [[ -f "/tmp/reqrep_test.ipc" ]]; then
-    rm -f "/tmp/reqrep_test.ipc"
-fi
+rm -f /tmp/reqrep* > /dev/null
 
 test_reqrep "tcp://127.0.0.1:5454"
-#test_reqrep "ipc:///tmp/reqrep_test.ipc"
+test_reqrep "ipc:///tmp/reqrep_test.ipc"

@@ -13,23 +13,20 @@ extern crate env_logger;
 extern crate scaproust;
 
 use std::io::*;
-use std::time;
-use std::thread;
 
 use scaproust::*;
 
 const NODE0: &'static str = "node0";
 const NODE1: &'static str = "node1";
 
-fn sleep_ms(ms: u64) {
-    thread::sleep(time::Duration::from_millis(ms));
-}
-
-fn node0(url: &str) {
-    let mut session = SessionBuilder::new().
+fn create_session() -> Session {
+    SessionBuilder::new().
         with("tcp", Tcp).
         with("ipc", Ipc).
-        build().expect("Failed to create session !");
+        build().expect("Failed to create session !")
+}
+fn node0(url: &str) {
+    let mut session = create_session();
     let mut socket = session.create_socket::<Pull>().expect("Failed to create socket !");
     let _ = socket.bind(url).expect("Failed to bind socket !");
 
@@ -42,12 +39,9 @@ fn node0(url: &str) {
 }
 
 fn node1(url: &str, msg: &str) {
-    let mut session = SessionBuilder::new().
-        with("tcp", Tcp).
-        with("ipc", Ipc).
-        build().expect("Failed to create session !");
+    let mut session = create_session();
     let mut socket = session.create_socket::<Push>().expect("Failed to create socket !");
-    let ep = socket.connect(url).expect("Failed to connect socket !");
+    let _ = socket.connect(url).expect("Failed to connect socket !");
     let buffer = From::from(msg.as_bytes());
 
     println!("NODE1: SENDING \"{}\"", msg);
