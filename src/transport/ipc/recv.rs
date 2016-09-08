@@ -92,3 +92,23 @@ fn read_payload<T:io::Read>(stream: &mut T, mut buffer: Vec<u8>, mut read: usize
         Ok((false, RecvOperationStep::Payload(buffer, read)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+
+    use super::*;
+
+    #[test]
+    fn recv_in_one_run() {
+        let buffer = vec![1, 0, 0, 0, 0, 0, 0, 0, 8, 1, 4, 3, 2, 65, 66, 67, 69];
+        let mut stream = io::Cursor::new(buffer);
+        let mut operation = RecvOperation::new(1024);
+        let msg = operation.run(&mut stream).
+            expect("recv should have succeeded").
+            expect("recv should be done");
+        let expected_bytes = [1, 4, 3, 2, 65, 66, 67, 69];
+
+        assert_eq!(&expected_bytes, msg.get_body());
+    }
+}
