@@ -21,10 +21,18 @@ use scaproust::*;
 const NODE0: &'static str = "node0";
 const NODE1: &'static str = "node1";
 
+#[cfg(not(windows))]
 fn create_session() -> Session {
     SessionBuilder::new().
         with("tcp", Tcp).
         with("ipc", Ipc).
+        build().expect("Failed to create session !")
+}
+
+#[cfg(windows)]
+fn create_session() -> Session {
+    SessionBuilder::new().
+        with("tcp", Tcp).
         build().expect("Failed to create session !")
 }
 

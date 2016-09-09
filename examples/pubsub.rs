@@ -22,10 +22,18 @@ use scaproust::*;
 const SERVER: &'static str = "server";
 const CLIENT: &'static str = "client";
 
+#[cfg(not(windows))]
 fn create_session() -> Session {
     SessionBuilder::new().
         with("tcp", Tcp).
         with("ipc", Ipc).
+        build().expect("Failed to create session !")
+}
+
+#[cfg(windows)]
+fn create_session() -> Session {
+    SessionBuilder::new().
+        with("tcp", Tcp).
         build().expect("Failed to create session !")
 }
 
