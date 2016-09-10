@@ -1,8 +1,4 @@
-### Urgent
-- Investigate why travis build works only with one test runner
-
 ### Improvements
-- publish doc without sudo : https://github.com/huonw/travis-cargo
 - Recv max buffer size
 - Reconnect interval max 
 - Linger
@@ -10,7 +6,7 @@
 - Req prefetch replies
 - Use a pool for payloads and buffers (if any)
 - Find something more efficient than a channel for sending replies from the event loop back to the facade (a mailbox?)
-- IPC transport : See [mio-uds](https://github.com/alexcrichton/mio-uds)
+- IPC transport on windows : See https://github.com/mmacedoeu/pipetoredis.rs
 - INPROC transport : to be determined (rust channel's are probably doing a better work at this)
 
 ### Features
