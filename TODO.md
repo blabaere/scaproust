@@ -1,3 +1,23 @@
+current: Recv max buffer size & tcp no delay
+
+core
+
+- add recv max size & no delay to core::EndpointSpec
+- remove id from core::EndpointSpec
+- replace all fields except id in core::endpoint::Endpoint by an EndpointSpec
+- add an id in Schedulable reconnect & rebind variant
+- replace all relevant parameters of Network::[re]connect|bind by an EndpointSpec parameter
+
+reactor
+
+- fix adapter core::Network trait implementation 
+
+transport
+
+- add recv max size & no delay parameters to bind & connect, or create a struct for that
+- ...
+
+
 ### Improvements
 - Recv max buffer size
 - Reconnect interval max 
