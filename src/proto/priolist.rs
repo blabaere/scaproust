@@ -5,30 +5,6 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 /*
-WARNING:  
-Priolist can not own pipes, since fq & lb deal only with one operation.
-Bus protocol, for example uses both fq and broadcast.
-
-Since send and recv are mutable operations, the item type must be either EndpointId.
-This would cost a HashMap lookup for each operation.
-
-Or the usual shared mutability recipe: Rc<RefCell<Pipe>>.
-This would cost a borrow mut on each operation, and memory fragmentation.
-
-Or maybe FairQueue, LoadBalancing & Broadcast should each own an Rc<RefCell<PrioList>> ?
-NO !!! broadcast is not priority based.
-
-FairQueue     --> PrioList --> Rc<RefCell<HashMap<Eid, ActivablePipe>>>
-LoadBalancing --> PrioList --> Rc<RefCell<HashMap<Eid, ActivablePipe>>>
-Broadcast     ---------------> Rc<RefCell<HashMap<Eid, ActivablePipe>>>
-
-but then, where should add & remove operations be located ?
-
-struct ActivablePipe {
-    pipe: Pipe,
-    active: bool // nein, active is relative to operation
-}
-
 PROTOCOL    |   SEND          |   RECV
 -------------------------------------------
 bus         |   broadcast     |   fairqueue
