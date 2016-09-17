@@ -10,8 +10,6 @@
 ### Fixed
 - Fix potential infinite wait in device
 
----
-
 ## 0.1.0 (2016-09-02)
 
 Initial release
