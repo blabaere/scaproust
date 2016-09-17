@@ -59,7 +59,7 @@ extern crate scaproust;
 
 - [ ] Transports
   - [x] TCP
-  - [ ] IPC (*nix) See: [mio-uds](https://github.com/alexcrichton/mio-uds)
+  - [x] IPC (*nix)
   - [ ] IPC (Windows)
 
 - [ ] Socket options
