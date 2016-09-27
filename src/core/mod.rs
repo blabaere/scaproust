@@ -54,10 +54,15 @@ impl<'x> Into<usize> for &'x EndpointId {
 /*****************************************************************************/
 
 pub struct EndpointSpec {
-    pub id: EndpointId,
     pub url: String,
+    pub desc: EndpointDesc
+}
+
+pub struct EndpointDesc {
     pub send_priority: u8,
-    pub recv_priority: u8
+    pub recv_priority: u8,
+    pub tcp_no_delay: bool,
+    pub recv_max_size: u64
 }
 
 /*****************************************************************************/

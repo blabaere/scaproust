@@ -15,7 +15,9 @@ pub struct Config {
     pub recv_timeout: Option<Duration>,
     pub recv_priority: u8,
     pub retry_ivl: Duration,
-    pub retry_ivl_max: Option<Duration>
+    pub retry_ivl_max: Option<Duration>,
+    pub tcp_no_delay: bool,
+    pub recv_max_size: u64
 }
 
 pub enum ConfigOption {
@@ -85,7 +87,9 @@ impl Default for Config {
             recv_timeout: None,
             recv_priority: 8,
             retry_ivl: Duration::from_millis(100),
-            retry_ivl_max: None
+            retry_ivl_max: None,
+            tcp_no_delay: false,
+            recv_max_size: 1024 * 1024
         }
     }
 }
@@ -99,6 +103,8 @@ impl Config {
             ConfigOption::RecvPriority(priority) => self.recv_priority = priority,
             ConfigOption::RetryIvl(ivl) => self.retry_ivl = ivl,
             ConfigOption::RetryIvlMax(ivl) => self.retry_ivl_max = ivl,
+            ConfigOption::RecvMaxSize(x) => self.recv_max_size = x,
+            ConfigOption::TcpNoDelay(x) => self.tcp_no_delay = x,
             _ => return Err(invalid_input_io_error("option not supported"))
         }
         Ok(())

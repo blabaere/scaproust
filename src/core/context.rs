@@ -8,7 +8,7 @@ use std::fmt;
 use std::io::Result;
 use std::time::Duration;
 
-use core::EndpointSpec;
+use core::{EndpointId, EndpointSpec};
 use core::network::Network;
 
 pub trait Context : Network + Scheduler + fmt::Debug {
@@ -27,8 +27,8 @@ pub enum Event {
 }
 
 pub enum Schedulable {
-    Reconnect(EndpointSpec),
-    Rebind(EndpointSpec),
+    Reconnect(EndpointId, EndpointSpec),
+    Rebind(EndpointId, EndpointSpec),
     SendTimeout,
     RecvTimeout,
     ReqResend,

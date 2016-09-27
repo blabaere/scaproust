@@ -10,10 +10,11 @@ use std::io;
 use std::boxed::FnBox;
 use std::time::Duration;
 
-use super::{SocketId, EndpointId, Message, EndpointSpec};
+use super::{SocketId, EndpointId, Message, EndpointSpec, EndpointDesc};
 use super::endpoint::{Pipe, Acceptor};
 use super::config::{Config, ConfigOption};
 use super::context::{Context, Schedulable, Scheduled, Event};
+use super::network;
 use io_error::*;
 
 pub enum Request {
@@ -108,21 +109,50 @@ impl Socket {
 
 /*****************************************************************************/
 /*                                                                           */
+/* endpoint creation                                                         */
+/*                                                                           */
+/*****************************************************************************/
+
+fn create_endpoint_desc(&self) -> EndpointDesc {
+    EndpointDesc {
+        send_priority: self.config.send_priority,
+        recv_priority: self.config.recv_priority,
+        tcp_no_delay: self.config.tcp_no_delay,
+        recv_max_size: self.config.recv_max_size
+    }
+}
+
+fn create_endpoint_spec(&self, url: String) -> EndpointSpec {
+    EndpointSpec {
+        url: url,
+        desc: self.create_endpoint_desc()
+    }
+}
+
+fn create_endpoint_tmpl(&self, url: String) -> network::EndpointTmpl {
+    network::EndpointTmpl {
+        pids: self.get_protocol_ids(),
+        spec: self.create_endpoint_spec(url)
+    }
+}
+
+/*****************************************************************************/
+/*                                                                           */
 /* connect                                                                   */
 /*                                                                           */
 /*****************************************************************************/
 
     pub fn connect(&mut self, ctx: &mut Context, url: String) {
-        let pids = self.get_protocol_ids();
+        let tmpl = self.create_endpoint_tmpl(url);
 
-        match ctx.connect(self.id, &url, pids) {
-            Ok(id) => self.on_connect_success(ctx, url, id),
+        match ctx.connect(self.id, &tmpl) {
+            Ok(id) => self.on_connect_success(ctx, id, tmpl.spec),
             Err(e) => self.on_connect_error(e)
         };
     }
 
-    fn on_connect_success(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
-        let pipe = self.connect_pipe(eid, url);
+    fn on_connect_success(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+        let pipe = self.connect_pipe(eid, spec);
 
         self.insert_pipe(ctx, eid, pipe);
         self.send_reply(Reply::Connect(eid));
@@ -132,29 +162,33 @@ impl Socket {
         self.send_reply(Reply::Err(err));
     }
 
-    fn schedule_reconnect(&mut self, ctx: &mut Context, spec: EndpointSpec) {
-        let task = Schedulable::Reconnect(spec);
+    fn schedule_reconnect(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+        let task = Schedulable::Reconnect(eid, spec);
         let delay = self.config.retry_ivl;
         let _ = ctx.schedule(task, delay); 
         // TODO maybe we should keep track of the scheduled reconnection
         // In case the facade wants to close the ep somewhere between the error and the timeout
     }
 
-    pub fn reconnect(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+    pub fn reconnect(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
         let pids = self.get_protocol_ids();
+        let tmpl = network::EndpointTmpl {
+            pids: pids,
+            spec: spec
+        };
 
-        match ctx.reconnect(self.id, spec.id, &spec.url, pids) {
-            Ok(_)  => self.on_reconnect_success(ctx, spec),
-            Err(_) => self.on_reconnect_error(ctx, spec)
+        match ctx.reconnect(self.id, eid, &tmpl) {
+            Ok(_)  => self.on_reconnect_success(ctx, eid, tmpl.spec),
+            Err(_) => self.on_reconnect_error(ctx, eid, tmpl.spec)
         }
     }
 
-    fn on_reconnect_success(&mut self, ctx: &mut Context, spec: EndpointSpec) {
-        self.insert_pipe(ctx, spec.id, Pipe::from(spec));
+    fn on_reconnect_success(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+        self.insert_pipe(ctx, eid, Pipe::from_spec(eid, spec));
     }
 
-    fn on_reconnect_error(&mut self, ctx: &mut Context, spec: EndpointSpec) {
-        self.schedule_reconnect(ctx, spec);
+    fn on_reconnect_error(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+        self.schedule_reconnect(ctx, eid, spec);
     }
 
 /*****************************************************************************/
@@ -164,16 +198,16 @@ impl Socket {
 /*****************************************************************************/
 
     pub fn bind(&mut self, ctx: &mut Context, url: String) {
-        let pids = self.get_protocol_ids();
+        let tmpl = self.create_endpoint_tmpl(url);
 
-        match ctx.bind(self.id, &url, pids) {
-            Ok(id) => self.on_bind_success(ctx, url, id),
+        match ctx.bind(self.id, &tmpl) {
+            Ok(id) => self.on_bind_success(ctx, id, tmpl.spec),
             Err(e) => self.on_bind_error(e)
         };
     }
 
-    fn on_bind_success(&mut self, ctx: &mut Context, url: String, eid: EndpointId) {
-        let acceptor = self.connect_acceptor(eid, url);
+    fn on_bind_success(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+        let acceptor = self.connect_acceptor(eid, spec);
 
         acceptor.open(ctx);
 
@@ -185,29 +219,35 @@ impl Socket {
         self.send_reply(Reply::Err(err));
     }
 
-    fn schedule_rebind(&mut self, ctx: &mut Context, spec: EndpointSpec) {
-        let task = Schedulable::Rebind(spec);
+    fn schedule_rebind(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+        let task = Schedulable::Rebind(eid, spec);
         let delay = self.config.retry_ivl;
         let _ = ctx.schedule(task, delay); 
         // TODO maybe we should keep track of the scheduled reconnection
         // In case the facade wants to close the ep somewhere between the error and the timeout
     }
 
-    pub fn rebind(&mut self, ctx: &mut Context, spec: EndpointSpec) {
+    pub fn rebind(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
         let pids = self.get_protocol_ids();
+        let tmpl = network::EndpointTmpl {
+            pids: pids,
+            spec: spec
+        };
 
-        match ctx.rebind(self.id, spec.id, &spec.url, pids) {
-            Ok(_)  => self.on_rebind_success(ctx, spec),
-            Err(_) => self.on_rebind_error(ctx, spec)
+        match ctx.rebind(self.id, eid, &tmpl) {
+            Ok(_)  => self.on_rebind_success(ctx, eid, tmpl.spec),
+            Err(_) => self.on_rebind_error(ctx, eid, tmpl.spec)
         };
     }
 
-    fn on_rebind_success(&mut self, ctx: &mut Context, spec: EndpointSpec) {
-        self.insert_acceptor(ctx, spec.id, Acceptor::from(spec))
+    fn on_rebind_success(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+        let acceptor = Acceptor::from_spec(eid, spec);
+
+        self.insert_acceptor(ctx, eid, acceptor)
     }
 
-    fn on_rebind_error(&mut self, ctx: &mut Context, spec: EndpointSpec) {
-        self.schedule_rebind(ctx, spec);
+    fn on_rebind_error(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+        self.schedule_rebind(ctx, eid, spec);
     }
 
 /*****************************************************************************/
@@ -234,7 +274,7 @@ impl Socket {
 
     pub fn on_pipe_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
         if let Some(spec) = self.remove_pipe(ctx, eid) {
-            self.schedule_reconnect(ctx, spec);
+            self.schedule_reconnect(ctx, eid, spec);
         }
     }
 
@@ -254,8 +294,8 @@ impl Socket {
         None
     }
 
-    fn connect_pipe(&self, eid: EndpointId, url: String) -> Pipe {
-        Pipe::new_connected(eid, url, self.config.send_priority, self.config.recv_priority)
+    fn connect_pipe(&self, eid: EndpointId, spec: EndpointSpec) -> Pipe {
+        Pipe::from_spec(eid, spec)
     }
 
     fn accept_pipe(&self, aid: EndpointId, eid: EndpointId) -> Pipe {
@@ -264,8 +304,14 @@ impl Socket {
         } else {
             (self.config.send_priority, self.config.recv_priority)
         };
+        let desc = EndpointDesc {
+            send_priority: send_prio,
+            recv_priority: recv_prio,
+            tcp_no_delay: self.config.tcp_no_delay,
+            recv_max_size: self.config.recv_max_size
+        };
 
-        Pipe::new_accepted(eid, send_prio, recv_prio)
+        Pipe::new_accepted(eid, desc)
     }
 
 /*****************************************************************************/
@@ -276,7 +322,7 @@ impl Socket {
 
     pub fn on_acceptor_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
         if let Some(spec) = self.remove_acceptor(ctx, eid) {
-            self.schedule_rebind(ctx, spec);
+            self.schedule_rebind(ctx, eid, spec);
         }
     }
 
@@ -294,12 +340,8 @@ impl Socket {
         self.acceptors.remove(&eid).map_or(None, |acceptor| acceptor.close(ctx))
     }
 
-    fn connect_acceptor(&self, eid: EndpointId, url: String) -> Acceptor {
-        Acceptor::new(
-            eid,
-            url,
-            self.config.send_priority,
-            self.config.recv_priority)
+    fn connect_acceptor(&self, eid: EndpointId, spec: EndpointSpec) -> Acceptor {
+        Acceptor::from_spec(eid, spec)
     }
 
 /*****************************************************************************/
@@ -429,9 +471,9 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use core::network::Network;
+    use core::network;
     use core::context::*;
-    use core::{SocketId, EndpointId, Message};
+    use core::{SocketId, EndpointId, Message, EndpointSpec, EndpointDesc};
     use core::endpoint::Pipe;
     use io_error::*;
 
@@ -455,17 +497,17 @@ mod tests {
 
     struct FailingNetwork;
 
-    impl Network for FailingNetwork {
-        fn connect(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
+    impl network::Network for FailingNetwork {
+        fn connect(&mut self, _: SocketId, _: &network::EndpointTmpl) -> io::Result<EndpointId> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
-        fn reconnect(&mut self, _: SocketId, _: EndpointId, _: &str, _: (u16, u16)) -> io::Result<()> {
+        fn reconnect(&mut self, _: SocketId, _: EndpointId, _: &network::EndpointTmpl) -> io::Result<()> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
-        fn bind(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
+        fn bind(&mut self, _: SocketId, _: &network::EndpointTmpl) -> io::Result<EndpointId> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
-        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &str, _: (u16, u16)) -> io::Result<()> {
+        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &network::EndpointTmpl) -> io::Result<()> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
         fn open(&mut self, _: EndpointId, _: bool) {
@@ -519,17 +561,17 @@ mod tests {
 
     struct WorkingNetwork(EndpointId);
 
-    impl Network for WorkingNetwork {
-        fn connect(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
+    impl network::Network for WorkingNetwork {
+        fn connect(&mut self, _: SocketId, _: &network::EndpointTmpl) -> io::Result<EndpointId> {
             Ok(self.0)
         }
-        fn reconnect(&mut self, _: SocketId, _: EndpointId, _: &str, _: (u16, u16)) -> io::Result<()> {
+        fn reconnect(&mut self, _: SocketId, _: EndpointId, _: &network::EndpointTmpl) -> io::Result<()> {
             Ok(())
         }
-        fn bind(&mut self, _: SocketId, _: &str, _: (u16, u16)) -> io::Result<EndpointId> {
+        fn bind(&mut self, _: SocketId, _: &network::EndpointTmpl) -> io::Result<EndpointId> {
             Ok(self.0)
         }
-        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &str, _: (u16, u16)) -> io::Result<()> {
+        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &network::EndpointTmpl) -> io::Result<()> {
             Ok(())
         }
         fn open(&mut self, _: EndpointId, _: bool) {}

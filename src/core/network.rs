@@ -7,13 +7,20 @@
 use std::rc::Rc;
 use std::io::Result;
 
+use super::{EndpointSpec};
 use core::{SocketId, EndpointId, Message};
 
+
+pub struct EndpointTmpl {
+    pub pids: (u16, u16),
+    pub spec: EndpointSpec
+}
+
 pub trait Network {
-    fn connect(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> Result<EndpointId>;
-    fn reconnect(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> Result<()>;
-    fn bind(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> Result<EndpointId>;
-    fn rebind(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> Result<()>;
+    fn connect(&mut self, sid: SocketId, tmpl: &EndpointTmpl) -> Result<EndpointId>;
+    fn reconnect(&mut self, sid: SocketId, eid: EndpointId, tmpl: &EndpointTmpl) -> Result<()>;
+    fn bind(&mut self, sid: SocketId, tmpl: &EndpointTmpl) -> Result<EndpointId>;
+    fn rebind(&mut self, sid: SocketId, eid: EndpointId, tmpl: &EndpointTmpl) -> Result<()>;
     fn open(&mut self, eid: EndpointId, remote: bool);
     fn close(&mut self, eid: EndpointId, remote: bool);
     fn send(&mut self, eid: EndpointId, msg: Rc<Message>);

@@ -14,7 +14,7 @@ use mio::{Evented, Token, Ready, PollOpt};
 use mio::timer::{Timer, Timeout};
 
 use core::context;
-use core::network::Network;
+use core::network::{Network, EndpointTmpl};
 use core::{SocketId, EndpointId, Message};
 use transport::Transport;
 use transport::endpoint::*;
@@ -306,25 +306,25 @@ impl<'a> SocketEventLoopContext<'a> {
 
 impl<'a> Network for SocketEventLoopContext<'a> {
 
-    fn connect(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
-        let pipe = try!(self.connect(url, pids));
+    fn connect(&mut self, sid: SocketId, tmpl: &EndpointTmpl) -> io::Result<EndpointId> {
+        let pipe = try!(self.connect(&tmpl.spec.url, tmpl.pids));
         let eid = self.endpoints.insert_pipe(sid, pipe);
 
         Ok(eid)
     }
-    fn bind(&mut self, sid: SocketId, url: &str, pids: (u16, u16)) -> io::Result<EndpointId> {
-        let acceptor = try!(self.bind(url, pids));
+    fn bind(&mut self, sid: SocketId, tmpl: &EndpointTmpl) -> io::Result<EndpointId> {
+        let acceptor = try!(self.bind(&tmpl.spec.url, tmpl.pids));
         let eid = self.endpoints.insert_acceptor(sid, acceptor);
 
         Ok(eid)
     }
-    fn reconnect(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> io::Result<()> {
-        let pipe = try!(self.connect(url, pids));
+    fn reconnect(&mut self, sid: SocketId, eid: EndpointId, tmpl: &EndpointTmpl) -> io::Result<()> {
+        let pipe = try!(self.connect(&tmpl.spec.url, tmpl.pids));
 
         Ok(self.endpoints.insert_pipe_controller(sid, eid, pipe))
     }
-    fn rebind(&mut self, sid: SocketId, eid: EndpointId, url: &str, pids: (u16, u16)) -> io::Result<()> {
-        let acceptor = try!(self.bind(url, pids));
+    fn rebind(&mut self, sid: SocketId, eid: EndpointId, tmpl: &EndpointTmpl) -> io::Result<()> {
+        let acceptor = try!(self.bind(&tmpl.spec.url, tmpl.pids));
 
         Ok(self.endpoints.insert_acceptor_controller(sid, eid, acceptor))
     }

@@ -6,7 +6,7 @@
 
 use std::rc::Rc;
 
-use super::{EndpointId, Message, EndpointSpec};
+use super::{EndpointId, Message, EndpointSpec, EndpointDesc};
 use super::context::Context;
 
 pub enum Request {
@@ -16,29 +16,34 @@ pub enum Request {
 pub struct Endpoint {
     id: EndpointId,
     url: Option<String>,
-    send_priority: u8,
-    recv_priority: u8
+    desc: EndpointDesc
 }
 
 pub struct Pipe(Endpoint);
 pub struct Acceptor(Endpoint);
 
 impl Endpoint {
-    fn new_created(id: EndpointId, url: String, send_prio: u8, recv_prio: u8) -> Endpoint {
+    fn new_created(id: EndpointId, url: String, desc: EndpointDesc) -> Endpoint {
         Endpoint {
             id: id,
             url: Some(url),
-            send_priority: send_prio,
-            recv_priority: recv_prio,
+            desc: desc,
         }
     }
 
-    fn new_accepted(id: EndpointId, send_prio: u8, recv_prio: u8) -> Endpoint {
+    fn new_accepted(id: EndpointId, desc: EndpointDesc) -> Endpoint {
         Endpoint {
             id: id,
             url: None,
-            send_priority: send_prio,
-            recv_priority: recv_prio,
+            desc: desc
+        }
+    }
+
+    fn from_spec(id: EndpointId, spec: EndpointSpec) -> Endpoint {
+        Endpoint {
+            id: id,
+            url: Some(spec.url),
+            desc: spec.desc
         }
     }
 
@@ -53,29 +58,33 @@ impl Endpoint {
     }
     fn close(mut self, network: &mut Context, remote: bool) -> Option<EndpointSpec> {
         network.close(self.id, remote);
-        
-        self.url.take().map(|url| EndpointSpec {
-            id: self.id,
-            url: url,
-            send_priority: self.send_priority,
-            recv_priority: self.recv_priority
-        })
-    }
-}
 
-impl From<EndpointSpec> for Pipe {
-    fn from(spec: EndpointSpec) -> Pipe {
-        Pipe::new_connected(spec.id, spec.url, spec.send_priority, spec.recv_priority)
+        match self.url.take() {
+            Some(url) => Some(EndpointSpec {
+                url: url,
+                desc: self.desc} ),
+            None => None,
+        }
+    }
+    fn get_send_priority(&self) -> u8 {
+        self.desc.send_priority
+    }
+    fn get_recv_priority(&self) -> u8 {
+        self.desc.recv_priority
     }
 }
 
 impl Pipe {
-    pub fn new_connected(id: EndpointId, url: String, send_prio: u8, recv_prio: u8) -> Pipe {
-        Pipe(Endpoint::new_created(id, url, send_prio, recv_prio))
+    pub fn new_connected(id: EndpointId, url: String, desc: EndpointDesc) -> Pipe {
+        Pipe(Endpoint::new_created(id, url, desc))
     }
 
-    pub fn new_accepted(id: EndpointId, send_prio: u8, recv_prio: u8) -> Pipe {
-        Pipe(Endpoint::new_accepted(id, send_prio, recv_prio))
+    pub fn new_accepted(id: EndpointId, desc: EndpointDesc) -> Pipe {
+        Pipe(Endpoint::new_accepted(id, desc))
+    }
+
+    pub fn from_spec(id: EndpointId, spec: EndpointSpec) -> Pipe {
+        Pipe(Endpoint::from_spec(id, spec))
     }
 
     pub fn open(&self, network: &mut Context) {
@@ -91,16 +100,19 @@ impl Pipe {
         self.0.close(network, true)
     }
     pub fn get_send_priority(&self) -> u8 {
-        self.0.send_priority
+        self.0.get_send_priority()
     }
     pub fn get_recv_priority(&self) -> u8 {
-        self.0.recv_priority
+        self.0.get_recv_priority()
     }
 }
 
 impl Acceptor {
-    pub fn new(id: EndpointId, url: String, send_prio: u8, recv_prio: u8) -> Acceptor {
-        Acceptor(Endpoint::new_created(id, url, send_prio, recv_prio))
+    pub fn new(id: EndpointId, url: String, desc: EndpointDesc) -> Acceptor {
+        Acceptor(Endpoint::new_created(id, url, desc))
+    }
+    pub fn from_spec(id: EndpointId, spec: EndpointSpec) -> Acceptor {
+        Acceptor(Endpoint::from_spec(id, spec))
     }
     pub fn open(&self, network: &mut Context) {
         self.0.open(network, false)
@@ -109,15 +121,9 @@ impl Acceptor {
         self.0.close(network, false)
     }
     pub fn get_send_priority(&self) -> u8 {
-        self.0.send_priority
+        self.0.get_send_priority()
     }
     pub fn get_recv_priority(&self) -> u8 {
-        self.0.recv_priority
-    }
-}
-
-impl From<EndpointSpec> for Acceptor {
-    fn from(spec: EndpointSpec) -> Acceptor {
-        Acceptor::new(spec.id, spec.url, spec.send_priority, spec.recv_priority)
+        self.0.get_recv_priority()
     }
 }
