@@ -64,7 +64,7 @@ extern crate scaproust;
 
 - [ ] Socket options
   - [ ] Linger
-  - [ ] Recv max size
+  - [x] Recv max size
   - [x] Send timeout
   - [x] Recv timeout
   - [x] Reconnect interval
@@ -80,8 +80,8 @@ extern crate scaproust;
   - [x] SUB subscribe
   - [x] SUB unsubscribe
 
-- [ ] Transport options
-  - [ ] TCP no delay
+- [x] Transport options
+  - [x] TCP no delay
 
 ## License
 

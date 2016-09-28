@@ -20,7 +20,7 @@ exclude       = [
 log = "0.3.6"
 byteorder = "0.5.3"
 time = "0.1.35"
-clippy = "0.0.90"
+clippy = "0.0.91"
 mio = "0.6.0"
 mio-uds = "0.6.0"
 

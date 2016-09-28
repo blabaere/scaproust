@@ -3,7 +3,8 @@
 ### Added
 - Make the transports pluggable
 - Let the user close individual endpoints
-- Add IPC transport on *nix, using unix socket.
+- IPC transport on *nix, using unix socket.
+- Expose `recv max size` and `tcp no delay` options. 
 
 ### Changed
 
