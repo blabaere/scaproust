@@ -17,15 +17,17 @@ use super::stub::IpcPipeStub;
 
 pub struct IpcAcceptor {
     listener: UnixListener,
-    proto_ids: (u16, u16)
+    proto_ids: (u16, u16),
+    recv_max_size: u64
 }
 
 impl IpcAcceptor {
 
-    pub fn new(l: UnixListener, pids: (u16, u16)) -> IpcAcceptor {
+    pub fn new(l: UnixListener, pids: (u16, u16), recv_max_size: u64) -> IpcAcceptor {
         IpcAcceptor {
             listener: l,
-            proto_ids: pids
+            proto_ids: pids,
+            recv_max_size: recv_max_size
         }
     }
 
@@ -58,10 +60,9 @@ impl IpcAcceptor {
     }
 
     fn create_pipe(&self, stream: UnixStream) -> Box<pipe::Pipe> {
-        let pids = self.proto_ids;
-        let stub = IpcPipeStub::new(stream);
+        let stub = IpcPipeStub::new(stream, self.recv_max_size);
 
-        box AsyncPipe::new(stub, pids)
+        box AsyncPipe::new(stub, self.proto_ids)
     }
 }
 

@@ -14,11 +14,16 @@ pub mod acceptor;
 
 use std::io::Result;
 
-pub const DEFAULT_RECV_MAX_SIZE: u64 = 1024 * 1024;
+pub struct Destination<'a> {
+    pub addr: &'a str,
+    pub pids: (u16, u16),
+    pub tcp_no_delay: bool,
+    pub recv_max_size: u64
+}
 
 pub trait Transport {
-    fn connect(&self, url: &str, pids: (u16, u16)) -> Result<Box<pipe::Pipe>>;
-    fn bind(&self, url: &str, pids: (u16, u16)) -> Result<Box<acceptor::Acceptor>>;
+    fn connect(&self, dest: &Destination) -> Result<Box<pipe::Pipe>>;
+    fn bind(&self, dest: &Destination) -> Result<Box<acceptor::Acceptor>>;
 }
 
 #[cfg(test)]

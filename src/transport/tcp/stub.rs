@@ -12,7 +12,6 @@ use mio;
 use mio::tcp::{TcpStream, Shutdown};
 
 use core::Message;
-use transport::DEFAULT_RECV_MAX_SIZE;
 use transport::tcp::send::SendOperation;
 use transport::tcp::recv::RecvOperation;
 use transport::async::stub::*;
@@ -26,6 +25,7 @@ use io_error::*;
 
 pub struct TcpPipeStub {
     stream: TcpStream,
+    recv_max_size: u64,
     send_operation: Option<SendOperation>,
     recv_operation: Option<RecvOperation>
 }
@@ -38,9 +38,10 @@ impl Deref for TcpPipeStub {
 }
 
 impl TcpPipeStub {
-    pub fn new(stream: TcpStream) -> TcpPipeStub {
+    pub fn new(stream: TcpStream, recv_max_size: u64) -> TcpPipeStub {
         TcpPipeStub {
             stream: stream,
+            recv_max_size: recv_max_size,
             send_operation: None,
             recv_operation: None
         }
@@ -106,7 +107,7 @@ impl Sender for TcpPipeStub {
 
 impl Receiver for TcpPipeStub {
     fn start_recv(&mut self) -> io::Result<Option<Message>> {
-        let recv_operation = RecvOperation::new(DEFAULT_RECV_MAX_SIZE);
+        let recv_operation = RecvOperation::new(self.recv_max_size);
 
         self.run_recv_operation(recv_operation)
     }

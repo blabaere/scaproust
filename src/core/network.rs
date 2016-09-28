@@ -7,14 +7,8 @@
 use std::rc::Rc;
 use std::io::Result;
 
-use super::{EndpointSpec};
+use super::{EndpointTmpl};
 use core::{SocketId, EndpointId, Message};
-
-
-pub struct EndpointTmpl {
-    pub pids: (u16, u16),
-    pub spec: EndpointSpec
-}
 
 pub trait Network {
     fn connect(&mut self, sid: SocketId, tmpl: &EndpointTmpl) -> Result<EndpointId>;

@@ -10,11 +10,10 @@ use std::io;
 use std::boxed::FnBox;
 use std::time::Duration;
 
-use super::{SocketId, EndpointId, Message, EndpointSpec, EndpointDesc};
+use super::{SocketId, EndpointId, Message, EndpointTmpl, EndpointSpec, EndpointDesc, };
 use super::endpoint::{Pipe, Acceptor};
 use super::config::{Config, ConfigOption};
 use super::context::{Context, Schedulable, Scheduled, Event};
-use super::network;
 use io_error::*;
 
 pub enum Request {
@@ -129,8 +128,8 @@ fn create_endpoint_spec(&self, url: String) -> EndpointSpec {
     }
 }
 
-fn create_endpoint_tmpl(&self, url: String) -> network::EndpointTmpl {
-    network::EndpointTmpl {
+fn create_endpoint_tmpl(&self, url: String) -> EndpointTmpl {
+    EndpointTmpl {
         pids: self.get_protocol_ids(),
         spec: self.create_endpoint_spec(url)
     }
@@ -172,7 +171,7 @@ fn create_endpoint_tmpl(&self, url: String) -> network::EndpointTmpl {
 
     pub fn reconnect(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
         let pids = self.get_protocol_ids();
-        let tmpl = network::EndpointTmpl {
+        let tmpl = EndpointTmpl {
             pids: pids,
             spec: spec
         };
@@ -229,7 +228,7 @@ fn create_endpoint_tmpl(&self, url: String) -> network::EndpointTmpl {
 
     pub fn rebind(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
         let pids = self.get_protocol_ids();
-        let tmpl = network::EndpointTmpl {
+        let tmpl = EndpointTmpl {
             pids: pids,
             spec: spec
         };
@@ -473,7 +472,7 @@ mod tests {
     use super::*;
     use core::network;
     use core::context::*;
-    use core::{SocketId, EndpointId, Message, EndpointSpec, EndpointDesc};
+    use core::{SocketId, EndpointId, Message, EndpointTmpl};
     use core::endpoint::Pipe;
     use io_error::*;
 
@@ -498,16 +497,16 @@ mod tests {
     struct FailingNetwork;
 
     impl network::Network for FailingNetwork {
-        fn connect(&mut self, _: SocketId, _: &network::EndpointTmpl) -> io::Result<EndpointId> {
+        fn connect(&mut self, _: SocketId, _: &EndpointTmpl) -> io::Result<EndpointId> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
-        fn reconnect(&mut self, _: SocketId, _: EndpointId, _: &network::EndpointTmpl) -> io::Result<()> {
+        fn reconnect(&mut self, _: SocketId, _: EndpointId, _: &EndpointTmpl) -> io::Result<()> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
-        fn bind(&mut self, _: SocketId, _: &network::EndpointTmpl) -> io::Result<EndpointId> {
+        fn bind(&mut self, _: SocketId, _: &EndpointTmpl) -> io::Result<EndpointId> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
-        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &network::EndpointTmpl) -> io::Result<()> {
+        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &EndpointTmpl) -> io::Result<()> {
             Err(other_io_error("FailingNetwork can only fail"))
         }
         fn open(&mut self, _: EndpointId, _: bool) {
@@ -562,16 +561,16 @@ mod tests {
     struct WorkingNetwork(EndpointId);
 
     impl network::Network for WorkingNetwork {
-        fn connect(&mut self, _: SocketId, _: &network::EndpointTmpl) -> io::Result<EndpointId> {
+        fn connect(&mut self, _: SocketId, _: &EndpointTmpl) -> io::Result<EndpointId> {
             Ok(self.0)
         }
-        fn reconnect(&mut self, _: SocketId, _: EndpointId, _: &network::EndpointTmpl) -> io::Result<()> {
+        fn reconnect(&mut self, _: SocketId, _: EndpointId, _: &EndpointTmpl) -> io::Result<()> {
             Ok(())
         }
-        fn bind(&mut self, _: SocketId, _: &network::EndpointTmpl) -> io::Result<EndpointId> {
+        fn bind(&mut self, _: SocketId, _: &EndpointTmpl) -> io::Result<EndpointId> {
             Ok(self.0)
         }
-        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &network::EndpointTmpl) -> io::Result<()> {
+        fn rebind(&mut self, _: SocketId, _: EndpointId, _: &EndpointTmpl) -> io::Result<()> {
             Ok(())
         }
         fn open(&mut self, _: EndpointId, _: bool) {}

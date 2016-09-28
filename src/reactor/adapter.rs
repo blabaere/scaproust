@@ -14,9 +14,9 @@ use mio::{Evented, Token, Ready, PollOpt};
 use mio::timer::{Timer, Timeout};
 
 use core::context;
-use core::network::{Network, EndpointTmpl};
-use core::{SocketId, EndpointId, Message};
-use transport::Transport;
+use core::network::Network;
+use core::{SocketId, EndpointId, Message, EndpointTmpl};
+use transport::{Transport, Destination};
 use transport::endpoint::*;
 use transport::pipe;
 use transport::acceptor;
@@ -271,13 +271,10 @@ impl<'a> SocketEventLoopContext<'a> {
 
     fn get_transport(&self, scheme: &str) -> io::Result<&Box<Transport + Send>> {
         self.endpoints.get_transport(scheme)
-        /*match scheme {
-            "tcp" => Ok(Box::new(Tcp)),
-            _ => Err(invalid_input_io_error(scheme.to_owned()))
-        }*/
     }
 
-    fn connect(&mut self, url: &str, pids: (u16, u16)) -> io::Result<Box<pipe::Pipe>> {
+    fn connect(&mut self, tmpl: &EndpointTmpl) -> io::Result<Box<pipe::Pipe>> {
+        let url = &tmpl.spec.url;
         let index = match url.find("://") {
             Some(x) => x,
             None => return Err(invalid_input_io_error(url.to_owned()))
@@ -286,11 +283,18 @@ impl<'a> SocketEventLoopContext<'a> {
         let (scheme, remainder) = url.split_at(index);
         let addr = &remainder[3..];
         let transport = try!(self.get_transport(scheme));
+        let dest = Destination {
+            addr: addr,
+            pids: tmpl.pids,
+            tcp_no_delay: tmpl.spec.desc.tcp_no_delay,
+            recv_max_size: tmpl.spec.desc.recv_max_size,
+        };
 
-        transport.connect(addr, pids)
+        transport.connect(&dest)
     }
 
-    fn bind(&mut self, url: &str, pids: (u16, u16)) -> io::Result<Box<acceptor::Acceptor>> {
+    fn bind(&mut self, tmpl: &EndpointTmpl) -> io::Result<Box<acceptor::Acceptor>> {
+        let url = &tmpl.spec.url;
         let index = match url.find("://") {
             Some(x) => x,
             None => return Err(invalid_input_io_error(url.to_owned()))
@@ -299,32 +303,38 @@ impl<'a> SocketEventLoopContext<'a> {
         let (scheme, remainder) = url.split_at(index);
         let addr = &remainder[3..];
         let transport = try!(self.get_transport(scheme));
+        let dest = Destination {
+            addr: addr,
+            pids: tmpl.pids,
+            tcp_no_delay: tmpl.spec.desc.tcp_no_delay,
+            recv_max_size: tmpl.spec.desc.recv_max_size,
+        };
 
-        transport.bind(addr, pids)
+        transport.bind(&dest)
     }
 }
 
 impl<'a> Network for SocketEventLoopContext<'a> {
 
     fn connect(&mut self, sid: SocketId, tmpl: &EndpointTmpl) -> io::Result<EndpointId> {
-        let pipe = try!(self.connect(&tmpl.spec.url, tmpl.pids));
+        let pipe = try!(self.connect(tmpl));
         let eid = self.endpoints.insert_pipe(sid, pipe);
 
         Ok(eid)
     }
     fn bind(&mut self, sid: SocketId, tmpl: &EndpointTmpl) -> io::Result<EndpointId> {
-        let acceptor = try!(self.bind(&tmpl.spec.url, tmpl.pids));
+        let acceptor = try!(self.bind(tmpl));
         let eid = self.endpoints.insert_acceptor(sid, acceptor);
 
         Ok(eid)
     }
     fn reconnect(&mut self, sid: SocketId, eid: EndpointId, tmpl: &EndpointTmpl) -> io::Result<()> {
-        let pipe = try!(self.connect(&tmpl.spec.url, tmpl.pids));
+        let pipe = try!(self.connect(tmpl));
 
         Ok(self.endpoints.insert_pipe_controller(sid, eid, pipe))
     }
     fn rebind(&mut self, sid: SocketId, eid: EndpointId, tmpl: &EndpointTmpl) -> io::Result<()> {
-        let acceptor = try!(self.bind(&tmpl.spec.url, tmpl.pids));
+        let acceptor = try!(self.bind(tmpl));
 
         Ok(self.endpoints.insert_acceptor_controller(sid, eid, acceptor))
     }

@@ -49,9 +49,14 @@ impl<'x> Into<usize> for &'x EndpointId {
 
 /*****************************************************************************/
 /*                                                                           */
-/* EndpointSpec                                                              */
+/* Endpoint                                                                  */
 /*                                                                           */
 /*****************************************************************************/
+
+pub struct EndpointTmpl {
+    pub pids: (u16, u16),
+    pub spec: EndpointSpec
+}
 
 pub struct EndpointSpec {
     pub url: String,

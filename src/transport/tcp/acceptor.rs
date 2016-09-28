@@ -16,15 +16,19 @@ use super::stub::TcpPipeStub;
 
 pub struct TcpAcceptor {
     listener: TcpListener,
-    proto_ids: (u16, u16)
+    proto_ids: (u16, u16),
+    no_delay: bool,
+    recv_max_size: u64
 }
 
 impl TcpAcceptor {
 
-    pub fn new(l: TcpListener, pids: (u16, u16)) -> TcpAcceptor {
+    pub fn new(l: TcpListener, dest: &Destination) -> TcpAcceptor {
         TcpAcceptor {
             listener: l,
-            proto_ids: pids
+            proto_ids: dest.pids,
+            no_delay: dest.tcp_no_delay,
+            recv_max_size: dest.recv_max_size
         }
     }
 
@@ -34,6 +38,7 @@ impl TcpAcceptor {
         loop {
             match self.listener.accept() {
                 Ok((stream, _)) => {
+                    let _ = stream.set_nodelay(self.no_delay);
                     let pipe = self.create_pipe(stream);
 
                     pipes.push(pipe);
@@ -54,10 +59,9 @@ impl TcpAcceptor {
     }
 
     fn create_pipe(&self, stream: TcpStream) -> Box<pipe::Pipe> {
-        let pids = self.proto_ids;
-        let stub = TcpPipeStub::new(stream);
+        let stub = TcpPipeStub::new(stream, self.recv_max_size);
 
-        box AsyncPipe::new(stub, pids)
+        box AsyncPipe::new(stub, self.proto_ids)
     }
 }
 

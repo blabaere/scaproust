@@ -14,7 +14,6 @@ use mio;
 use mio_uds::UnixStream;
 
 use core::Message;
-use transport::DEFAULT_RECV_MAX_SIZE;
 use transport::ipc::send::SendOperation;
 use transport::ipc::recv::RecvOperation;
 use transport::async::stub::*;
@@ -28,6 +27,7 @@ use io_error::*;
 
 pub struct IpcPipeStub {
     stream: UnixStream,
+    recv_max_size: u64,
     send_operation: Option<SendOperation>,
     recv_operation: Option<RecvOperation>
 }
@@ -40,9 +40,10 @@ impl Deref for IpcPipeStub {
 }
 
 impl IpcPipeStub {
-    pub fn new(stream: UnixStream) -> IpcPipeStub {
+    pub fn new(stream: UnixStream, recv_max_size: u64) -> IpcPipeStub {
         IpcPipeStub {
             stream: stream,
+            recv_max_size: recv_max_size,
             send_operation: None,
             recv_operation: None
         }
@@ -108,7 +109,7 @@ impl Sender for IpcPipeStub {
 
 impl Receiver for IpcPipeStub {
     fn start_recv(&mut self) -> io::Result<Option<Message>> {
-        let recv_operation = RecvOperation::new(DEFAULT_RECV_MAX_SIZE);
+        let recv_operation = RecvOperation::new(self.recv_max_size);
 
         self.run_recv_operation(recv_operation)
     }

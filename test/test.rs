@@ -93,10 +93,10 @@ fn can_use_custom_transport() {
 struct Subway;
 
 impl transport::Transport for Subway {
-    fn connect(&self, _: &str, _: (u16, u16)) -> io::Result<Box<transport::pipe::Pipe>> {
+    fn connect(&self, _: &transport::Destination) -> io::Result<Box<transport::pipe::Pipe>> {
         Err(io::Error::new(io::ErrorKind::Other, "test only"))
     }
-    fn bind(&self, _: &str, _: (u16, u16)) -> io::Result<Box<transport::acceptor::Acceptor>> {
+    fn bind(&self, _: &transport::Destination) -> io::Result<Box<transport::acceptor::Acceptor>> {
         Err(io::Error::new(io::ErrorKind::Other, "test only"))
     }
 }

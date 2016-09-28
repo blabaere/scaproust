@@ -17,7 +17,7 @@ use mio::tcp::{TcpListener, TcpStream};
 
 use self::stub::TcpPipeStub;
 use self::acceptor::TcpAcceptor;
-use transport::Transport;
+use transport::{Transport, Destination};
 use transport::pipe::Pipe;
 use transport::acceptor::Acceptor;
 use transport::async::AsyncPipe;
@@ -26,33 +26,34 @@ use io_error::*;
 pub struct Tcp;
 
 impl Tcp {
-    fn connect(&self, addr: &net::SocketAddr, pids: (u16, u16)) -> io::Result<Box<Pipe>> {
+    fn connect(&self, addr: &net::SocketAddr, dest: &Destination) -> io::Result<Box<Pipe>> {
         let stream = try!(TcpStream::connect(addr));
-        let stub = TcpPipeStub::new(stream);
-        let pipe = box AsyncPipe::new(stub, pids);
+        try!(stream.set_nodelay(dest.tcp_no_delay));
+        let stub = TcpPipeStub::new(stream, dest.recv_max_size);
+        let pipe = box AsyncPipe::new(stub, dest.pids);
 
         Ok(pipe)
     }
-    fn bind(&self, addr: &net::SocketAddr, pids: (u16, u16)) -> io::Result<Box<Acceptor>> {
+    fn bind(&self, addr: &net::SocketAddr, dest: &Destination) -> io::Result<Box<Acceptor>> {
         let listener = try!(TcpListener::bind(addr));
-        let acceptor = box TcpAcceptor::new(listener, pids);
+        let acceptor = box TcpAcceptor::new(listener, dest);
 
         Ok(acceptor)
     }
 }
 
 impl Transport for Tcp {
-    fn connect(&self, url: &str, pids: (u16, u16)) -> io::Result<Box<Pipe>> {
-        match net::SocketAddr::from_str(url) {
-            Ok(addr) => self.connect(&addr, pids),
-            Err(_) => Err(invalid_input_io_error(url))
+    fn connect(&self, dest: &Destination) -> io::Result<Box<Pipe>> {
+        match net::SocketAddr::from_str(dest.addr) {
+            Ok(addr) => self.connect(&addr, dest),
+            Err(_) => Err(invalid_input_io_error(dest.addr))
         }
     }
 
-    fn bind(&self, url: &str, pids: (u16, u16)) -> io::Result<Box<Acceptor>> {
-        match net::SocketAddr::from_str(url) {
-            Ok(addr) => self.bind(&addr, pids),
-            Err(_) => Err(invalid_input_io_error(url))
+    fn bind(&self, dest: &Destination) -> io::Result<Box<Acceptor>> {
+        match net::SocketAddr::from_str(dest.addr) {
+            Ok(addr) => self.bind(&addr, dest),
+            Err(_) => Err(invalid_input_io_error(dest.addr))
         }
     }
 }
