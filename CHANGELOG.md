@@ -7,6 +7,7 @@
 - Expose `recv max size` and `tcp no delay` options. 
 
 ### Changed
+- A builder must be used to create a session.
 
 ### Fixed
 - Fix potential infinite wait in device
