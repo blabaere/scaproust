@@ -1,3 +1,11 @@
+Poll design:
+ - Currently core::context::Event::CanSend is never raised, the protocols must be raising it before implementing poll.
+ - Polling requires the front-end to pass a variable number of socket ids to the back-end. This means heap allocation on each call, if this proves problematic, a poller struct could be created on each side. Maybe an Arc could be exchanged back and forth between each side.
+ - When a poll is in progress, the polled sockets should not be used. One way to prevent it is to borrow the sockets for the duration of poll.
+ - On the back-end side a probe should listen to readable/writable events raised by sockets. This is very similar to the way bridge device currently works so there is probably something to be shared. In the same way, the readable/writable value must be stored between polls.
+ - A when the poll timeout is reached, the reply should be sent to the front-end.
+ - What if the poller is created after the socket is connected ? The writable events have already been published, and the poller will not receive them ...
+
 ### Improvements
 - Reconnect interval max 
 - Linger
