@@ -1,3 +1,14 @@
+To fix device bug and implement client side poll, socket should expose a `poll` function.
+And delegate the call to the protocol which will raise CanSend or CanRecv events accordingly.
+
+Bug scenario:
+While not checking, a device receives two CanRecv notifications.
+Then it is checked, the reply is sent immediatly.
+When checked again, the socket is not seen as 'CanRecv'.
+Now the device can wait forever.
+There is nothing that can be done at the device level, so the socket/protocol must raise 'CanRecv' right after receiving if it is still able to recv.
+And it is probably the same for CanSend.
+
 Poll design:
  - Currently core::context::Event::CanSend is never raised, the protocols must be raising it before implementing poll.
  - Polling requires the front-end to pass a variable number of socket ids to the back-end. This means heap allocation on each call, if this proves problematic, a poller struct could be created on each side. Maybe an Arc could be exchanged back and forth between each side.
