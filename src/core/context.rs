@@ -21,8 +21,8 @@ pub trait Scheduler {
 }
 
 pub enum Event {
-    CanSend,
-    CanRecv,
+    CanSend(bool),
+    CanRecv(bool),
     Closed
 }
 

@@ -263,7 +263,7 @@ impl State {
         match self {
             State::RecvOnHold(p, timeout) => State::Active(p).recv(ctx, inner, timeout),
             any => {
-                ctx.raise(Event::CanRecv);
+                ctx.raise(Event::CanRecv(true));
                 any
             }
         }

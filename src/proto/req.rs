@@ -301,7 +301,7 @@ impl State {
                 }
             },
             any => {
-                ctx.raise(Event::CanRecv);
+                ctx.raise(Event::CanRecv(true));
                 any
             }
         }

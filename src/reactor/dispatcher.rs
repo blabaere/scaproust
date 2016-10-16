@@ -262,8 +262,8 @@ impl Dispatcher {
 
     fn process_socket_evt(&mut self, _: &mut EventLoop, sid: SocketId, evt: context::Event) {
         match evt {
-            context::Event::CanRecv => self.apply_on_device_link(sid, |device| device.on_socket_can_recv(sid)),
-            context::Event::CanSend => {},
+            context::Event::CanRecv(_) => self.apply_on_device_link(sid, |device| device.on_socket_can_recv(sid)),
+            context::Event::CanSend(_) => {},
             context::Event::Closed => self.sockets.remove_socket(sid)
         }
     }
