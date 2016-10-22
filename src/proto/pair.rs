@@ -324,3 +324,76 @@ impl Inner {
         self.pipe.take().map(|(_, pipe)| pipe.close(ctx));
     }
 }
+
+/*****************************************************************************/
+/*                                                                           */
+/* tests                                                                     */
+/*                                                                           */
+/*****************************************************************************/
+
+#[cfg(test)]
+mod tests {
+
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::sync::mpsc;
+
+    use core::{EndpointId, EndpointDesc, Message};
+    use core::socket::{Protocol, Reply};
+    use core::endpoint::Pipe;
+    use core::context::{Context, Event};
+    use core::tests::*;
+    use io_error::*;
+
+    use super::*;
+
+    #[test]
+    fn adding_more_than_one_pipe_should_close_the_subsequent_ones() {
+        let (tx, _) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid1 = EndpointId::from(1);
+        let pipe1 = new_test_pipe(eid1);
+        let eid2 = EndpointId::from(2);
+        let pipe2 = new_test_pipe(eid2);
+
+        pair.add_pipe(&mut ctx, eid1, pipe1);
+        pair.add_pipe(&mut ctx, eid2, pipe2);
+
+        let sensor = ctx_sensor.borrow();
+        let close_calls = sensor.get_close_calls();
+        assert_eq!(1, close_calls.len());
+
+        let &(ref eid, ref remote) = &close_calls[0];
+        assert_eq!(eid2, *eid);
+        assert!(*remote);
+    }
+
+    #[test]
+    fn remove_returns_the_added_pipe() {
+        let (tx, _) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(3);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+
+        let removed = pair.remove_pipe(&mut ctx, eid);
+        assert!(removed.is_some());
+
+        if let Some(pipe) = removed {
+            pipe.close(&mut ctx);
+        }
+
+        let sensor = ctx_sensor.borrow();
+        let close_calls = sensor.get_close_calls();
+        assert_eq!(1, close_calls.len());
+
+        let &(ref id, ref remote) = &close_calls[0];
+        assert_eq!(eid, *id);
+        assert!(*remote);
+    }
+}

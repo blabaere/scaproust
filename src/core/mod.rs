@@ -12,6 +12,9 @@ pub mod session;
 pub mod endpoint;
 pub mod device;
 
+#[cfg(test)]
+pub mod tests;
+
 use std::fmt;
 
 /*****************************************************************************/
