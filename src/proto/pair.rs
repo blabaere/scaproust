@@ -338,12 +338,11 @@ mod tests {
     use std::rc::Rc;
     use std::sync::mpsc;
 
-    use core::{EndpointId, EndpointDesc, Message};
+    use core::{EndpointId, Message};
     use core::socket::{Protocol, Reply};
     use core::endpoint::Pipe;
     use core::context::{Context, Event, Scheduled};
     use core::tests::*;
-    use io_error::*;
 
     use super::*;
 
@@ -463,6 +462,77 @@ mod tests {
         let timeout = Scheduled::from(8);
         pair.send(&mut ctx, msg, Some(timeout));
         pair.on_send_timeout(&mut ctx);
+
+        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let is_reply_err = match reply {
+            Reply::Err(_) => true,
+            _ => false
+        };
+        assert!(is_reply_err);
+    }
+
+    #[test]
+    fn when_recv_succeed_it_is_notified_and_timeout_is_cancelled() {
+        let (tx, rx) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(9);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+        pair.on_recv_ready(&mut ctx, eid);
+
+        let timeout = Scheduled::from(0);
+        pair.recv(&mut ctx, Some(timeout));
+        pair.on_recv_ack(&mut ctx, eid, Message::new());
+
+        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let is_reply_ok = match reply {
+            Reply::Recv(_) => true,
+            _ => false
+        };
+        assert!(is_reply_ok);
+
+        let sensor = ctx_sensor.borrow();
+        sensor.assert_one_recv_from(eid);
+        sensor.assert_one_cancellation(timeout);
+    }
+
+    #[test]
+    fn can_put_recv_on_hold_and_resume_when_a_pipe_is_added_and_becomes_ready() {
+        let (tx, _) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+
+        pair.recv(&mut ctx, None);
+        ctx_sensor.borrow().assert_no_recv_call();
+
+        let eid = EndpointId::from(1);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+        ctx_sensor.borrow().assert_no_recv_call();
+
+        pair.on_recv_ready(&mut ctx, eid);
+        ctx_sensor.borrow().assert_one_recv_from(eid);
+    }
+
+    #[test]
+    fn when_recv_timeout_is_reached_err_is_notified() {
+        let (tx, rx) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(2);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+
+        let timeout = Scheduled::from(3);
+        pair.recv(&mut ctx, Some(timeout));
+        pair.on_recv_timeout(&mut ctx);
 
         let reply = rx.recv().expect("facade should have been sent a reply !");
         let is_reply_err = match reply {

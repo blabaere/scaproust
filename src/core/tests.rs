@@ -32,6 +32,8 @@ pub fn new_test_endpoint_desc() -> EndpointDesc {
 pub struct TestContextSensor {
     close_calls: Vec<(EndpointId, bool)>,
     send_calls: Vec<(EndpointId, Rc<Message>)>,
+    recv_calls: Vec<EndpointId>,
+    raised_events: Vec<Event>,
     schedule_cancellations: Vec<Scheduled>
 }
 
@@ -40,6 +42,8 @@ impl Default for TestContextSensor {
         TestContextSensor {
             close_calls: Vec::new(),
             send_calls: Vec::new(),
+            recv_calls: Vec::new(),
+            raised_events: Vec::new(),
             schedule_cancellations: Vec::new(),
         }
     }
@@ -73,6 +77,10 @@ impl TestContextSensor {
         assert_eq!(eid, *id);
     }
 
+    fn push_raised_event(&mut self, evt: Event) {
+        self.raised_events.push(evt)
+    }
+
     fn push_schedule_cancellation(&mut self, scheduled: Scheduled) {
         self.schedule_cancellations.push(scheduled)
     }
@@ -82,6 +90,21 @@ impl TestContextSensor {
 
         let s = &self.schedule_cancellations[0];
         assert_eq!(scheduled, *s);
+    }
+
+    fn push_recv_call(&mut self, eid: EndpointId) {
+        self.recv_calls.push(eid)
+    }
+
+    pub fn assert_no_recv_call(&self) {
+        assert_eq!(0, self.recv_calls.len());
+    }
+
+    pub fn assert_one_recv_from(&self, eid: EndpointId) {
+        assert_eq!(1, self.recv_calls.len());
+
+        let id = &self.recv_calls[0];
+        assert_eq!(eid, *id);
     }
 }
 
@@ -121,7 +144,7 @@ impl Network for TestContext {
         self.sensor.borrow_mut().push_send_call(eid, msg)
     }
     fn recv(&mut self, eid: EndpointId) {
-        unimplemented!();
+        self.sensor.borrow_mut().push_recv_call(eid)
     }
 }
 
@@ -135,6 +158,6 @@ impl Scheduler for TestContext {
 }
 impl Context for TestContext {
     fn raise(&mut self, evt: Event) {
-        unimplemented!();
+        self.sensor.borrow_mut().push_raised_event(evt)
     }
 }

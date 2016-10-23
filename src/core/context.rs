@@ -20,6 +20,7 @@ pub trait Scheduler {
     fn cancel(&mut self, scheduled: Scheduled);
 }
 
+#[derive(Debug)]
 pub enum Event {
     CanSend(bool),
     CanRecv(bool),
