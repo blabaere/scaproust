@@ -341,7 +341,7 @@ mod tests {
     use core::{EndpointId, EndpointDesc, Message};
     use core::socket::{Protocol, Reply};
     use core::endpoint::Pipe;
-    use core::context::{Context, Event};
+    use core::context::{Context, Event, Scheduled};
     use core::tests::*;
     use io_error::*;
 
@@ -395,5 +395,55 @@ mod tests {
         let &(ref id, ref remote) = &close_calls[0];
         assert_eq!(eid, *id);
         assert!(*remote);
+    }
+
+    #[test]
+    fn can_put_send_on_hold_and_resume_when_a_pipe_is_added_and_becomes_ready() {
+        let (tx, _) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let msg = Message::new();
+
+        pair.send(&mut ctx, msg, None);
+        ctx_sensor.borrow().assert_no_send_call();
+
+        let eid = EndpointId::from(4);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+        ctx_sensor.borrow().assert_no_send_call();
+
+        pair.on_send_ready(&mut ctx, eid);
+        ctx_sensor.borrow().assert_one_send_to(eid);
+    }
+
+    #[test]
+    fn when_send_succeed_it_is_notified_and_timeout_is_cancelled() {
+        let (tx, rx) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(5);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+        pair.on_send_ready(&mut ctx, eid);
+
+        let msg = Message::new();
+        let timeout = Scheduled::from(6);
+        pair.send(&mut ctx, msg, Some(timeout));
+        pair.on_send_ack(&mut ctx, eid);
+
+        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let is_reply_ok = match reply {
+            Reply::Send => true,
+            _ => false
+        };
+        assert!(is_reply_ok);
+
+        let sensor = ctx_sensor.borrow();
+        sensor.assert_one_send_to(eid);
+        sensor.assert_one_cancellation(timeout);
     }
 }
