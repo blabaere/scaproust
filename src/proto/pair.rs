@@ -446,4 +446,29 @@ mod tests {
         sensor.assert_one_send_to(eid);
         sensor.assert_one_cancellation(timeout);
     }
+
+    #[test]
+    fn when_send_timeout_is_reached_err_is_notified() {
+        let (tx, rx) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(7);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+        pair.on_send_ready(&mut ctx, eid);
+
+        let msg = Message::new();
+        let timeout = Scheduled::from(8);
+        pair.send(&mut ctx, msg, Some(timeout));
+        pair.on_send_timeout(&mut ctx);
+
+        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let is_reply_err = match reply {
+            Reply::Err(_) => true,
+            _ => false
+        };
+        assert!(is_reply_err);
+    }
 }
