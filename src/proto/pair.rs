@@ -168,6 +168,7 @@ impl State {
 
     fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout) -> State {
         if let Some(eid) = inner.send(ctx, msg.clone()) {
+            ctx.raise(Event::CanSend(false));
             State::Sending(eid, msg, timeout)
         } else {
             State::SendOnHold(msg, timeout)
@@ -196,7 +197,10 @@ impl State {
 
         match self {
             State::SendOnHold(msg, timeout) => State::Idle.send(ctx, inner, msg, timeout),
-            any => any
+            any => {
+                ctx.raise(Event::CanSend(true));
+                any
+            }
         }
     }
 
@@ -540,5 +544,48 @@ mod tests {
             _ => false
         };
         assert!(is_reply_err);
+    }
+
+    #[test]
+    fn when_peer_becomes_writable_can_send_event_is_raised() {
+        let (tx, _) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(4);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+        pair.on_send_ready(&mut ctx, eid);
+
+        let sensor = ctx_sensor.borrow();
+        let raised_evts = sensor.get_raised_events();
+
+        assert_eq!(1, raised_evts.len());
+        assert_eq!(Event::CanSend(true), raised_evts[0]);
+    }
+
+    #[test]
+    fn when_sending_cannot_send_event_is_raised() {
+        let (tx, _) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(5);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+        pair.on_send_ready(&mut ctx, eid);
+        pair.send(&mut ctx, Message::new(), None);
+        pair.on_send_ack(&mut ctx, eid);
+        pair.on_send_ready(&mut ctx, eid);
+
+        let sensor = ctx_sensor.borrow();
+        let raised_evts = sensor.get_raised_events();
+
+        assert_eq!(3, raised_evts.len());
+        assert_eq!(Event::CanSend(true), raised_evts[0]);
+        assert_eq!(Event::CanSend(false), raised_evts[1]);
+        assert_eq!(Event::CanSend(true), raised_evts[2]);
     }
 }

@@ -81,6 +81,10 @@ impl TestContextSensor {
         self.raised_events.push(evt)
     }
 
+    pub fn get_raised_events(&self) -> &[Event] {
+        &self.raised_events
+    }
+
     fn push_schedule_cancellation(&mut self, scheduled: Scheduled) {
         self.schedule_cancellations.push(scheduled)
     }
