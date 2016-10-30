@@ -135,6 +135,10 @@ impl Priolist {
         }
     }
 
+    pub fn peek(&self) -> bool {
+        self.current.is_some()
+    }
+
     fn compute_next(&mut self, pivot: usize, priority: u8) {
         if let Some(index) = self.find(|x| x.active && x.priority == priority, pivot..self.len()) {
             return self.set_current(index, priority);

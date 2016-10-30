@@ -167,8 +167,9 @@ impl State {
 /*****************************************************************************/
 
     fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout) -> State {
+        ctx.raise(Event::CanSend(false));
+
         if let Some(eid) = inner.send(ctx, msg.clone()) {
-            ctx.raise(Event::CanSend(false));
             State::Sending(eid, msg, timeout)
         } else {
             State::SendOnHold(msg, timeout)
@@ -211,6 +212,8 @@ impl State {
 /*****************************************************************************/
 
     fn recv(self, ctx: &mut Context, inner: &mut Inner, timeout: Timeout) -> State {
+        ctx.raise(Event::CanRecv(false));
+
         inner.recv(ctx).map_or_else(
             |   | State::RecvOnHold(timeout),
             |eid| State::Receiving(eid, timeout))
@@ -566,7 +569,7 @@ mod tests {
     }
 
     #[test]
-    fn when_sending_cannot_send_event_is_raised() {
+    fn when_send_starts_event_is_raised() {
         let (tx, _) = mpsc::channel();
         let mut pair = Pair::from(tx);
         let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
@@ -587,5 +590,29 @@ mod tests {
         assert_eq!(Event::CanSend(true), raised_evts[0]);
         assert_eq!(Event::CanSend(false), raised_evts[1]);
         assert_eq!(Event::CanSend(true), raised_evts[2]);
+    }
+
+    #[test]
+    fn when_recv_starts_event_is_raised() {
+        let (tx, _) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(6);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+        pair.on_recv_ready(&mut ctx, eid);
+        pair.recv(&mut ctx, None);
+        pair.on_recv_ack(&mut ctx, eid, Message::new());
+        pair.on_recv_ready(&mut ctx, eid);
+
+        let sensor = ctx_sensor.borrow();
+        let raised_evts = sensor.get_raised_events();
+
+        assert_eq!(3, raised_evts.len());
+        assert_eq!(Event::CanRecv(true), raised_evts[0]);
+        assert_eq!(Event::CanRecv(false), raised_evts[1]);
+        assert_eq!(Event::CanRecv(true), raised_evts[2]);
     }
 }

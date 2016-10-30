@@ -36,6 +36,9 @@ Next, add this to your crate:
 extern crate scaproust;
 ```
 
+## What's cooking ?
+Polling, because exposing future-rs compatible async operations is going to take a while.
+
 ## Progress
 - [ ] Protocols
   - [x] PAIR

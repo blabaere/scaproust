@@ -70,6 +70,11 @@ impl TestContextSensor {
         assert_eq!(0, self.send_calls.len());
     }
 
+    pub fn assert_send_to(&self, eid: EndpointId, times: usize) {
+        let count = self.send_calls.iter().filter(|call| call.0 == eid).count();
+        assert_eq!(times, count);
+    }
+
     pub fn assert_one_send_to(&self, eid: EndpointId) {
         assert_eq!(1, self.send_calls.len());
 
@@ -83,6 +88,10 @@ impl TestContextSensor {
 
     pub fn get_raised_events(&self) -> &[Event] {
         &self.raised_events
+    }
+
+    pub fn assert_no_event_raised(&self) {
+        assert_eq!(0, self.raised_events.len());
     }
 
     fn push_schedule_cancellation(&mut self, scheduled: Scheduled) {

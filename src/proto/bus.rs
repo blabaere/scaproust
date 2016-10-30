@@ -163,6 +163,7 @@ impl State {
 /*****************************************************************************/
 
     fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, oid: Option<EndpointId>, timeout: Timeout) -> State {
+        ctx.raise(Event::CanSend(false));
         inner.send(ctx, msg, oid, timeout);
         self
     }
@@ -184,6 +185,8 @@ impl State {
 /*****************************************************************************/
 
     fn recv(self, ctx: &mut Context, inner: &mut Inner, timeout: Timeout) -> State {
+        ctx.raise(Event::CanRecv(false));
+
         inner.recv(ctx).map_or_else(
             |   | State::RecvOnHold(timeout),
             |eid| State::Receiving(eid, timeout))
@@ -193,6 +196,9 @@ impl State {
             State::Receiving(id, timeout) => {
                 if id == eid {
                     inner.on_recv_ack(ctx, timeout, msg);
+                    if inner.is_recv_ready() {
+                        ctx.raise(Event::CanRecv(true));
+                    }
                     State::Idle
                 } else {
                     State::Receiving(id, timeout)
@@ -253,8 +259,12 @@ impl Inner {
         }
     }
 
-    fn on_send_ready(&mut self, _: &mut Context, eid: EndpointId) {
+    fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.bc.insert(eid);
+
+        if self.bc.len() == 1 {
+            ctx.raise(Event::CanSend(true));
+        }
     }
 
     fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
@@ -274,6 +284,9 @@ impl Inner {
         if let Some(sched) = timeout {
             ctx.cancel(sched);
         }
+    }
+    fn is_recv_ready(&self) -> bool {
+        self.fq.peek()
     }
     fn on_recv_timeout(&self) {
         let error = timedout_io_error("Recv timed out");
@@ -315,4 +328,167 @@ fn encode(msg: Message) -> (Message, Option<EndpointId>) {
     let raw_msg = Message::from_header_and_body(remaining_header, body);
 
     (raw_msg, Some(EndpointId::from(originator)))
+}
+
+/*****************************************************************************/
+/*                                                                           */
+/* tests                                                                     */
+/*                                                                           */
+/*****************************************************************************/
+
+#[cfg(test)]
+mod tests {
+
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::sync::mpsc;
+
+    use core::{EndpointId, Message};
+    use core::socket::{Protocol, Reply};
+    use core::endpoint::Pipe;
+    use core::context::{Context, Event, Scheduled};
+    use core::tests::*;
+
+    use super::*;
+
+    #[test]
+    fn when_send_succeeds_it_is_notified_and_timeout_is_cancelled() {
+        let (tx, rx) = mpsc::channel();
+        let mut bus = Bus::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+
+        let msg = Message::new();
+        let timeout = Scheduled::from(0);
+        bus.send(&mut ctx, msg, Some(timeout));
+
+        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let is_reply_ok = match reply {
+            Reply::Send => true,
+            _ => false
+        };
+        assert!(is_reply_ok);
+
+        let sensor = ctx_sensor.borrow();
+        sensor.assert_one_cancellation(timeout);
+    }
+
+    #[test]
+    fn send_broadcast_to_all_ready_pipes() {
+        let (tx, rx) = mpsc::channel();
+        let mut bus = Bus::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid1 = EndpointId::from(1);
+        let pipe1 = new_test_pipe(eid1);
+        let eid2 = EndpointId::from(2);
+        let pipe2 = new_test_pipe(eid2);
+        let eid3 = EndpointId::from(3);
+        let pipe3 = new_test_pipe(eid3);
+
+        bus.add_pipe(&mut ctx, eid1, pipe1);
+        bus.add_pipe(&mut ctx, eid2, pipe2);
+        bus.add_pipe(&mut ctx, eid3, pipe3);
+        bus.on_send_ready(&mut ctx, eid1);
+        bus.on_send_ready(&mut ctx, eid3);
+
+        bus.send(&mut ctx, Message::new(), None);
+
+        let sensor = ctx_sensor.borrow();
+        sensor.assert_send_to(eid1, 1);
+        sensor.assert_send_to(eid2, 0);
+        sensor.assert_send_to(eid3, 1);
+    }
+
+    #[test]
+    fn when_ready_pipe_list_becomes_not_empty_event_is_raised() {
+        let (tx, rx) = mpsc::channel();
+        let mut bus = Bus::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid1 = EndpointId::from(1);
+        let pipe1 = new_test_pipe(eid1);
+        let eid2 = EndpointId::from(2);
+        let pipe2 = new_test_pipe(eid2);
+
+        bus.add_pipe(&mut ctx, eid1, pipe1);
+        bus.add_pipe(&mut ctx, eid2, pipe2);
+
+        ctx_sensor.borrow().assert_no_event_raised();
+        bus.on_send_ready(&mut ctx, eid2);
+
+        let sensor = ctx_sensor.borrow();
+        let raised_evts = sensor.get_raised_events();
+
+        assert_eq!(1, raised_evts.len());
+        assert_eq!(Event::CanSend(true), raised_evts[0]);
+    }
+
+    #[test]
+    fn when_send_starts_event_is_raised() {
+        let (tx, rx) = mpsc::channel();
+        let mut bus = Bus::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+
+        bus.send(&mut ctx, Message::new(), None);
+
+        let sensor = ctx_sensor.borrow();
+        let raised_evts = sensor.get_raised_events();
+
+        assert_eq!(1, raised_evts.len());
+        assert_eq!(Event::CanSend(false), raised_evts[0]);
+    }
+
+    #[test]
+    fn when_recv_starts_event_is_raised() {
+        let (tx, _) = mpsc::channel();
+        let mut bus = Bus::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(1);
+        let pipe = new_test_pipe(eid);
+
+        bus.add_pipe(&mut ctx, eid, pipe);
+        bus.on_recv_ready(&mut ctx, eid);
+        bus.recv(&mut ctx, None);
+        bus.on_recv_ack(&mut ctx, eid, Message::new());
+        bus.on_recv_ready(&mut ctx, eid);
+
+        let sensor = ctx_sensor.borrow();
+        let raised_evts = sensor.get_raised_events();
+
+        assert_eq!(3, raised_evts.len());
+        assert_eq!(Event::CanRecv(true), raised_evts[0]);
+        assert_eq!(Event::CanRecv(false), raised_evts[1]);
+        assert_eq!(Event::CanRecv(true), raised_evts[2]);
+    }
+
+    #[test]
+    fn when_recv_ack_event_is_raised_if_there_is_another_pipe_ready() {
+        let (tx, _) = mpsc::channel();
+        let mut bus = Bus::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid1 = EndpointId::from(1);
+        let pipe1 = new_test_pipe(eid1);
+        let eid2 = EndpointId::from(2);
+        let pipe2 = new_test_pipe(eid2);
+
+        bus.add_pipe(&mut ctx, eid1, pipe1);
+        bus.add_pipe(&mut ctx, eid2, pipe2);
+        bus.on_recv_ready(&mut ctx, eid1);
+        bus.on_recv_ready(&mut ctx, eid2);
+        bus.recv(&mut ctx, None);
+        bus.on_recv_ack(&mut ctx, eid1, Message::new());
+
+        let sensor = ctx_sensor.borrow();
+        let raised_evts = sensor.get_raised_events();
+
+        assert_eq!(4, raised_evts.len());
+        assert_eq!(Event::CanRecv(true), raised_evts[0]);
+        assert_eq!(Event::CanRecv(true), raised_evts[1]);
+        assert_eq!(Event::CanRecv(false), raised_evts[2]);
+        assert_eq!(Event::CanRecv(true), raised_evts[3]);
+    }
 }
