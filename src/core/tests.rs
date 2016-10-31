@@ -9,11 +9,10 @@ use std::cell::RefCell;
 use std::io::Result;
 use std::time::Duration;
 
-use super::{SocketId, EndpointId, Message, EndpointTmpl, EndpointSpec, EndpointDesc, };
-use super::endpoint::{Pipe, Acceptor};
+use super::{SocketId, EndpointId, Message, EndpointTmpl, EndpointDesc, };
+use super::endpoint::Pipe;
 use super::context::{Context, Scheduler, Schedulable, Scheduled, Event};
 use super::network::Network;
-use io_error::*;
 
 pub fn new_test_pipe(id: EndpointId) -> Pipe {
     Pipe::new_accepted(id, new_test_endpoint_desc())
@@ -135,19 +134,19 @@ impl TestContext {
 }
 
 impl Network for TestContext {
-    fn connect(&mut self, sid: SocketId, tmpl: &EndpointTmpl) -> Result<EndpointId> {
+    fn connect(&mut self, _: SocketId, _: &EndpointTmpl) -> Result<EndpointId> {
         unimplemented!();
     }
-    fn reconnect(&mut self, sid: SocketId, eid: EndpointId, tmpl: &EndpointTmpl) -> Result<()> {
+    fn reconnect(&mut self, _: SocketId, _: EndpointId, _: &EndpointTmpl) -> Result<()> {
         unimplemented!();
     }
-    fn bind(&mut self, sid: SocketId, tmpl: &EndpointTmpl) -> Result<EndpointId> {
+    fn bind(&mut self, _: SocketId, _: &EndpointTmpl) -> Result<EndpointId> {
         unimplemented!();
     }
-    fn rebind(&mut self, sid: SocketId, eid: EndpointId, tmpl: &EndpointTmpl) -> Result<()> {
+    fn rebind(&mut self, _: SocketId, _: EndpointId, _: &EndpointTmpl) -> Result<()> {
         unimplemented!();
     }
-    fn open(&mut self, eid: EndpointId, remote: bool) {
+    fn open(&mut self, _: EndpointId, _: bool) {
         unimplemented!();
     }
     fn close(&mut self, eid: EndpointId, remote: bool) {

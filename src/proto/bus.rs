@@ -159,9 +159,9 @@ impl State {
     #[cfg(debug_assertions)]
     fn name(&self) -> &'static str {
         match *self {
-            State::Idle            => "Idle",
-            State::Receiving(_, _) => "Receiving",
-            State::RecvOnHold(_)   => "RecvOnHold"
+            State::Idle           => "Idle",
+            State::Receiving(..)  => "Receiving",
+            State::RecvOnHold(..) => "RecvOnHold"
         }
     }
 
@@ -367,8 +367,7 @@ mod tests {
 
     use core::{EndpointId, Message};
     use core::socket::{Protocol, Reply};
-    use core::endpoint::Pipe;
-    use core::context::{Context, Event, Scheduled};
+    use core::context::{Event, Scheduled};
     use core::tests::*;
 
     use super::*;
@@ -397,7 +396,7 @@ mod tests {
 
     #[test]
     fn send_broadcast_to_all_ready_pipes() {
-        let (tx, rx) = mpsc::channel();
+        let (tx, _) = mpsc::channel();
         let mut bus = Bus::from(tx);
         let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
         let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
@@ -424,7 +423,7 @@ mod tests {
 
     #[test]
     fn when_ready_pipe_list_becomes_not_empty_event_is_raised() {
-        let (tx, rx) = mpsc::channel();
+        let (tx, _) = mpsc::channel();
         let mut bus = Bus::from(tx);
         let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
         let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
@@ -448,7 +447,7 @@ mod tests {
 
     #[test]
     fn when_send_starts_event_is_raised() {
-        let (tx, rx) = mpsc::channel();
+        let (tx, _) = mpsc::channel();
         let mut bus = Bus::from(tx);
         let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
         let mut ctx = TestContext::with_sensor(ctx_sensor.clone());

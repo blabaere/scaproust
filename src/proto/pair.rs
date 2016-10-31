@@ -143,11 +143,11 @@ impl State {
     #[cfg(debug_assertions)]
     fn name(&self) -> &'static str {
         match *self {
-            State::Idle             => "Idle",
-            State::Sending(_, _, _) => "Sending",
-            State::SendOnHold(_, _) => "SendOnHold",
-            State::Receiving(_, _)  => "Receiving",
-            State::RecvOnHold(_)    => "RecvOnHold"
+            State::Idle           => "Idle",
+            State::Sending(..)    => "Sending",
+            State::SendOnHold(..) => "SendOnHold",
+            State::Receiving(..)  => "Receiving",
+            State::RecvOnHold(..) => "RecvOnHold"
         }
     }
 
@@ -354,8 +354,7 @@ mod tests {
 
     use core::{EndpointId, Message};
     use core::socket::{Protocol, Reply};
-    use core::endpoint::Pipe;
-    use core::context::{Context, Event, Scheduled};
+    use core::context::{Event, Scheduled};
     use core::tests::*;
 
     use super::*;

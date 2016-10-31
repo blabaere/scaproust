@@ -130,9 +130,9 @@ impl State {
     #[cfg(debug_assertions)]
     fn name(&self) -> &'static str {
         match *self {
-            State::Idle             => "Idle",
-            State::Sending(_, _, _) => "Sending",
-            State::SendOnHold(_, _) => "SendOnHold"
+            State::Idle           => "Idle",
+            State::Sending(..)    => "Sending",
+            State::SendOnHold(..) => "SendOnHold"
         }
     }
 

@@ -11,7 +11,7 @@ use std::sync::mpsc::Sender;
 use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
-use core::context::Context;
+use core::context::{Context, Event};
 use super::{Timeout, PUB, SUB};
 use io_error::*;
 
@@ -61,6 +61,8 @@ impl Protocol for Pub {
             self.pipes.get_mut(&id).map(|pipe| pipe.send(ctx, msg.clone()));
         }
 
+        ctx.raise(Event::CanSend(false));
+
         let _ = self.reply_tx.send(Reply::Send);
         if let Some(sched) = timeout {
             ctx.cancel(sched);
@@ -70,7 +72,10 @@ impl Protocol for Pub {
     }
     fn on_send_timeout(&mut self, _: &mut Context) {
     }
-    fn on_send_ready(&mut self, _: &mut Context, eid: EndpointId) {
+    fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        if self.bc.is_empty() {
+            ctx.raise(Event::CanSend(true));
+        }
         self.bc.insert(eid);
     }
     fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
