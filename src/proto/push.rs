@@ -325,8 +325,9 @@ mod tests {
         sensor.assert_one_send_to(eid);
         sensor.assert_one_cancellation(timeout);
     }
-  #[test]
-    fn when_recv_starts_event_is_raised() {
+
+    #[test]
+    fn when_send_starts_event_is_raised() {
         let (tx, _) = mpsc::channel();
         let mut push = Push::from(tx);
         let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
