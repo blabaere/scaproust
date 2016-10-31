@@ -45,10 +45,21 @@ impl Pair {
     fn apply<F>(&mut self, ctx: &mut Context, transition: F) where F : FnOnce(State, &mut Context, &mut Inner) -> State {
         if let Some(old_state) = self.state.take() {
             #[cfg(debug_assertions)] let old_name = old_state.name();
+            let was_send_ready = self.inner.send_ready;
+            let was_recv_ready = self.inner.recv_ready;
             let new_state = transition(old_state, ctx, &mut self.inner);
+            let is_send_ready = self.inner.send_ready;
+            let is_recv_ready = self.inner.recv_ready;
             #[cfg(debug_assertions)] let new_name = new_state.name();
 
             self.state = Some(new_state);
+
+            if was_send_ready != is_send_ready {
+                ctx.raise(Event::CanSend(is_send_ready));
+            }
+            if was_recv_ready != is_recv_ready {
+                ctx.raise(Event::CanRecv(is_recv_ready));
+            }
 
             #[cfg(debug_assertions)] debug!("[{:?}] switch from {} to {}", ctx, old_name, new_name);
         }
@@ -140,7 +151,9 @@ impl State {
         }
     }
 
-    fn on_pipe_removed(self, _: &mut Context, _: &mut Inner, eid: EndpointId) -> State {
+    fn on_pipe_removed(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        inner.on_pipe_removed(ctx);
+
         match self {
             State::Sending(id, msg, timeout) => {
                 if id == eid {
@@ -167,8 +180,6 @@ impl State {
 /*****************************************************************************/
 
     fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout) -> State {
-        ctx.raise(Event::CanSend(false));
-
         if let Some(eid) = inner.send(ctx, msg.clone()) {
             State::Sending(eid, msg, timeout)
         } else {
@@ -198,10 +209,7 @@ impl State {
 
         match self {
             State::SendOnHold(msg, timeout) => State::Idle.send(ctx, inner, msg, timeout),
-            any => {
-                ctx.raise(Event::CanSend(true));
-                any
-            }
+            any => any
         }
     }
 
@@ -212,8 +220,6 @@ impl State {
 /*****************************************************************************/
 
     fn recv(self, ctx: &mut Context, inner: &mut Inner, timeout: Timeout) -> State {
-        ctx.raise(Event::CanRecv(false));
-
         inner.recv(ctx).map_or_else(
             |   | State::RecvOnHold(timeout),
             |eid| State::Receiving(eid, timeout))
@@ -241,10 +247,7 @@ impl State {
 
         match self {
             State::RecvOnHold(timeout) => State::Idle.recv(ctx, inner, timeout),
-            any => {
-                ctx.raise(Event::CanRecv(true));
-                any
-            }
+            any => any
         }
     }
 }
@@ -273,6 +276,10 @@ impl Inner {
         }
 
         None
+    }
+    fn on_pipe_removed(&mut self, _: &mut Context) {
+        self.send_ready = false;
+        self.recv_ready = false;
     }
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>) -> Option<EndpointId> {
         if self.send_ready == false {
@@ -614,5 +621,47 @@ mod tests {
         assert_eq!(Event::CanRecv(true), raised_evts[0]);
         assert_eq!(Event::CanRecv(false), raised_evts[1]);
         assert_eq!(Event::CanRecv(true), raised_evts[2]);
+    }
+
+    #[test]
+    fn when_send_ready_pipe_is_removed_event_is_raised() {
+        let (tx, _) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(5);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+        pair.on_send_ready(&mut ctx, eid);
+        pair.remove_pipe(&mut ctx, eid);
+
+        let sensor = ctx_sensor.borrow();
+        let raised_evts = sensor.get_raised_events();
+
+        assert_eq!(2, raised_evts.len());
+        assert_eq!(Event::CanSend(true), raised_evts[0]);
+        assert_eq!(Event::CanSend(false), raised_evts[1]);
+    }
+
+    #[test]
+    fn when_recv_ready_pipe_is_removed_event_is_raised() {
+        let (tx, _) = mpsc::channel();
+        let mut pair = Pair::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(5);
+        let pipe = new_test_pipe(eid);
+
+        pair.add_pipe(&mut ctx, eid, pipe);
+        pair.on_recv_ready(&mut ctx, eid);
+        pair.remove_pipe(&mut ctx, eid);
+
+        let sensor = ctx_sensor.borrow();
+        let raised_evts = sensor.get_raised_events();
+
+        assert_eq!(2, raised_evts.len());
+        assert_eq!(Event::CanRecv(true), raised_evts[0]);
+        assert_eq!(Event::CanRecv(false), raised_evts[1]);
     }
 }
