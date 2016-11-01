@@ -4,7 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 use std::io;
@@ -41,6 +41,7 @@ struct Inner {
     reply_tx: Sender<Reply>,
     pipes: HashMap<EndpointId, Pipe>,
     lb: Priolist,
+    rv: HashSet<EndpointId>,
     req_id_seq: u32,
     is_device_item: bool,
     resend_ivl: Duration
@@ -63,12 +64,39 @@ impl Req {
     fn apply<F>(&mut self, ctx: &mut Context, transition: F) where F : FnOnce(State, &mut Context, &mut Inner) -> State {
         if let Some(old_state) = self.state.take() {
             #[cfg(debug_assertions)] let old_name = old_state.name();
+            let was_send_ready = old_state.is_send_ready(&self.inner);
+            let was_recv_ready = old_state.is_recv_ready(&self.inner);
             let new_state = transition(old_state, ctx, &mut self.inner);
+            let is_send_ready = new_state.is_send_ready(&self.inner);
+            let is_recv_ready = new_state.is_recv_ready(&self.inner);
             #[cfg(debug_assertions)] let new_name = new_state.name();
 
             self.state = Some(new_state);
 
+            if was_send_ready != is_send_ready {
+                ctx.raise(Event::CanSend(is_send_ready));
+            }
+            if was_recv_ready != is_recv_ready {
+                ctx.raise(Event::CanRecv(is_recv_ready));
+            }
+
             #[cfg(debug_assertions)] debug!("[{:?}] switch from {} to {}", ctx, old_name, new_name);
+        }
+    }
+
+    fn is_send_ready(&self) -> bool {
+        if let Some(ref state) = self.state {
+            state.is_send_ready(&self.inner)
+        } else {
+            false
+        }
+    }
+
+    fn is_recv_ready(&self) -> bool {
+        if let Some(ref state) = self.state {
+            state.is_recv_ready(&self.inner)
+        } else {
+            false
         }
     }
 
@@ -97,10 +125,21 @@ impl Protocol for Req {
         self.inner.add_pipe(eid, pipe)
     }
     fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe> {
+        let was_send_ready = self.is_send_ready();
+        let was_recv_ready = self.is_recv_ready();
         let pipe = self.inner.remove_pipe(eid);
+        let is_send_ready = self.is_send_ready();
+        let is_recv_ready = self.is_recv_ready();
 
         if pipe.is_some() {
             self.apply(ctx, |s, ctx, inner| s.on_pipe_removed(ctx, inner, eid));
+        }
+
+        if was_send_ready != is_send_ready {
+            ctx.raise(Event::CanSend(is_send_ready));
+        }
+        if was_recv_ready != is_recv_ready {
+            ctx.raise(Event::CanRecv(is_recv_ready));
         }
 
         pipe
@@ -242,6 +281,9 @@ impl State {
             any => any
         }
     }
+    fn is_send_ready(&self, inner: &Inner) -> bool {
+        inner.is_send_ready()
+    }
 
 /*****************************************************************************/
 /*                                                                           */
@@ -292,6 +334,7 @@ impl State {
         State::Idle
     }
     fn on_recv_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        inner.on_recv_ready(eid);
         match self {
             State::RecvOnHold(p, timeout) => {
                 if eid == p.eid {
@@ -300,10 +343,7 @@ impl State {
                     State::RecvOnHold(p, timeout)
                 }
             },
-            any => {
-                ctx.raise(Event::CanRecv(true));
-                any
-            }
+            any => any
         }
     }
     fn on_retry_timeout(self, ctx: &mut Context, inner: &mut Inner) -> State {
@@ -311,6 +351,13 @@ impl State {
             State::Idle.send(ctx, inner, p.req, None, true)
         } else {
             self
+        }
+    }
+    fn is_recv_ready(&self, inner: &Inner) -> bool {
+        if let State::Active(ref p) = *self {
+            inner.is_recv_ready(&p.eid)
+        } else {
+            false
         }
     }
 }
@@ -327,6 +374,7 @@ impl Inner {
             reply_tx: tx,
             pipes: HashMap::new(),
             lb: Priolist::new(),
+            rv: HashSet::new(),
             req_id_seq: time::get_time().nsec as u32,
             is_device_item: false,
             resend_ivl: Duration::from_secs(60)
@@ -338,6 +386,7 @@ impl Inner {
     }
     fn remove_pipe(&mut self, eid: EndpointId) -> Option<Pipe> {
         self.lb.remove(&eid);
+        self.rv.remove(&eid);
         self.pipes.remove(&eid)
     }
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>) -> Option<EndpointId> {
@@ -365,6 +414,9 @@ impl Inner {
         let error = timedout_io_error("Send timed out");
         let _ = self.reply_tx.send(Reply::Err(error));
     }
+    fn is_send_ready(&self) -> bool {
+        self.lb.peek()
+    }
     fn cancel(&self, ctx: &mut Context, p: PendingRequest) {
         if let Some(sched) = p.retry_timeout {
             ctx.cancel(sched);
@@ -372,6 +424,7 @@ impl Inner {
     }
 
     fn recv_from(&mut self, ctx: &mut Context, eid: EndpointId) -> bool {
+        self.rv.remove(&eid);
         self.pipes.get_mut(&eid).map(|pipe| pipe.recv(ctx)).is_some()
     }
     fn recv_when_inactive(&mut self, ctx: &mut Context, timeout: Timeout) {
@@ -400,6 +453,12 @@ impl Inner {
     fn on_recv_ack_malformed(&self, _: &mut Context) {
         let error = invalid_data_io_error("Received reply without req id");
         let _ = self.reply_tx.send(Reply::Err(error));
+    }
+    fn on_recv_ready(&mut self, eid: EndpointId) {
+        self.rv.insert(eid);
+    }
+    fn is_recv_ready(&self, eid: &EndpointId) -> bool {
+        self.rv.contains(eid)
     }
 
     fn msg_to_raw_msg(&mut self, msg: Message) -> Message {
@@ -463,4 +522,296 @@ fn decode(raw_msg: Message) -> Option<(Message, u32)> {
     }
 
     Some((Message::from_header_and_body(header, body), req_id))
+}
+
+/*****************************************************************************/
+/*                                                                           */
+/* tests                                                                     */
+/*                                                                           */
+/*****************************************************************************/
+
+#[cfg(test)]
+mod tests {
+
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::sync::mpsc;
+
+    use byteorder::*;
+
+    use core::{EndpointId, Message};
+    use core::socket::{Protocol, Reply};
+    use core::context::{Event, Scheduled};
+    use core::tests::*;
+
+    use super::*;
+
+    #[test]
+    fn when_send_succeed_it_is_notified_and_timeout_is_cancelled() {
+        let (tx, rx) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_send_ready(&mut ctx, eid);
+
+        let msg = Message::new();
+        let timeout = Scheduled::from(1);
+        req.send(&mut ctx, msg, Some(timeout));
+        req.on_send_ack(&mut ctx, eid);
+
+        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let is_reply_ok = match reply {
+            Reply::Send => true,
+            _ => false
+        };
+        assert!(is_reply_ok);
+
+        let sensor = ctx_sensor.borrow();
+        sensor.assert_one_send_to(eid);
+        sensor.assert_one_cancellation(timeout);
+    }
+
+    #[test]
+    fn when_send_starts_event_is_raised() {
+        let (tx, _) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(1);
+        let pipe = new_test_pipe(eid);
+
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_send_ready(&mut ctx, eid);
+        req.send(&mut ctx, Message::new(), None);
+        req.on_send_ack(&mut ctx, eid);
+        req.on_send_ready(&mut ctx, eid);
+
+        let sensor = ctx_sensor.borrow();
+        let raised_evts = sensor.get_raised_events();
+
+        assert_eq!(3, raised_evts.len());
+        assert_eq!(Event::CanSend(true), raised_evts[0]);
+        assert_eq!(Event::CanSend(false), raised_evts[1]);
+        assert_eq!(Event::CanSend(true), raised_evts[2]);
+    }
+
+    #[test]
+    fn when_send_ready_pipe_is_removed_event_is_raised() {
+        let (tx, _) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(2);
+        let pipe = new_test_pipe(eid);
+
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_send_ready(&mut ctx, eid);
+        req.remove_pipe(&mut ctx, eid);
+
+        let sensor = ctx_sensor.borrow();
+        let raised_evts = sensor.get_raised_events();
+
+        assert_eq!(2, raised_evts.len());
+        assert_eq!(Event::CanSend(true), raised_evts[0]);
+        assert_eq!(Event::CanSend(false), raised_evts[1]);
+    }
+
+    #[test]
+    fn when_active_pipe_is_removed_event_is_raised() {
+        let (tx, _) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(1);
+        let pipe = new_test_pipe(eid);
+        let eid_o = EndpointId::from(2);
+        let pipe_o = new_test_pipe(eid);
+
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.add_pipe(&mut ctx, eid_o, pipe_o);
+        assert_eq!(0, ctx_sensor.borrow().get_raised_events().len());
+
+        req.on_send_ready(&mut ctx, eid);
+        assert_eq!(1, ctx_sensor.borrow().get_raised_events().len());
+        assert_eq!(Event::CanSend(true), ctx_sensor.borrow().get_raised_events()[0]);
+
+        req.send(&mut ctx, Message::new(), None);
+        assert_eq!(2, ctx_sensor.borrow().get_raised_events().len());
+        assert_eq!(Event::CanSend(false), ctx_sensor.borrow().get_raised_events()[1]);
+
+        req.on_send_ack(&mut ctx, eid);
+        assert_eq!(2, ctx_sensor.borrow().get_raised_events().len());
+
+        req.on_recv_ready(&mut ctx, eid_o);
+        assert_eq!(2, ctx_sensor.borrow().get_raised_events().len());
+
+        req.on_recv_ready(&mut ctx, eid);
+        assert_eq!(3, ctx_sensor.borrow().get_raised_events().len());
+        assert_eq!(Event::CanRecv(true), ctx_sensor.borrow().get_raised_events()[2]);
+
+        req.remove_pipe(&mut ctx, eid);
+        assert_eq!(4, ctx_sensor.borrow().get_raised_events().len());
+        assert_eq!(Event::CanRecv(false), ctx_sensor.borrow().get_raised_events()[3]);
+    }
+
+    #[test]
+    fn when_in_regular_mode_send_will_append_request_id_to_the_header() {
+        let (tx, _) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(4);
+        let pipe = new_test_pipe(eid);
+        let app_msg = Message::from_body(vec![1u8, 2, 3]);
+
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_send_ready(&mut ctx, eid);
+        req.send(&mut ctx, app_msg, None);
+
+        let sensor = ctx_sensor.borrow();
+        let send_calls = sensor.get_send_calls();
+
+        assert_eq!(1, send_calls.len());
+        let &(_, ref proto_msg) = &send_calls[0];
+        let header = proto_msg.get_header();
+        let body = proto_msg.get_body();
+
+        assert_eq!(4, header.len());
+        assert_eq!(3, body.len());
+        let req_id = BigEndian::read_u32(header);
+        let control = req_id & 0x80000000;
+        assert_eq!(0x80000000, control);
+    }
+
+    #[test]
+    fn when_in_raw_mode_send_will_not_append_anything_to_the_header() {
+        let (tx, _) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(5);
+        let pipe = new_test_pipe(eid);
+        let app_msg = Message::from_body(vec![1u8, 2, 3]);
+
+        req.on_device_plugged(&mut ctx);
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_send_ready(&mut ctx, eid);
+        req.send(&mut ctx, app_msg, None);
+
+        let sensor = ctx_sensor.borrow();
+        let send_calls = sensor.get_send_calls();
+
+        assert_eq!(1, send_calls.len());
+        let &(_, ref proto_msg) = &send_calls[0];
+        let header = proto_msg.get_header();
+        let body = proto_msg.get_body();
+
+        assert_eq!(0, header.len());
+        assert_eq!(3, body.len());
+    }
+
+    #[test]
+    fn when_in_regular_mode_recv_while_idle_will_fail() {
+        let (tx, rx) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_recv_ready(&mut ctx, eid);
+        req.recv(&mut ctx, None);
+
+        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let is_reply_err = match reply {
+            Reply::Err(_) => true,
+            _ => false
+        };
+        assert!(is_reply_err);
+    }
+
+    #[test]
+    fn when_in_regular_mode_recv_while_active_will_drop_msg_with_wrong_request_id() {
+        let (tx, rx) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_send_ready(&mut ctx, eid);
+        req.send(&mut ctx, Message::new(), None);
+        req.on_send_ack(&mut ctx, eid);
+        let _ = rx.recv().expect("facade should have been sent a reply !");
+
+        let bad_request_id = (req.inner.req_id_seq - 1) | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2, 1];
+
+        BigEndian::write_u32(&mut body[0..4], bad_request_id);
+
+        let msg = Message::from_body(body);
+        req.on_recv_ready(&mut ctx, eid);
+        req.recv(&mut ctx, None);
+        req.on_recv_ack(&mut ctx, eid, msg);
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn when_in_regular_mode_recv_while_active_will_accept_msg_with_right_request_id() {
+        let (tx, rx) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_send_ready(&mut ctx, eid);
+        req.send(&mut ctx, Message::new(), None);
+        req.on_send_ack(&mut ctx, eid);
+        let _ = rx.recv().expect("facade should have been sent a reply !");
+
+        let good_request_id = (req.inner.req_id_seq) | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2, 1];
+
+        BigEndian::write_u32(&mut body[0..4], good_request_id);
+
+        let msg = Message::from_body(body);
+        req.on_recv_ready(&mut ctx, eid);
+        req.recv(&mut ctx, None);
+        req.on_recv_ack(&mut ctx, eid, msg);
+
+        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let is_reply_ok = match reply {
+            Reply::Recv(_) => true,
+            _ => false
+        };
+        assert!(is_reply_ok);
+    }
+
+    #[test]
+    fn when_in_regular_mode_recv_moves_the_request_id_from_the_body_to_the_header() {
+        unimplemented!();
+    }
+
+    #[test]
+    fn when_in_raw_mode_recv_while_idle_will_succeed() {
+        unimplemented!();
+    }
+
+    #[test]
+    fn when_in_raw_mode_recv_moves_the_request_id_from_the_body_to_the_header() {
+        unimplemented!();
+    }
+
+    #[test]
+    fn when_in_raw_mode_recv_will_accept_any_msg_with_a_four_bytes_header() {
+        unimplemented!();
+    }
 }
