@@ -378,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    fn when_recv_ready_pipe_is_removed_event_is_raised() {
+    fn when_send_ready_pipe_is_removed_event_is_raised() {
         let (tx, _) = mpsc::channel();
         let mut push = Push::from(tx);
         let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
