@@ -4,6 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::io::Result;
@@ -13,6 +14,7 @@ use super::{SocketId, EndpointId, Message, EndpointTmpl, EndpointDesc, };
 use super::endpoint::Pipe;
 use super::context::{Context, Scheduler, Schedulable, Scheduled, Event};
 use super::network::Network;
+use io_error;
 
 pub fn new_test_pipe(id: EndpointId) -> Pipe {
     Pipe::new_accepted(id, new_test_endpoint_desc())
@@ -43,7 +45,7 @@ impl Default for TestContextSensor {
             send_calls: Vec::new(),
             recv_calls: Vec::new(),
             raised_events: Vec::new(),
-            schedule_cancellations: Vec::new(),
+            schedule_cancellations: Vec::new()
         }
     }
 }
@@ -120,15 +122,22 @@ impl TestContextSensor {
     }
 }
 
-#[derive(Debug)]
 pub struct TestContext {
     sensor: Rc<RefCell<TestContextSensor>>,
+    schedule_result: Option<Scheduled>
+}
+
+impl fmt::Debug for TestContext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "TestContext")
+    }
 }
 
 impl TestContext {
     pub fn with_sensor(sensor: Rc<RefCell<TestContextSensor>>) -> TestContext {
         TestContext {
-            sensor: sensor
+            sensor: sensor,
+            schedule_result: None
         }
     }
 }
@@ -162,7 +171,11 @@ impl Network for TestContext {
 
 impl Scheduler for TestContext {
     fn schedule(&mut self, schedulable: Schedulable, delay: Duration) -> Result<Scheduled> {
-        unimplemented!();
+        if let Some(scheduled) = self.schedule_result.take() {
+            Ok(scheduled)
+        } else {
+            Err(io_error::other_io_error("test"))
+        }
     }
     fn cancel(&mut self, scheduled: Scheduled) {
         self.sensor.borrow_mut().push_schedule_cancellation(scheduled)
