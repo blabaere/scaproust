@@ -32,15 +32,16 @@ enum State {
     Idle,
     Sending(EndpointId, Rc<Message>, Timeout, bool),
     SendOnHold(Rc<Message>, Timeout, bool),
-    Active(PendingRequest),
-    Receiving(PendingRequest, Timeout),
-    RecvOnHold(PendingRequest, Timeout)
+    Active(EndpointId, PendingRequest),
+    Receiving(EndpointId, Option<PendingRequest>, Timeout),
+    RecvOnHold(Option<EndpointId>, Option<PendingRequest>, Timeout)
 }
 
 struct Inner {
     reply_tx: Sender<Reply>,
     pipes: HashMap<EndpointId, Pipe>,
     lb: Priolist,
+    fq: Priolist,
     rv: HashSet<EndpointId>,
     req_id_seq: u32,
     is_device_item: bool,
@@ -48,7 +49,6 @@ struct Inner {
 }
 
 struct PendingRequest {
-    eid: EndpointId,
     req: Rc<Message>,
     retry_timeout: Timeout
 }
@@ -208,9 +208,9 @@ impl State {
             State::Sending(_, _, _, false) => "Sending",
             State::Sending(_, _, _, true)  => "Resending",
             State::SendOnHold(_, _, _)     => "SendOnHold",
-            State::Active(_)               => "Active",
-            State::Receiving(_, _)         => "Receiving",
-            State::RecvOnHold(_, _)        => "RecvOnHold"
+            State::Active(..)               => "Active",
+            State::Receiving(..)         => "Receiving",
+            State::RecvOnHold(..)        => "RecvOnHold"
         }
     }
 
@@ -223,11 +223,11 @@ impl State {
                     State::Sending(id, msg, timeout, retry)
                 }
             },
-            State::Receiving(p, timeout) => {
-                if p.eid == eid {
+            State::Receiving(id, p, timeout) => {
+                if eid == id {
                     State::Idle.recv(ctx, inner, timeout)
                 } else {
-                    State::Receiving(p, timeout)
+                    State::Receiving(id, p, timeout)
                 }
             },
             any => any
@@ -241,7 +241,7 @@ impl State {
 /*****************************************************************************/
 
     fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout, retry: bool) -> State {
-        if let State::Active(p) = self {
+        if let State::Active(_, p) = self {
             inner.cancel(ctx, p);
         }
         if let Some(eid) = inner.send(ctx, msg.clone()) {
@@ -253,16 +253,19 @@ impl State {
     fn on_send_ack(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
         match self {
             State::Sending(id, msg, timeout, retry) => {
-                if id == eid {
-                    let retry_timeout = inner.on_send_ack(ctx, timeout, retry);
+                if id != eid {
+                    return State::Sending(id, msg, timeout, retry);
+                }
 
-                    State::Active(PendingRequest {
-                        eid: eid,
+                let retry_timeout = inner.on_send_ack(ctx, timeout, retry);
+
+                if inner.is_device_item {
+                    State::Idle
+                } else {
+                    State::Active(eid, PendingRequest {
                         req: msg,
                         retry_timeout: retry_timeout
                     })
-                } else {
-                    State::Sending(id, msg, timeout, retry)
                 }
             },
             any => any
@@ -292,33 +295,45 @@ impl State {
 /*****************************************************************************/
 
     fn recv(self, ctx: &mut Context, inner: &mut Inner, timeout: Timeout) -> State {
-        if let State::Active(p) = self {
-            State::Idle.recv_reply_for(ctx, inner, timeout, p)
+        if inner.is_device_item {
+            inner.recv(ctx).map_or_else(
+                |   | State::RecvOnHold(None, None, timeout),
+                |eid| State::Receiving(eid, None, timeout))
+        } else if let State::Active(eid, p) = self {
+            State::Idle.recv_reply_for(ctx, inner, timeout, eid, p)
         } else {
             inner.recv_when_inactive(ctx, timeout);
 
             State::Idle
         }
     }
-    fn recv_reply_for(self, ctx: &mut Context, inner: &mut Inner, timeout: Timeout, p: PendingRequest) -> State {
-        if inner.recv_from(ctx, p.eid) {
-            State::Receiving(p, timeout)
+    fn recv_reply_for(self, ctx: &mut Context, inner: &mut Inner, timeout: Timeout, eid: EndpointId, p: PendingRequest) -> State {
+        if inner.recv_reply_from(ctx, eid) {
+            State::Receiving(eid, Some(p), timeout)
         } else {
-            State::RecvOnHold(p, timeout)
+            State::RecvOnHold(Some(eid), Some(p), timeout)
         }
     }
     fn on_recv_ack(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId, msg: Message, req_id: u32) -> State {
         match self {
-            State::Receiving(p, timeout) => {
-                if p.eid == eid {
+            State::Receiving(id, None, timeout) => {
+                if eid == id {
+                    inner.on_recv_ack(ctx, timeout, msg, None);
+                    State::Idle
+                } else {
+                    State::Receiving(id, None, timeout)
+                }
+            },
+            State::Receiving(id, Some(p), timeout) => {
+                if eid == id {
                     if inner.cur_req_id() == req_id {
                         inner.on_recv_ack(ctx, timeout, msg, p.retry_timeout);
                         State::Idle
                     } else {
-                        State::Idle.recv_reply_for(ctx, inner, timeout, p)
+                        State::Idle.recv_reply_for(ctx, inner, timeout, id, p)
                     }
                 } else {
-                    State::Receiving(p, timeout)
+                    State::Receiving(id, Some(p), timeout)
                 }
             },
             any => any
@@ -326,8 +341,10 @@ impl State {
     }
     fn on_recv_timeout(self, ctx: &mut Context, inner: &mut Inner) -> State {
         match self {
-            State::Receiving(p, _) |
-            State::RecvOnHold(p, _) => inner.on_recv_timeout(ctx, p.retry_timeout),
+            State::Receiving(_, None, _) |
+            State::RecvOnHold(_, None, _) => inner.on_recv_timeout(ctx, None),
+            State::Receiving(_, Some(p), _) |
+            State::RecvOnHold(_, Some(p), _) => inner.on_recv_timeout(ctx, p.retry_timeout),
             _ => {}
         }
 
@@ -336,26 +353,31 @@ impl State {
     fn on_recv_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_recv_ready(eid);
         match self {
-            State::RecvOnHold(p, timeout) => {
-                if eid == p.eid {
-                    State::Active(p).recv(ctx, inner, timeout)
+            State::RecvOnHold(None, None, timeout) => {
+                State::Idle.recv(ctx, inner, timeout)
+            },
+            State::RecvOnHold(Some(id), Some(p), timeout) => {
+                if eid == id {
+                    State::Active(id, p).recv(ctx, inner, timeout)
                 } else {
-                    State::RecvOnHold(p, timeout)
+                    State::RecvOnHold(Some(id), Some(p), timeout)
                 }
             },
             any => any
         }
     }
     fn on_retry_timeout(self, ctx: &mut Context, inner: &mut Inner) -> State {
-        if let State::Active(p) = self {
+        if let State::Active(_, p) = self {
             State::Idle.send(ctx, inner, p.req, None, true)
         } else {
             self
         }
     }
     fn is_recv_ready(&self, inner: &Inner) -> bool {
-        if let State::Active(ref p) = *self {
-            inner.is_recv_ready(&p.eid)
+        if inner.is_device_item {
+            inner.is_recv_ready()
+        } else if let State::Active(ref eid, _) = *self {
+            inner.is_recv_ready_from(eid)
         } else {
             false
         }
@@ -374,6 +396,7 @@ impl Inner {
             reply_tx: tx,
             pipes: HashMap::new(),
             lb: Priolist::new(),
+            fq: Priolist::new(),
             rv: HashSet::new(),
             req_id_seq: time::get_time().nsec as u32,
             is_device_item: false,
@@ -382,10 +405,12 @@ impl Inner {
     }
     fn add_pipe(&mut self, eid: EndpointId, pipe: Pipe) {
         self.lb.insert(eid, pipe.get_send_priority());
+        self.fq.insert(eid, pipe.get_recv_priority());
         self.pipes.insert(eid, pipe);
     }
     fn remove_pipe(&mut self, eid: EndpointId) -> Option<Pipe> {
         self.lb.remove(&eid);
+        self.fq.remove(&eid);
         self.rv.remove(&eid);
         self.pipes.remove(&eid)
     }
@@ -403,12 +428,16 @@ impl Inner {
     }
     fn on_send_ack(&self, ctx: &mut Context, timeout: Timeout, retry: bool) -> Timeout {
         if !retry {
-        let _ = self.reply_tx.send(Reply::Send);
+            let _ = self.reply_tx.send(Reply::Send);
         }
         if let Some(sched) = timeout {
             ctx.cancel(sched);
         }
-        ctx.schedule(Schedulable::ReqResend, self.resend_ivl).ok()
+        if self.is_device_item {
+            None
+        } else {
+            ctx.schedule(Schedulable::ReqResend, self.resend_ivl).ok()
+        }
     }
     fn on_send_timeout(&self) {
         let error = timedout_io_error("Send timed out");
@@ -423,7 +452,16 @@ impl Inner {
         }
     }
 
-    fn recv_from(&mut self, ctx: &mut Context, eid: EndpointId) -> bool {
+    fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
+        self.fq.pop().map_or(None, |eid| self.recv_from(ctx, eid))
+    }
+    fn recv_from(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointId> {
+        self.pipes.get_mut(&eid).map_or(None, |pipe| {
+            pipe.recv(ctx); 
+            Some(eid)
+        })
+    }
+    fn recv_reply_from(&mut self, ctx: &mut Context, eid: EndpointId) -> bool {
         self.rv.remove(&eid);
         self.pipes.get_mut(&eid).map(|pipe| pipe.recv(ctx)).is_some()
     }
@@ -455,10 +493,14 @@ impl Inner {
         let _ = self.reply_tx.send(Reply::Err(error));
     }
     fn on_recv_ready(&mut self, eid: EndpointId) {
+        self.fq.activate(&eid);
         self.rv.insert(eid);
     }
-    fn is_recv_ready(&self, eid: &EndpointId) -> bool {
+    fn is_recv_ready_from(&self, eid: &EndpointId) -> bool {
         self.rv.contains(eid)
+    }
+    fn is_recv_ready(&self) -> bool {
+        self.fq.peek()
     }
 
     fn msg_to_raw_msg(&mut self, msg: Message) -> Message {
@@ -471,7 +513,8 @@ impl Inner {
 
     fn raw_msg_to_msg(&self, raw_msg: Message) -> Option<(Message, u32)> {
         if self.is_device_item {
-            Some((raw_msg, self.cur_req_id()))
+            let cur_req_id = self.cur_req_id();
+            decode(raw_msg).map(|(msg, _)| (msg, cur_req_id))
         } else {
             decode(raw_msg)
         }
@@ -563,7 +606,7 @@ mod tests {
         req.send(&mut ctx, msg, Some(timeout));
         req.on_send_ack(&mut ctx, eid);
 
-        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
         let is_reply_ok = match reply {
             Reply::Send => true,
             _ => false
@@ -727,7 +770,7 @@ mod tests {
         req.on_recv_ready(&mut ctx, eid);
         req.recv(&mut ctx, None);
 
-        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
         let is_reply_err = match reply {
             Reply::Err(_) => true,
             _ => false
@@ -748,7 +791,7 @@ mod tests {
         req.on_send_ready(&mut ctx, eid);
         req.send(&mut ctx, Message::new(), None);
         req.on_send_ack(&mut ctx, eid);
-        let _ = rx.recv().expect("facade should have been sent a reply !");
+        let _ = rx.try_recv().expect("facade should have been sent a reply !");
 
         let bad_request_id = (req.inner.req_id_seq - 1) | 0x80000000;
         let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2, 1];
@@ -775,7 +818,7 @@ mod tests {
         req.on_send_ready(&mut ctx, eid);
         req.send(&mut ctx, Message::new(), None);
         req.on_send_ack(&mut ctx, eid);
-        let _ = rx.recv().expect("facade should have been sent a reply !");
+        let _ = rx.try_recv().expect("facade should have been sent a reply !");
 
         let good_request_id = (req.inner.req_id_seq) | 0x80000000;
         let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2, 1];
@@ -787,7 +830,7 @@ mod tests {
         req.recv(&mut ctx, None);
         req.on_recv_ack(&mut ctx, eid, msg);
 
-        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
         let is_reply_ok = match reply {
             Reply::Recv(_) => true,
             _ => false
@@ -797,21 +840,164 @@ mod tests {
 
     #[test]
     fn when_in_regular_mode_recv_moves_the_request_id_from_the_body_to_the_header() {
-        //unimplemented!();
+        let (tx, rx) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_send_ready(&mut ctx, eid);
+        req.send(&mut ctx, Message::new(), None);
+        req.on_send_ack(&mut ctx, eid);
+        let _ = rx.try_recv().expect("facade should have been sent a reply !");
+
+        let good_request_id = (req.inner.req_id_seq) | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2, 1];
+
+        BigEndian::write_u32(&mut body[0..4], good_request_id);
+
+        let msg = Message::from_body(body);
+        req.on_recv_ready(&mut ctx, eid);
+        req.recv(&mut ctx, None);
+        req.on_recv_ack(&mut ctx, eid, msg);
+
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
+        let reply_msg = match reply {
+            Reply::Recv(msg) => Some(msg),
+            _ => None
+        };
+        let app_msg = reply_msg.unwrap();
+        assert_eq!(4, app_msg.get_header().len());
+        assert_eq!(3, app_msg.get_body().len());
+    }
+
+    #[test]
+    fn when_in_raw_mode_recv_while_active_will_accept_msg_with_any_request_id() {
+        let (tx, rx) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+
+        req.on_device_plugged(&mut ctx);
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_send_ready(&mut ctx, eid);
+        req.send(&mut ctx, Message::new(), None);
+        req.on_send_ack(&mut ctx, eid);
+        let _ = rx.try_recv().expect("facade should have been sent a reply !");
+
+        let bad_request_id = (req.inner.req_id_seq + 666) | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2, 1];
+
+        BigEndian::write_u32(&mut body[0..4], bad_request_id);
+
+        let msg = Message::from_body(body);
+        req.on_recv_ready(&mut ctx, eid);
+        req.recv(&mut ctx, None);
+        req.on_recv_ack(&mut ctx, eid, msg);
+
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
+        let is_reply_ok = match reply {
+            Reply::Recv(_) => true,
+            _ => false
+        };
+        assert!(is_reply_ok);
     }
 
     #[test]
     fn when_in_raw_mode_recv_while_idle_will_succeed() {
-        //unimplemented!();
+        let (tx, rx) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+
+        let request_id = (req.inner.req_id_seq + 666) | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2, 1];
+
+        BigEndian::write_u32(&mut body[0..4], request_id);
+
+        let msg = Message::from_body(body);
+
+        req.on_device_plugged(&mut ctx);
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_recv_ready(&mut ctx, eid);
+        req.recv(&mut ctx, None);
+        req.on_recv_ack(&mut ctx, eid, msg);
+
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
+        let is_reply_ok = match reply {
+            Reply::Recv(_) => true,
+            _ => false
+        };
+        assert!(is_reply_ok);
     }
 
     #[test]
     fn when_in_raw_mode_recv_moves_the_request_id_from_the_body_to_the_header() {
-        //unimplemented!();
+        let (tx, rx) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+
+        let request_id = (req.inner.req_id_seq + 666) | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2, 1];
+
+        BigEndian::write_u32(&mut body[0..4], request_id);
+
+        let msg = Message::from_body(body);
+
+        req.on_device_plugged(&mut ctx);
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_recv_ready(&mut ctx, eid);
+        req.recv(&mut ctx, None);
+        req.on_recv_ack(&mut ctx, eid, msg);
+
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
+        let reply_msg = match reply {
+            Reply::Recv(msg) => Some(msg),
+            _ => None
+        };
+        let app_msg = reply_msg.unwrap();
+        assert_eq!(4, app_msg.get_header().len());
+        assert_eq!(3, app_msg.get_body().len());
     }
 
     #[test]
     fn when_in_raw_mode_recv_will_accept_any_msg_with_a_four_bytes_header() {
-        //unimplemented!();
-    }
+        let (tx, rx) = mpsc::channel();
+        let mut req = Req::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+
+        let request_id = 666;
+        let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2];
+
+        BigEndian::write_u32(&mut body[0..4], request_id);
+
+        let msg = Message::from_body(body);
+
+        req.on_device_plugged(&mut ctx);
+        req.add_pipe(&mut ctx, eid, pipe);
+        req.on_recv_ready(&mut ctx, eid);
+        req.recv(&mut ctx, None);
+        req.on_recv_ack(&mut ctx, eid, msg);
+
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
+        let reply_msg = match reply {
+            Reply::Recv(msg) => Some(msg),
+            _ => None
+        };
+        let app_msg = reply_msg.unwrap();
+        assert_eq!(4, app_msg.get_header().len());
+        assert_eq!(2, app_msg.get_body().len());
+     }
 }
