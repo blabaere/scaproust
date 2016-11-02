@@ -8,7 +8,7 @@ The message is represent as follow: `([header][body])`
 | Send | ([req-id][req-body]) | The REQ socket generates a req-id and appends it to the message header. The REQ socket now has a pending request in its state. |
 | Send | ([][req-id;req-body]) | The message is sent from one endpoint to another over the transport |
 | Recv | ([eid1][req-id;req-body]) | The device REP socket appends the receving endpoint id the message header |
-| Recv | ([eid1;req-id][req-body]) | The device REP socket moves 4 bytes from the body to the header |
+| Recv | ([eid1;req-id][req-body]) | The device REP socket moves the message backtrace from the body to the header |
 | FWD | ([eid1;req-id][req-body]) | The device forwards the untouched message to its REQ socket |
 | Send | ([eid1;req-id][req-body]) | The device REQ socket DOES NOT generate a req-id or append anything |
 | Send | ([][eid1;req-id;req-body]) | The message is sent from one endpoint to another over the transport |
