@@ -1,5 +1,21 @@
 This document explains how a device can work with stateful protocols like REQ/REP.
-It's focus is on how the reply flows from the REP back to the original REQ while keeping the reqId.
+It shows the content of the message at each step of the workflow.
+The message is represent as follow: `([header][body])`
+
+| Step | Message | Comment |
+| --- | --- | --- |
+|  | ([][req-body]) | The application creates a request and sent it via a REQ socket |
+|  | ([req-id][req-body]) | The REQ socket generates a req-id and appends it to the message header. The REQ socket now has a pending request in its state. |
+|  | ([][req-id;req-body]) | The message is sent from one endpoint to another over the transport |
+|  | ([eid1][req-id;req-body]) | The device REP socket appends the receving endpoint id the message header |
+|  | ([eid1;req-id][req-body]) | The device REP socket moves 4 bytes from the body to the header |
+|  | ([eid1;req-id][req-body]) | The device forwards the message untouched to its REQ socket |
+|  | ([eid1;req-id][req-body]) | The device REQ socket DOES NOT generate a req-id or append anything |
+|  | ([][eid1;req-id;req-body]) | The message is sent from one endpoint to another over the transport |
+|  | ([eid2][eid1;req-id;req-body]) | The REP socket appends the receving endpoint id the message header |
+|  | ([eid2;eid1;req-id][req-body]) | The REP socket moves the message backtrace from the body to the header |
+|  | ([][req-body]) | The REP socket moves the message header and stores it in its state |
+|  |  | At this point the application is given a message with the original request, the device sockets don't remember anything while the 'outer' REQ & REP have kept a trace of the request flow |
 
 User -> 
 ([][req-body])
