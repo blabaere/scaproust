@@ -8,6 +8,8 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 
+use byteorder::*;
+
 use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
@@ -132,9 +134,11 @@ impl Protocol for Rep {
         pipe
     }
     fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Timeout) {
-        let raw_msg = self.inner.msg_to_raw_msg(msg);
-
-        self.apply(ctx, |s, ctx, inner| s.send(ctx, inner, Rc::new(raw_msg), timeout))
+        if let Some((raw_msg, eid)) = self.inner.msg_to_raw_msg(msg) {
+            self.apply(ctx, |s, ctx, inner| s.send(ctx, inner, Rc::new(raw_msg), timeout, eid))
+        } else {
+            self.inner.on_send_malformed(ctx, timeout);
+        }
     }
     fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.inner.clear_backtrace();
@@ -151,9 +155,7 @@ impl Protocol for Rep {
         self.apply(ctx, |s, ctx, inner| s.recv(ctx, inner, timeout))
     }
     fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, raw_msg: Message) {
-        if let Some(msg) = self.inner.raw_msg_to_msg(raw_msg) {
-            self.inner.set_backtrace(msg.get_header());
-
+        if let Some(msg) = self.inner.raw_msg_to_msg(raw_msg, eid) {
             self.apply(ctx, |s, ctx, inner| s.on_recv_ack(ctx, inner, eid, msg))
         } else {
             self.inner.on_recv_ack_malformed(ctx)
@@ -212,8 +214,11 @@ impl State {
 /*                                                                           */
 /*****************************************************************************/
 
-    fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout) -> State {
-        if let State::Active(eid) = self {
+    fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout, eid: EndpointId) -> State {
+        if inner.is_device_item {
+            State::Idle.send_reply_to(ctx, inner, msg, timeout, eid)
+        }
+        else if let State::Active(_) = self {
             State::Idle.send_reply_to(ctx, inner, msg, timeout, eid)
         } else {
             inner.send_when_inactive(ctx, timeout);
@@ -251,8 +256,11 @@ impl State {
         self
     }
     fn is_send_ready(&self, inner: &Inner) -> bool {
-        if let State::Active(ref eid) = *self {
-            inner.is_send_ready(eid)
+        if inner.is_device_item {
+            inner.is_send_ready()
+        }
+        else if let State::Active(ref eid) = *self {
+            inner.is_send_ready_to(eid)
         } else {
             false
         }
@@ -274,7 +282,12 @@ impl State {
             State::Receiving(id, timeout) => {
                 if id == eid {
                     inner.on_recv_ack(ctx, timeout, msg);
-                    State::Active(eid)
+                    if inner.is_device_item {
+                        State::Idle
+                    } else {
+                        State::Active(eid)
+                    }
+                    
                 } else {
                     State::Receiving(id, timeout)
                 }
@@ -327,7 +340,13 @@ impl Inner {
         self.sd.remove(&eid);
         self.pipes.remove(&eid)
     }
-
+    fn on_send_malformed(&mut self, ctx: &mut Context, timeout: Timeout) {
+        let error = invalid_data_io_error("Sending without eid");
+        let _ = self.reply_tx.send(Reply::Err(error));
+        if let Some(sched) = timeout {
+            ctx.cancel(sched);
+        }
+    }
     fn send_to(&mut self, ctx: &mut Context, msg: Rc<Message>, eid: EndpointId) -> bool {
         self.sd.remove(&eid);
         self.pipes.get_mut(&eid).map(|pipe| pipe.send(ctx, msg)).is_some()
@@ -352,7 +371,10 @@ impl Inner {
     fn on_send_ready(&mut self, eid: EndpointId) {
         self.sd.insert(eid);
     }
-    fn is_send_ready(&self, eid: &EndpointId) -> bool {
+    fn is_send_ready(&self) -> bool {
+        !self.sd.is_empty()
+    }
+    fn is_send_ready_to(&self, eid: &EndpointId) -> bool {
         self.sd.contains(eid)
     }
 
@@ -368,7 +390,11 @@ impl Inner {
     fn on_recv_ready(&mut self, eid: EndpointId) {
         self.fq.activate(&eid)
     }
-    fn on_recv_ack(&self, ctx: &mut Context, timeout: Timeout, msg: Message) {
+    fn on_recv_ack(&mut self, ctx: &mut Context, timeout: Timeout, mut msg: Message) {
+        if !self.is_device_item {
+            self.set_backtrace(&msg.header);
+            msg.header.clear();
+        }
         let _ = self.reply_tx.send(Reply::Recv(msg));
         if let Some(sched) = timeout {
             ctx.cancel(sched);
@@ -386,19 +412,57 @@ impl Inner {
         self.fq.peek()
     }
  
-    fn raw_msg_to_msg(&self, raw_msg: Message) -> Option<Message> {
-        if self.is_device_item {
-            Some(raw_msg)
-        } else {
-            decode(raw_msg, self.ttl)
+    fn raw_msg_to_msg(&self, raw_msg: Message, eid: EndpointId) -> Option<Message> {
+        let (mut header, mut body) = raw_msg.split();
+        let mut hops = 0;
+        let mut eid_bytes: [u8; 4] = [0; 4];
+        let eid_usize: usize = eid.into();
+
+        BigEndian::write_u32(&mut eid_bytes[0..4], eid_usize as u32);
+
+        header.reserve(4);
+        header.extend_from_slice(&eid_bytes[..]);
+
+        loop {
+            if hops >= self.ttl {
+                return None;
+            }
+            hops += 1;
+
+            if body.len() < 4 {
+                return None;
+            }
+
+            let tail = body.split_off(4);
+            header.reserve(4);
+            header.extend_from_slice(&body);
+
+            let position = header.len() - 4;
+            if header[position] & 0x80 != 0 {
+                return Some(Message::from_header_and_body(header, tail));
+            }
+            body = tail;
         }
     }
-    fn msg_to_raw_msg(&self, msg: Message) -> Message {
-        if self.is_device_item {
-            msg
-        } else {
-            encode(msg, self.get_backtrace())
+    fn msg_to_raw_msg(&self, msg: Message) -> Option<(Message, EndpointId)> {
+        let (mut header, body) = msg.split();
+
+        if !self.is_device_item {
+            let backtrace = self.get_backtrace();
+
+            header.clear();
+            header.extend_from_slice(backtrace);
         }
+
+        if header.len() < 4 {
+            return None;
+        }
+
+        let tail = header.split_off(4);
+        let eid_u32 = BigEndian::read_u32(&header);
+        let eid = EndpointId::from(eid_u32 as usize);
+        
+        Some((Message::from_header_and_body(tail, body), eid))
     }
     fn set_backtrace(&mut self, bt: &[u8]) {
         self.backtrace.clear();
@@ -415,39 +479,6 @@ impl Inner {
             pipe.close(ctx);
         }
     }
-}
-
-fn decode(raw_msg: Message, ttl: u8) -> Option<Message> {
-    let (mut header, mut body) = raw_msg.split();
-    let mut hops = 0;
-
-    loop {
-        if hops >= ttl {
-            return None;
-        }
-        hops += 1;
-
-        if body.len() < 4 {
-            return None;
-        }
-
-        let tail = body.split_off(4);
-        header.extend_from_slice(&body);
-
-        let position = header.len() - 4;
-        if header[position] & 0x80 != 0 {
-            return Some(Message::from_header_and_body(header, tail));
-        }
-        body = tail;
-    }
-}
-
-fn encode(msg: Message, backtrace: &[u8]) -> Message {
-    let (mut header, body) = msg.split();
-
-    header.extend_from_slice(backtrace);
-
-    Message::from_header_and_body(header, body)
 }
 
 /*****************************************************************************/
@@ -655,9 +686,107 @@ mod tests {
 
     #[test]
     fn when_in_regular_mode_recv_will_store_endpoint_and_backtrace_in_socket_state() {
+        let (tx, rx) = mpsc::channel();
+        let mut rep = Rep::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+        let request_id = 666 | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 2, 4, 2, 0, 0, 0, 0, 4, 2, 1];
+
+        BigEndian::write_u32(&mut body[4..8], request_id);
+
+        let msg = Message::from_body(body);
+
+        rep.add_pipe(&mut ctx, eid, pipe);
+        rep.on_recv_ready(&mut ctx, eid);
+        rep.recv(&mut ctx, None);
+        rep.on_recv_ack(&mut ctx, eid, msg);
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
+        let reply_msg = match reply {
+            Reply::Recv(msg) => Some(msg),
+            _ => None
+        };
+        let app_msg = reply_msg.unwrap();
+        assert_eq!(0, app_msg.get_header().len());
+        assert_eq!(3, app_msg.get_body().len());
+        assert_eq!(12, rep.inner.get_backtrace().len());
     }
 
     #[test]
     fn when_in_raw_mode_recv_will_store_endpoint_and_backtrace_in_msg_header() {
+        let (tx, rx) = mpsc::channel();
+        let mut rep = Rep::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+        let request_id = 666 | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 2, 4, 2, 0, 0, 0, 0, 4, 2, 1];
+
+        BigEndian::write_u32(&mut body[4..8], request_id);
+
+        let msg = Message::from_body(body);
+
+        rep.on_device_plugged(&mut ctx);
+        rep.add_pipe(&mut ctx, eid, pipe);
+        rep.on_recv_ready(&mut ctx, eid);
+        rep.recv(&mut ctx, None);
+        rep.on_recv_ack(&mut ctx, eid, msg);
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
+        let reply_msg = match reply {
+            Reply::Recv(msg) => Some(msg),
+            _ => None
+        };
+        let app_msg = reply_msg.unwrap();
+        assert_eq!(12, app_msg.get_header().len());
+        assert_eq!(3, app_msg.get_body().len());
+        assert_eq!(0, rep.inner.get_backtrace().len());
     }
+
+    #[test]
+    fn when_in_regular_mode_send_will_restore_backtrace_from_socket_state_in_header_before_removing_endoint_id() {
+        let (tx, rx) = mpsc::channel();
+        let mut rep = Rep::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(0);
+        let pipe = new_test_pipe(eid);
+        let request_id = 666 | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 2, 4, 2, 0, 0, 0, 0, 4, 2, 1];
+
+        BigEndian::write_u32(&mut body[4..8], request_id);
+
+        let msg = Message::from_body(body);
+
+        rep.add_pipe(&mut ctx, eid, pipe);
+        rep.on_recv_ready(&mut ctx, eid);
+        rep.recv(&mut ctx, None);
+        rep.on_recv_ack(&mut ctx, eid, msg);
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
+        let reply_msg = match reply {
+            Reply::Recv(msg) => Some(msg),
+            _ => None
+        };
+        let app_msg = reply_msg.unwrap();
+        assert_eq!(0, app_msg.get_header().len());
+        assert_eq!(3, app_msg.get_body().len());
+        assert_eq!(12, rep.inner.get_backtrace().len());
+
+        rep.on_send_ready(&mut ctx, eid);
+        rep.send(&mut ctx, Message::new(), None);
+        rep.on_send_ack(&mut ctx, eid);
+
+        let sensor = ctx_sensor.borrow();
+        sensor.assert_one_send_to(eid);
+
+        assert_eq!(0, rep.inner.get_backtrace().len());
+    }
+    
+    #[test]
+    fn when_in_raw_mode_send_will_remove_endpoint_id_from_header() {
+    }
+
+    // when_in_raw_send_before_recv_succeed
 }

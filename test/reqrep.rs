@@ -56,7 +56,7 @@ describe! can {
         req.connect(&url).unwrap();
 
         let not_sent = rep.send(vec![66, 65, 67]).unwrap_err();
-        assert_eq!(io::ErrorKind::Other, not_sent.kind());
+        assert_eq!(io::ErrorKind::InvalidData, not_sent.kind());
     }
 
     it "resend the request silently when the timeout is reached" {
