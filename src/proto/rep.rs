@@ -463,6 +463,8 @@ mod tests {
     use std::rc::Rc;
     use std::sync::mpsc;
 
+    use byteorder::*;
+
     use core::{EndpointId, Message};
     use core::socket::{Protocol, Reply};
     use core::context::{Event, Scheduled};
@@ -478,13 +480,16 @@ mod tests {
         let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
         let eid = EndpointId::from(0);
         let pipe = new_test_pipe(eid);
+        let timeout = Scheduled::from(1);
+        let request_id = 666 | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2, 1];
 
-        rep.on_device_plugged(&mut ctx);
+        BigEndian::write_u32(&mut body[0..4], request_id);
+
+        let msg = Message::from_body(body);
+
         rep.add_pipe(&mut ctx, eid, pipe);
         rep.on_recv_ready(&mut ctx, eid);
-
-        let msg = Message::new();
-        let timeout = Scheduled::from(1);
         rep.recv(&mut ctx, Some(timeout));
         rep.on_recv_ack(&mut ctx, eid, msg);
 
@@ -509,7 +514,6 @@ mod tests {
         let eid = EndpointId::from(0);
         let pipe = new_test_pipe(eid);
 
-        rep.on_device_plugged(&mut ctx);
         rep.add_pipe(&mut ctx, eid, pipe);
         rep.on_send_ready(&mut ctx, eid);
 
@@ -538,17 +542,21 @@ mod tests {
         let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
         let eid = EndpointId::from(0);
         let pipe = new_test_pipe(eid);
-
-        rep.on_device_plugged(&mut ctx);
-        rep.add_pipe(&mut ctx, eid, pipe);
-        rep.on_send_ready(&mut ctx, eid);
-
         let timeout = Scheduled::from(1);
+        let request_id = 666 | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2, 1];
+
+        BigEndian::write_u32(&mut body[0..4], request_id);
+
+        let msg = Message::from_body(body);
+
+        rep.add_pipe(&mut ctx, eid, pipe);
         rep.on_recv_ready(&mut ctx, eid);
         rep.recv(&mut ctx, None);
-        rep.on_recv_ack(&mut ctx, eid, Message::new());
+        rep.on_recv_ack(&mut ctx, eid, msg);
         let _ = rx.recv(); // flush recv reply
 
+        rep.on_send_ready(&mut ctx, eid);
         rep.send(&mut ctx, Message::new(), Some(timeout));
         rep.on_send_ack(&mut ctx, eid);
 
@@ -597,12 +605,17 @@ mod tests {
         let eid = EndpointId::from(1);
         let pipe = new_test_pipe(eid);
 
-        rep.on_device_plugged(&mut ctx);
-        rep.add_pipe(&mut ctx, eid, pipe);
+        let request_id = 666 | 0x80000000;
+        let mut body: Vec<u8> = vec![0, 0, 0, 0, 4, 2, 1];
 
+        BigEndian::write_u32(&mut body[0..4], request_id);
+
+        let msg = Message::from_body(body);
+
+        rep.add_pipe(&mut ctx, eid, pipe);
         rep.on_recv_ready(&mut ctx, eid);
         rep.recv(&mut ctx, None);
-        rep.on_recv_ack(&mut ctx, eid, Message::new());
+        rep.on_recv_ack(&mut ctx, eid, msg);
         let _ = rx.recv(); // flush recv reply
 
         rep.on_send_ready(&mut ctx, eid);
@@ -638,5 +651,13 @@ mod tests {
         assert_eq!(2, raised_evts.len());
         assert_eq!(Event::CanRecv(true), raised_evts[0]);
         assert_eq!(Event::CanRecv(false), raised_evts[1]);
+    }
+
+    #[test]
+    fn when_in_regular_mode_recv_will_store_endpoint_and_backtrace_in_socket_state() {
+    }
+
+    #[test]
+    fn when_in_raw_mode_recv_will_store_endpoint_and_backtrace_in_msg_header() {
     }
 }
