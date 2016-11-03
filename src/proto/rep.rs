@@ -216,15 +216,26 @@ impl State {
 
     fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout, eid: EndpointId) -> State {
         if inner.is_device_item {
-            State::Idle.send_reply_to(ctx, inner, msg, timeout, eid)
-        }
-        else if let State::Active(_) = self {
-            State::Idle.send_reply_to(ctx, inner, msg, timeout, eid)
-        } else {
-            inner.send_when_inactive(ctx, timeout);
+            return if inner.is_send_ready_to(&eid) {
+                State::Idle.send_reply_to(ctx, inner, msg, timeout, eid)
+            } else {
+                inner.on_send_ack(ctx, timeout);
 
-            State::Idle
+                State::Idle
+            }
         }
+
+        if let State::Active(_) = self {
+            return if inner.is_send_ready_to(&eid) {
+                State::Idle.send_reply_to(ctx, inner, msg, timeout, eid)
+            } else {
+                State::SendOnHold(eid, msg, timeout)
+            }
+        } 
+
+        inner.send_when_inactive(ctx, timeout);
+
+        State::Idle
     }
     fn send_reply_to(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout, eid: EndpointId) -> State {
         if inner.send_to(ctx, msg.clone(), eid) {
@@ -251,9 +262,19 @@ impl State {
 
         State::Idle
     }
-    fn on_send_ready(self, _: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_send_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_send_ready(eid);
-        self
+
+        match self {
+            State::SendOnHold(id, msg, timeout) => {
+                if id == eid {
+                    State::Idle.send_reply_to(ctx, inner, msg, timeout, eid)
+                } else {
+                    State::SendOnHold(id, msg, timeout)
+                }
+            },
+            any => any
+        }
     }
     fn is_send_ready(&self, inner: &Inner) -> bool {
         if inner.is_device_item {
@@ -786,7 +807,60 @@ mod tests {
     
     #[test]
     fn when_in_raw_mode_send_will_remove_endpoint_id_from_header() {
+        let (tx, _) = mpsc::channel();
+        let mut rep = Rep::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(1);
+        let pipe = new_test_pipe(eid);
+        let header: Vec<u8> = vec![0, 0, 0, 1];
+        let body: Vec<u8> = vec![6, 6, 6, 6, 4, 2, 1];
+        let msg = Message::from_header_and_body(header, body);
+
+        rep.on_device_plugged(&mut ctx);
+        rep.add_pipe(&mut ctx, eid, pipe);
+        rep.on_send_ready(&mut ctx, eid);
+        rep.send(&mut ctx, msg, None);
+        rep.on_send_ack(&mut ctx, eid);
+
+        let sensor = ctx_sensor.borrow();
+        sensor.assert_one_send_to(eid);
+
+        let send_calls = sensor.get_send_calls();
+
+        assert_eq!(1, send_calls.len());
+        let &(_, ref proto_msg) = &send_calls[0];
+        let header = proto_msg.get_header();
+        let body = proto_msg.get_body();
+
+        assert_eq!(0, header.len());
+        assert_eq!(7, body.len());
     }
 
-    // when_in_raw_send_before_recv_succeed
+    #[test]
+    fn when_in_raw_mode_send_while_peer_is_not_ready_drops_the_message_and_reports_success() {
+        let (tx, rx) = mpsc::channel();
+        let mut rep = Rep::from(tx);
+        let ctx_sensor = Rc::new(RefCell::new(TestContextSensor::default()));
+        let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
+        let eid = EndpointId::from(1);
+        let pipe = new_test_pipe(eid);
+        let header: Vec<u8> = vec![0, 0, 0, 1];
+        let body: Vec<u8> = vec![6, 6, 6, 6, 4, 2, 1];
+        let msg = Message::from_header_and_body(header, body);
+
+        rep.on_device_plugged(&mut ctx);
+        rep.add_pipe(&mut ctx, eid, pipe);
+        rep.send(&mut ctx, msg, None);
+        rep.on_send_ack(&mut ctx, eid);
+
+        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let is_reply_ok = match reply {
+            Reply::Send => true,
+            _ => false
+        };
+        assert!(is_reply_ok);
+
+        ctx_sensor.borrow().assert_no_send_call();
+    }
 }

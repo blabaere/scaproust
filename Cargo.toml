@@ -29,7 +29,7 @@ miow = "0.1.3"
 
 [dev-dependencies]
 env_logger = "0.3.4"
-stainless = "0.1.8"
+stainless = "0.1.9"
 
 [[test]]
 name = "test"
