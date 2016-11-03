@@ -46,11 +46,11 @@ impl Device {
         }
     }
 
-    pub fn on_socket_can_recv(&mut self, sid: SocketId) {
+    pub fn on_socket_can_recv(&mut self, sid: SocketId, can_recv: bool) {
         if sid == self.left {
-            self.left_recv = true;
+            self.left_recv = can_recv;
         } else if sid == self.right {
-            self.right_recv = true;
+            self.right_recv = can_recv;
         }
 
         if self.checking {
@@ -61,8 +61,6 @@ impl Device {
     fn send_reply(&mut self) {
         let _ = self.reply_sender.send(Reply::Check(self.left_recv, self.right_recv));
 
-        self.left_recv = false;
-        self.right_recv = false;
         self.checking = false;
     }
 }
