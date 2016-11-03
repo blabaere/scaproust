@@ -11,7 +11,7 @@ use std::sync::mpsc::Sender;
 use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
-use core::context::{Context, Event};
+use core::context::Context;
 use super::priolist::Priolist;
 use super::{Timeout, PUSH, PULL};
 use io_error::*;
@@ -51,9 +51,7 @@ impl Push {
 
             self.state = Some(new_state);
 
-            if was_send_ready != is_send_ready {
-                ctx.raise(Event::CanSend(is_send_ready));
-            }
+            ctx.check_send_ready_change(was_send_ready, is_send_ready);
 
             #[cfg(debug_assertions)] debug!("[{:?}] switch from {} to {}", ctx, old_name, new_name);
         }
@@ -92,9 +90,7 @@ impl Protocol for Push {
         let pipe = self.inner.remove_pipe(eid);
         let is_send_ready = self.inner.is_send_ready();
 
-        if was_send_ready != is_send_ready {
-            ctx.raise(Event::CanSend(is_send_ready));
-        }
+        ctx.check_send_ready_change(was_send_ready, is_send_ready);
 
         if pipe.is_some() {
             self.apply(ctx, |s, ctx, inner| s.on_pipe_removed(ctx, inner, eid));

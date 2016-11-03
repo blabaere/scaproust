@@ -50,8 +50,11 @@ impl Protocol for Pub {
     fn add_pipe(&mut self, _: &mut Context, eid: EndpointId, pipe: Pipe) {
         self.pipes.insert(eid, pipe);
     }
-    fn remove_pipe(&mut self, _: &mut Context, eid: EndpointId) -> Option<Pipe> {
+    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe> {
         self.bc.remove(&eid);
+        if self.bc.is_empty() {
+            ctx.raise(Event::CanSend(false));
+        }
         self.pipes.remove(&eid)
     }
     fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Timeout) {

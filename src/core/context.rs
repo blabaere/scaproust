@@ -13,6 +13,16 @@ use core::network::Network;
 
 pub trait Context : Network + Scheduler + fmt::Debug {
     fn raise(&mut self, evt: Event);
+    fn check_send_ready_change(&mut self, was_ready: bool, is_ready: bool) {
+        if was_ready != is_ready {
+            self.raise(Event::CanSend(is_ready));
+        }
+    }
+    fn check_recv_ready_change(&mut self, was_ready: bool, is_ready: bool) {
+        if was_ready != is_ready {
+            self.raise(Event::CanRecv(is_ready));
+        }
+    }
 }
 
 pub trait Scheduler {

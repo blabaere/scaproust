@@ -18,7 +18,7 @@ use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::config::ConfigOption;
 use core::endpoint::Pipe;
-use core::context::{Context, Schedulable, Event};
+use core::context::{Context, Schedulable};
 use super::priolist::Priolist;
 use super::{Timeout, REQ, REP};
 use io_error::*;
@@ -73,12 +73,8 @@ impl Req {
 
             self.state = Some(new_state);
 
-            if was_send_ready != is_send_ready {
-                ctx.raise(Event::CanSend(is_send_ready));
-            }
-            if was_recv_ready != is_recv_ready {
-                ctx.raise(Event::CanRecv(is_recv_ready));
-            }
+            ctx.check_send_ready_change(was_send_ready, is_send_ready);
+            ctx.check_recv_ready_change(was_recv_ready, is_recv_ready);
 
             #[cfg(debug_assertions)] debug!("[{:?}] switch from {} to {}", ctx, old_name, new_name);
         }
@@ -135,12 +131,8 @@ impl Protocol for Req {
             self.apply(ctx, |s, ctx, inner| s.on_pipe_removed(ctx, inner, eid));
         }
 
-        if was_send_ready != is_send_ready {
-            ctx.raise(Event::CanSend(is_send_ready));
-        }
-        if was_recv_ready != is_recv_ready {
-            ctx.raise(Event::CanRecv(is_recv_ready));
-        }
+        ctx.check_send_ready_change(was_send_ready, is_send_ready);
+        ctx.check_recv_ready_change(was_recv_ready, is_recv_ready);
 
         pipe
     }

@@ -13,7 +13,7 @@ use byteorder::*;
 use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
-use core::context::{Context, Event};
+use core::context::Context;
 use super::priolist::Priolist;
 use super::{Timeout, REQ, REP};
 use io_error::*;
@@ -62,12 +62,8 @@ impl Rep {
 
             self.state = Some(new_state);
 
-            if was_send_ready != is_send_ready {
-                ctx.raise(Event::CanSend(is_send_ready));
-            }
-            if was_recv_ready != is_recv_ready {
-                ctx.raise(Event::CanRecv(is_recv_ready));
-            }
+            ctx.check_send_ready_change(was_send_ready, is_send_ready);
+            ctx.check_recv_ready_change(was_recv_ready, is_recv_ready);
 
             #[cfg(debug_assertions)] debug!("[{:?}] switch from {} to {}", ctx, old_name, new_name);
         }
@@ -124,12 +120,8 @@ impl Protocol for Rep {
             self.apply(ctx, |s, ctx, inner| s.on_pipe_removed(ctx, inner, eid));
         }
 
-        if was_send_ready != is_send_ready {
-            ctx.raise(Event::CanSend(is_send_ready));
-        }
-        if was_recv_ready != is_recv_ready {
-            ctx.raise(Event::CanRecv(is_recv_ready));
-        }
+        ctx.check_send_ready_change(was_send_ready, is_send_ready);
+        ctx.check_recv_ready_change(was_recv_ready, is_recv_ready);
 
         pipe
     }
@@ -216,26 +208,24 @@ impl State {
 
     fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout, eid: EndpointId) -> State {
         if inner.is_device_item {
-            return if inner.is_send_ready_to(&eid) {
+            if inner.is_send_ready_to(&eid) {
                 State::Idle.send_reply_to(ctx, inner, msg, timeout, eid)
             } else {
                 inner.on_send_ack(ctx, timeout);
 
                 State::Idle
             }
-        }
-
-        if let State::Active(_) = self {
-            return if inner.is_send_ready_to(&eid) {
+        } else if let State::Active(_) = self {
+            if inner.is_send_ready_to(&eid) {
                 State::Idle.send_reply_to(ctx, inner, msg, timeout, eid)
             } else {
                 State::SendOnHold(eid, msg, timeout)
             }
-        } 
+        } else {
+            inner.send_when_inactive(ctx, timeout);
 
-        inner.send_when_inactive(ctx, timeout);
-
-        State::Idle
+            State::Idle
+        }
     }
     fn send_reply_to(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout, eid: EndpointId) -> State {
         if inner.send_to(ctx, msg.clone(), eid) {
