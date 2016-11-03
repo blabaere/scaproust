@@ -68,10 +68,6 @@ describe! can {
         d_push.bind(&d_push_url).unwrap();
         d_pull.bind(&d_pull_url).unwrap();
 
-        push.connect(&d_pull_url).unwrap();
-        pull.connect(&d_push_url).unwrap();
-        sleep_some();
-
         push.set_send_timeout(timeout).unwrap();
         pull.set_recv_timeout(timeout).unwrap();
 
@@ -85,6 +81,10 @@ describe! can {
         });
 
         barrier.wait();
+        sleep_some();
+
+        push.connect(&d_pull_url).unwrap();
+        pull.connect(&d_push_url).unwrap();
         sleep_some();
 
         push.send(vec![65, 66, 67]).expect("Push should have sent a message");
@@ -111,10 +111,6 @@ describe! can {
         d_req.bind(&d_req_url).unwrap();
         d_rep.bind(&d_rep_url).unwrap();
 
-        req.connect(&d_rep_url).unwrap();
-        rep.connect(&d_req_url).unwrap();
-        sleep_some();
-
         req.set_send_timeout(timeout).unwrap();
         req.set_recv_timeout(timeout).unwrap();
         rep.set_send_timeout(timeout).unwrap();
@@ -130,6 +126,10 @@ describe! can {
         });
 
         barrier.wait();
+        sleep_some();
+
+        req.connect(&d_rep_url).unwrap();
+        rep.connect(&d_req_url).unwrap();
         sleep_some();
 
         let sent_request = vec![65, 66, 67];
