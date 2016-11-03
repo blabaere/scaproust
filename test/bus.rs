@@ -83,16 +83,16 @@ describe! can {
         sleep_some();
 
         let sent = vec![65, 66, 67];
-        busl.send(sent).unwrap();
-        let _ = bus2.recv_msg().unwrap();
-        let received3 = bus3.recv_msg().unwrap();
+        busl.send(sent).expect("busl should have sent a message");
+        let _ = bus2.recv_msg().expect("bus2 should have received a message");
+        let received3 = bus3.recv_msg().expect("bus3 should have received a message");
 
         sleep_some();
 
-        bus3.send_msg(received3).unwrap();
+        bus3.send_msg(received3).expect("bus3 should have sent a message");
 
         let not_received1 = busl.recv().unwrap_err();
-        let received2 = bus2.recv().unwrap();
+        let received2 = bus2.recv().expect("bus2 should have received a message");
 
         assert_eq!(io::ErrorKind::TimedOut, not_received1.kind());
         assert_eq!(vec![65, 66, 67], received2);
