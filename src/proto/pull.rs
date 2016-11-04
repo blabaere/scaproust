@@ -89,7 +89,7 @@ impl Protocol for Pull {
         let was_recv_ready = self.inner.is_recv_ready();
         let pipe = self.inner.remove_pipe(eid);
         let is_recv_ready = self.inner.is_recv_ready();
-        
+
         ctx.check_recv_ready_change(was_recv_ready, is_recv_ready);
 
         if pipe.is_some() {
