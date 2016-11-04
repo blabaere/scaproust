@@ -164,6 +164,10 @@ impl Message {
     pub fn split(self) -> (Vec<u8>, Vec<u8>) {
         (self.header, self.body)
     }
+
+    pub fn without_header(self) -> Message {
+        Message::from_body(self.body)
+    }
 }
 
 impl Into<Vec<u8>> for Message {
