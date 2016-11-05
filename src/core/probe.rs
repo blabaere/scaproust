@@ -6,11 +6,12 @@
 
 use std::sync::mpsc::Sender;
 use std::io;
+use std::time::Duration;
 
-use super::SocketId;
+use super::{SocketId, PollReq};
 
 pub enum Request {
-    Poll,
+    Poll(Duration),
     Close
 }
 
@@ -25,12 +26,14 @@ pub trait Context {
 
 pub struct Probe {
     reply_sender: Sender<Reply>,
+    poll_opts: Vec<PollReq>
 }
 
 impl Probe {
-    pub fn new(reply_tx: Sender<Reply>) -> Probe {
+    pub fn new(reply_tx: Sender<Reply>, poll_opts: Vec<PollReq>) -> Probe {
         Probe {
-            reply_sender: reply_tx
+            reply_sender: reply_tx,
+            poll_opts: poll_opts
         }
     }
 
@@ -38,7 +41,7 @@ impl Probe {
         let _ = self.reply_sender.send(reply);
     }
 
-    pub fn poll(&mut self, _: &mut Context) {
+    pub fn poll(&mut self, _: &mut Context, timeout: Duration) {
         self.send_reply(Reply::Poll);
     }
 }

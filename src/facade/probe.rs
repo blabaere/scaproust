@@ -6,6 +6,7 @@
 
 use std::sync::mpsc;
 use std::io;
+use std::time::Duration;
 
 use super::*;
 use reactor;
@@ -50,8 +51,8 @@ impl Probe {
         }
     }
 
-    pub fn poll(&mut self) -> io::Result<()> {
-        let request = Request::Poll;
+    pub fn poll(&mut self, timeout: Duration) -> io::Result<()> {
+        let request = Request::Poll(timeout);
 
         self.call(request, |reply| self.on_poll_reply(reply))
     }

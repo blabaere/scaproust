@@ -8,13 +8,13 @@ use std::collections::HashMap;
 use std::sync::mpsc;
 use std::io;
 
-use core::{SocketId, DeviceId, ProbeId, socket, device, probe};
+use core::{SocketId, DeviceId, ProbeId, PollReq, socket, device, probe};
 use sequence::Sequence;
 
 pub enum Request {
     CreateSocket(socket::ProtocolCtor),
     CreateDevice(SocketId, SocketId),
-    CreateProbe,
+    CreateProbe(Vec<PollReq>),
     Shutdown
 }
 
@@ -118,9 +118,9 @@ impl Session {
 /*                                                                           */
 /*****************************************************************************/
 
-    pub fn add_probe(&mut self) {
+    pub fn add_probe(&mut self, poll_opts: Vec<PollReq>) {
         let (tx, rx) = mpsc::channel();
-        let id = self.probes.add(tx);
+        let id = self.probes.add(tx, poll_opts);
 
         self.send_reply(Reply::ProbeCreated(id, rx));
     }
@@ -229,9 +229,9 @@ impl ProbeCollection {
         }
     }
 
-    fn add(&mut self, reply_tx: mpsc::Sender<probe::Reply>) -> ProbeId {
+    fn add(&mut self, reply_tx: mpsc::Sender<probe::Reply>, poll_opts: Vec<PollReq>) -> ProbeId {
         let id = ProbeId::from(self.ids.next());
-        let probe = probe::Probe::new(reply_tx);
+        let probe = probe::Probe::new(reply_tx, poll_opts);
 
         self.probes.insert(id, probe);
         //self.mapping.insert(left, id);

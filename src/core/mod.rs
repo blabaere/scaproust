@@ -137,6 +137,12 @@ impl From<usize> for ProbeId {
     }
 }
 
+pub struct PollReq {
+    pub sid: SocketId,
+    pub recv: bool,
+    pub send: bool
+}
+
 /*****************************************************************************/
 /*                                                                           */
 /* Message                                                                   */

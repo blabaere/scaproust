@@ -197,7 +197,7 @@ impl Dispatcher {
                 self.apply_on_socket(r, |socket, ctx| socket.on_device_plugged(ctx));
                 self.sockets.add_device(l, r);
             },
-            session::Request::CreateProbe => self.sockets.add_probe(),
+            session::Request::CreateProbe(poll_opts) => self.sockets.add_probe(poll_opts),
             session::Request::Shutdown => el.shutdown()
         }
     }
@@ -226,8 +226,8 @@ impl Dispatcher {
         }
     }
     fn process_probe_request(&mut self, _: &mut EventLoop, id: ProbeId, request: probe::Request) {
-        if let probe::Request::Poll = request { 
-            self.apply_on_probe(id, |probe, ctx| probe.poll(ctx)) 
+        if let probe::Request::Poll(timeout) = request { 
+            self.apply_on_probe(id, |probe, ctx| probe.poll(ctx, timeout)) 
         }
     }
 

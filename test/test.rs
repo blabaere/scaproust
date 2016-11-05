@@ -42,8 +42,12 @@ pub fn sleep_some() {
     thread::sleep(Duration::from_millis(SYS_TIMEOUT));
 }
 
+pub fn make_hard_timeout() -> Duration {
+    Duration::from_millis(SYS_TIMEOUT)
+}
+
 pub fn make_timeout() -> Option<Duration> {
-    Some(Duration::from_millis(SYS_TIMEOUT))
+    Some(make_hard_timeout())
 }
 
 pub fn make_session() -> Session {

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use super::*;
 use reactor;
-use core::{SocketId, Message};
+use core::{SocketId, Message, PollReq};
 use core::socket::{Request, Reply};
 use core::config::ConfigOption;
 use core;
@@ -62,6 +62,14 @@ impl Socket {
     pub fn id(&self) -> SocketId {
         self.request_sender.socket_id
     }
+
+    pub fn create_poll_req(&self, recv: bool, send: bool) -> PollReq {
+        PollReq {
+            sid: self.id(),
+            recv: recv,
+            send: send
+        }
+    } 
 
 /*****************************************************************************/
 /*                                                                           */
