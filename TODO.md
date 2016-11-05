@@ -1,6 +1,9 @@
 To fix device bug and implement client side poll, socket should expose a `poll` function.
 And delegate the call to the protocol which will raise CanSend or CanRecv events accordingly.
 
+PB: device needs to wait until one of the sockets becomes readable, 
+while poll needs to know for each socket if it's readable or writable within the timeout.
+
 Bug scenario:
 While not checking, a device receives two CanRecv notifications.
 Then it is checked, the reply is sent immediatly.
@@ -28,11 +31,12 @@ Poll design:
 - INPROC transport : to be determined (rust channel's are probably doing a better work at this)
 
 ### Features
+- Non-blocking versions of send and recv
 - Websocket transport
 - TLS transport
 - Implement nanocat
 - STAR protocol ?
-- Polling and non-blocking operations ? Maybe not, see below
+- Polling
 
 ### Vision
 - Expose async io using future-rs ?
