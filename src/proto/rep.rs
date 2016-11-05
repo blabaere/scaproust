@@ -298,7 +298,6 @@ impl State {
                     } else {
                         State::Active(eid)
                     }
-                    
                 } else {
                     State::Receiving(id, timeout)
                 }

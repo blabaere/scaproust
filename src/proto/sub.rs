@@ -13,7 +13,7 @@ use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::config::ConfigOption;
 use core::endpoint::Pipe;
-use core::context::{Context, Event};
+use core::context::Context;
 use super::priolist::Priolist;
 use super::{Timeout, PUB, SUB};
 use io_error::*;

@@ -18,7 +18,7 @@ use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::config::ConfigOption;
 use core::endpoint::Pipe;
-use core::context::{Context, Schedulable, Event};
+use core::context::{Context, Schedulable};
 use super::priolist::Priolist;
 use super::{Timeout, SURVEYOR, RESPONDENT};
 use io_error::*;
@@ -787,4 +787,6 @@ mod tests {
         assert_eq!(4, app_msg.get_header().len());
         assert_eq!(3, app_msg.get_body().len());
     }
+
+    // test CanRecv events ...
 }

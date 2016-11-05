@@ -70,6 +70,6 @@ describe! can {
         resp2.connect(&url).unwrap();
 
         let not_sent = resp1.send(vec![66, 65, 67]).unwrap_err();
-        assert_eq!(io::ErrorKind::Other, not_sent.kind());
+        assert_eq!(io::ErrorKind::InvalidData, not_sent.kind());
     }
 }
