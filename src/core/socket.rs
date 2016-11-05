@@ -66,6 +66,9 @@ pub trait Protocol {
     fn on_recv_timeout(&mut self, ctx: &mut Context);
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId);
 
+    fn is_send_ready(&self) -> bool;
+    fn is_recv_ready(&self) -> bool;
+
     fn set_option(&mut self, _: ConfigOption) -> io::Result<()> {
         Err(invalid_input_io_error("option not supported"))
     }
@@ -106,34 +109,39 @@ impl Socket {
         let _ = self.reply_sender.send(reply);
     }
 
+    pub fn poll(&self, ctx: &mut Context) {
+        ctx.raise(Event::CanRecv(self.protocol.is_recv_ready()));
+        ctx.raise(Event::CanSend(self.protocol.is_send_ready()));
+    }
+
 /*****************************************************************************/
 /*                                                                           */
 /* endpoint creation                                                         */
 /*                                                                           */
 /*****************************************************************************/
 
-fn create_endpoint_desc(&self) -> EndpointDesc {
-    EndpointDesc {
-        send_priority: self.config.send_priority,
-        recv_priority: self.config.recv_priority,
-        tcp_no_delay: self.config.tcp_no_delay,
-        recv_max_size: self.config.recv_max_size
+    fn create_endpoint_desc(&self) -> EndpointDesc {
+        EndpointDesc {
+            send_priority: self.config.send_priority,
+            recv_priority: self.config.recv_priority,
+            tcp_no_delay: self.config.tcp_no_delay,
+            recv_max_size: self.config.recv_max_size
+        }
     }
-}
 
-fn create_endpoint_spec(&self, url: String) -> EndpointSpec {
-    EndpointSpec {
-        url: url,
-        desc: self.create_endpoint_desc()
+    fn create_endpoint_spec(&self, url: String) -> EndpointSpec {
+        EndpointSpec {
+            url: url,
+            desc: self.create_endpoint_desc()
+        }
     }
-}
 
-fn create_endpoint_tmpl(&self, url: String) -> EndpointTmpl {
-    EndpointTmpl {
-        pids: self.get_protocol_ids(),
-        spec: self.create_endpoint_spec(url)
+    fn create_endpoint_tmpl(&self, url: String) -> EndpointTmpl {
+        EndpointTmpl {
+            pids: self.get_protocol_ids(),
+            spec: self.create_endpoint_spec(url)
+        }
     }
-}
 
 /*****************************************************************************/
 /*                                                                           */
@@ -491,6 +499,8 @@ mod tests {
         fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
         fn on_recv_timeout(&mut self, _: &mut Context) {}
         fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {}
+        fn is_send_ready(&self) -> bool { false }
+        fn is_recv_ready(&self) -> bool { false }
         fn close(&mut self, _: &mut Context) {}
     }
 

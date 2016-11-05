@@ -14,8 +14,9 @@ use mio::{Evented, Token, Ready, PollOpt};
 use mio::timer::{Timer, Timeout};
 
 use core::context;
+use core::device;
 use core::network::Network;
-use core::{SocketId, EndpointId, Message, EndpointTmpl};
+use core::{SocketId, EndpointId, DeviceId, Message, EndpointTmpl};
 use transport::{Transport, Destination};
 use transport::endpoint::*;
 use transport::pipe;
@@ -45,6 +46,11 @@ pub struct EndpointEventLoopContext<'a, 'b> {
     endpoint_id: EndpointId,
     signal_tx: &'a mut EventLoopBus<Signal>,
     registrar: &'b mut Registrar
+}
+
+pub struct DeviceEventLoopContext<'a> {
+    device_id: DeviceId,
+    signal_tx: &'a mut EventLoopBus<Signal>
 }
 
 pub struct PipeController {
@@ -436,6 +442,37 @@ impl<'a, 'b> fmt::Debug for EndpointEventLoopContext<'a, 'b> {
 impl<'a, 'b> acceptor::Context for EndpointEventLoopContext<'a, 'b> {
     fn raise(&mut self, evt: acceptor::Event) {
         let signal = Signal::AcceptorEvt(self.socket_id, self.endpoint_id, evt);
+
+        self.signal_tx.send(signal);
+    }
+}
+
+/*****************************************************************************/
+/*                                                                           */
+/* Device context                                                            */
+/*                                                                           */
+/*****************************************************************************/
+
+impl<'a> DeviceEventLoopContext<'a> {
+    pub fn new(
+        did: DeviceId,
+        tx: &'a mut EventLoopBus<Signal>) -> DeviceEventLoopContext<'a> {
+        DeviceEventLoopContext {
+            device_id: did,
+            signal_tx: tx
+        }
+    }
+}
+
+impl<'a> fmt::Debug for DeviceEventLoopContext<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Device:{:?} ", self.device_id)
+    }
+}
+
+impl<'a, 'b> device::Context for DeviceEventLoopContext<'a> {
+    fn poll(&mut self, sid: SocketId) {
+        let signal = Signal::SocketCmd(sid, context::Command::Poll);
 
         self.signal_tx.send(signal);
     }

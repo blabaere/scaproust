@@ -19,6 +19,7 @@ pub enum Signal {
     PipeEvt(SocketId, EndpointId, pipe::Event),
     AcceptorCmd(SocketId, EndpointId, acceptor::Command),
     AcceptorEvt(SocketId, EndpointId, acceptor::Event),
+    SocketCmd(SocketId, context::Command),
     SocketEvt(SocketId, context::Event)
 }
 

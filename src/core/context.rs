@@ -31,6 +31,11 @@ pub trait Scheduler {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Command {
+    Poll
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Event {
     CanSend(bool),
     CanRecv(bool),

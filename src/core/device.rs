@@ -17,13 +17,17 @@ pub enum Reply {
     Check(bool, bool)
 }
 
+pub trait Context {
+    fn poll(&mut self, sid: SocketId);
+}
+
 pub struct Device {
     reply_sender: Sender<Reply>,
     left: SocketId,
     right: SocketId,
     left_recv: bool,
     right_recv: bool,
-    checking: bool
+    waiting: bool
 }
 
 impl Device {
@@ -34,15 +38,18 @@ impl Device {
             right: r,
             left_recv: false,
             right_recv: false,
-            checking: false
+            waiting: false
         }
     }
 
-    pub fn check(&mut self) {
+    pub fn check(&mut self, ctx: &mut Context) {
         if self.left_recv | self.right_recv {
             self.send_reply();
         } else {
-            self.checking = true;
+            ctx.poll(self.left);
+            ctx.poll(self.right);
+
+            self.waiting = true;
         }
     }
 
@@ -53,7 +60,7 @@ impl Device {
             self.right_recv = can_recv;
         }
 
-        if self.checking {
+        if can_recv && self.waiting {
             self.send_reply();
         }
     }
@@ -61,6 +68,6 @@ impl Device {
     fn send_reply(&mut self) {
         let _ = self.reply_sender.send(Reply::Check(self.left_recv, self.right_recv));
 
-        self.checking = false;
+        self.waiting = false;
     }
 }

@@ -47,11 +47,11 @@ impl Bus {
     fn apply<F>(&mut self, ctx: &mut Context, transition: F) where F : FnOnce(State, &mut Context, &mut Inner) -> State {
         if let Some(old_state) = self.state.take() {
             #[cfg(debug_assertions)] let old_name = old_state.name();
-            let was_send_ready = self.inner.is_send_ready();
-            let was_recv_ready = self.inner.is_recv_ready();
+            let was_send_ready = self.is_send_ready();
+            let was_recv_ready = self.is_recv_ready();
             let new_state = transition(old_state, ctx, &mut self.inner);
-            let is_send_ready = self.inner.is_send_ready();
-            let is_recv_ready = self.inner.is_recv_ready();
+            let is_send_ready = self.is_send_ready();
+            let is_recv_ready = self.is_recv_ready();
             #[cfg(debug_assertions)] let new_name = new_state.name();
 
             self.state = Some(new_state);
@@ -134,6 +134,12 @@ impl Protocol for Bus {
     }
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
+    }
+    fn is_send_ready(&self) -> bool {
+        self.inner.is_send_ready()
+    }
+    fn is_recv_ready(&self) -> bool {
+        self.inner.is_recv_ready()
     }
     fn close(&mut self, ctx: &mut Context) {
         self.inner.close(ctx)

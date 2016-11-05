@@ -77,22 +77,6 @@ impl Surveyor {
         }
     }
 
-    fn is_send_ready(&self) -> bool {
-        if let Some(ref state) = self.state {
-            state.is_send_ready(&self.inner)
-        } else {
-            false
-        }
-    }
-
-    fn is_recv_ready(&self) -> bool {
-        if let Some(ref state) = self.state {
-            state.is_recv_ready(&self.inner)
-        } else {
-            false
-        }
-    }
-
 }
 
 impl From<Sender<Reply>> for Surveyor {
@@ -176,6 +160,20 @@ impl Protocol for Surveyor {
     }
     fn on_device_plugged(&mut self, _: &mut Context) {
         self.inner.is_device_item = true;
+    }
+    fn is_send_ready(&self) -> bool {
+        if let Some(ref state) = self.state {
+            state.is_send_ready(&self.inner)
+        } else {
+            false
+        }
+    }
+    fn is_recv_ready(&self) -> bool {
+        if let Some(ref state) = self.state {
+            state.is_recv_ready(&self.inner)
+        } else {
+            false
+        }
     }
     fn close(&mut self, ctx: &mut Context) {
         self.inner.close(ctx)

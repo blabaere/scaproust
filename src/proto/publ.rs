@@ -94,6 +94,12 @@ impl Protocol for Pub {
     }
     fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {
     }
+    fn is_send_ready(&self) -> bool {
+        !self.bc.is_empty()
+    }
+    fn is_recv_ready(&self) -> bool {
+        false
+    }
     fn close(&mut self, ctx: &mut Context) {
         for (_, pipe) in self.pipes.drain() {
             pipe.close(ctx);

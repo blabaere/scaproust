@@ -123,6 +123,12 @@ impl Protocol for Pair {
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
     }
+    fn is_send_ready(&self) -> bool {
+        self.inner.send_ready
+    }
+    fn is_recv_ready(&self) -> bool {
+        self.inner.recv_ready
+    }
     fn close(&mut self, ctx: &mut Context) {
         self.inner.close(ctx)
     }

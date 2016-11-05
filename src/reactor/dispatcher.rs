@@ -18,7 +18,7 @@ use transport::{Transport, pipe, acceptor};
 use super::{Signal, Request, Task};
 use super::event_loop::{EventLoop, EventHandler};
 use super::bus::EventLoopBus;
-use super::adapter::{EndpointCollection, Schedule, SocketEventLoopContext};
+use super::adapter::{EndpointCollection, Schedule, SocketEventLoopContext, DeviceEventLoopContext};
 use sequence::Sequence;
 
 const CHANNEL_TOKEN: Token = Token(::std::usize::MAX - 1);
@@ -129,6 +129,7 @@ impl Dispatcher {
         match signal {
             Signal::PipeCmd(_, eid, cmd)       => self.process_pipe_cmd(el, eid, cmd),
             Signal::AcceptorCmd(_, eid, cmd)   => self.process_acceptor_cmd(el, eid, cmd),
+            Signal::SocketCmd(sid, cmd)        => self.process_socket_cmd(el, sid, cmd),
             Signal::PipeEvt(sid, eid, evt)     => self.process_pipe_evt(el, sid, eid, evt),
             Signal::AcceptorEvt(sid, eid, evt) => self.process_acceptor_evt(el, sid, eid, evt),
             Signal::SocketEvt(sid, evt)        => self.process_socket_evt(el, sid, evt),
@@ -215,13 +216,13 @@ impl Dispatcher {
     }
     fn process_device_request(&mut self, _: &mut EventLoop, id: DeviceId, request: device::Request) {
         if let device::Request::Check = request { 
-            self.apply_on_device(id, |device| device.check()) 
+            self.apply_on_device(id, |device, ctx| device.check(ctx)) 
         }
     }
 
 /*****************************************************************************/
 /*                                                                           */
-/* process signal requests                                                   */
+/* process signal cmd                                                        */
 /*                                                                           */
 /*****************************************************************************/
     fn process_pipe_cmd(&mut self, el: &mut EventLoop, eid: EndpointId, cmd: pipe::Command) {
@@ -234,6 +235,17 @@ impl Dispatcher {
             acceptor.process(el, &mut self.bus, cmd);
         }
     }
+    fn process_socket_cmd(&mut self, _: &mut EventLoop, id: SocketId, cmd: context::Command) {
+        match cmd {
+            context::Command::Poll => self.apply_on_socket(id, |socket, ctx| socket.poll(ctx)),
+        }
+    }
+
+/*****************************************************************************/
+/*                                                                           */
+/* process signal evt                                                        */
+/*                                                                           */
+/*****************************************************************************/
     fn process_pipe_evt(&mut self, _: &mut EventLoop, sid: SocketId, eid: EndpointId, evt: pipe::Event) {
         match evt {
             pipe::Event::Opened        => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
@@ -259,7 +271,6 @@ impl Dispatcher {
             _ => {}
         }
     }
-
     fn process_socket_evt(&mut self, _: &mut EventLoop, sid: SocketId, evt: context::Event) {
         match evt {
             context::Event::CanRecv(x) => self.apply_on_device_link(sid, |device| device.on_socket_can_recv(sid, x)),
@@ -283,9 +294,10 @@ impl Dispatcher {
     }
 
     fn apply_on_device<F>(&mut self, id: DeviceId, f: F) 
-    where F : FnOnce(&mut device::Device) {
+    where F : FnOnce(&mut device::Device, &mut DeviceEventLoopContext) {
         if let Some(device) = self.sockets.get_device_mut(id) {
-            f(device);
+            let mut ctx = DeviceEventLoopContext::new(id, &mut self.bus);
+            f(device, &mut ctx);
         }
     }
 
