@@ -11,6 +11,7 @@
 
 ### Fixed
 - Fix potential infinite wait in device
+- Fix many-to-many topology with REQ/REP and SURV/RESP over device
 
 ## 0.1.0 (2016-09-02)
 
