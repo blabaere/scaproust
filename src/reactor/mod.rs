@@ -9,7 +9,7 @@ mod event_loop;
 mod bus;
 mod adapter;
 
-use core::{SocketId, EndpointId, DeviceId, context, session, socket, endpoint, device};
+use core::{SocketId, EndpointId, DeviceId, ProbeId, context, session, socket, endpoint, device, probe};
 use transport::{pipe, acceptor};
 
 /// Commands and events flowing between the controller and transport or core components.
@@ -29,7 +29,7 @@ pub enum Request {
     Socket(SocketId, socket::Request),
     Endpoint(SocketId, EndpointId, endpoint::Request),
     Device(DeviceId, device::Request),
-    Shutdown
+    Probe(ProbeId, probe::Request)
 }
 
 pub enum Task {

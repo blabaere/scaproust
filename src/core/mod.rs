@@ -11,6 +11,7 @@ pub mod socket;
 pub mod session;
 pub mod endpoint;
 pub mod device;
+pub mod probe;
 
 #[cfg(test)]
 pub mod tests;
@@ -112,6 +113,27 @@ impl fmt::Debug for DeviceId {
 impl From<usize> for DeviceId {
     fn from(value: usize) -> DeviceId {
         DeviceId(value)
+    }
+}
+
+/*****************************************************************************/
+/*                                                                           */
+/* ProbeId                                                                   */
+/*                                                                           */
+/*****************************************************************************/
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct ProbeId(usize);
+
+impl fmt::Debug for ProbeId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<usize> for ProbeId {
+    fn from(value: usize) -> ProbeId {
+        ProbeId(value)
     }
 }
 

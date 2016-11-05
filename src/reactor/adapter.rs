@@ -15,8 +15,9 @@ use mio::timer::{Timer, Timeout};
 
 use core::context;
 use core::device;
+use core::probe;
 use core::network::Network;
-use core::{SocketId, EndpointId, DeviceId, Message, EndpointTmpl};
+use core::{SocketId, EndpointId, DeviceId, ProbeId, Message, EndpointTmpl};
 use transport::{Transport, Destination};
 use transport::endpoint::*;
 use transport::pipe;
@@ -50,6 +51,11 @@ pub struct EndpointEventLoopContext<'a, 'b> {
 
 pub struct DeviceEventLoopContext<'a> {
     device_id: DeviceId,
+    signal_tx: &'a mut EventLoopBus<Signal>
+}
+
+pub struct ProbeEventLoopContext<'a> {
+    probe_id: ProbeId,
     signal_tx: &'a mut EventLoopBus<Signal>
 }
 
@@ -455,10 +461,10 @@ impl<'a, 'b> acceptor::Context for EndpointEventLoopContext<'a, 'b> {
 
 impl<'a> DeviceEventLoopContext<'a> {
     pub fn new(
-        did: DeviceId,
+        id: DeviceId,
         tx: &'a mut EventLoopBus<Signal>) -> DeviceEventLoopContext<'a> {
         DeviceEventLoopContext {
-            device_id: did,
+            device_id: id,
             signal_tx: tx
         }
     }
@@ -470,13 +476,50 @@ impl<'a> fmt::Debug for DeviceEventLoopContext<'a> {
     }
 }
 
-impl<'a, 'b> device::Context for DeviceEventLoopContext<'a> {
+impl<'a> device::Context for DeviceEventLoopContext<'a> {
     fn poll(&mut self, sid: SocketId) {
         let signal = Signal::SocketCmd(sid, context::Command::Poll);
 
         self.signal_tx.send(signal);
     }
 }
+
+/*****************************************************************************/
+/*                                                                           */
+/* Probe context                                                             */
+/*                                                                           */
+/*****************************************************************************/
+
+impl<'a> ProbeEventLoopContext<'a> {
+    pub fn new(
+        id: ProbeId,
+        tx: &'a mut EventLoopBus<Signal>) -> ProbeEventLoopContext<'a> {
+        ProbeEventLoopContext {
+            probe_id: id,
+            signal_tx: tx
+        }
+    }
+}
+
+impl<'a> fmt::Debug for ProbeEventLoopContext<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Probe:{:?} ", self.probe_id)
+    }
+}
+
+impl<'a> probe::Context for ProbeEventLoopContext<'a> {
+    fn poll(&mut self, sid: SocketId) {
+        let signal = Signal::SocketCmd(sid, context::Command::Poll);
+
+        self.signal_tx.send(signal);
+    }
+}
+
+/*****************************************************************************/
+/*                                                                           */
+/* mio Token conversion                                                      */
+/*                                                                           */
+/*****************************************************************************/
 
 impl Into<Token> for EndpointId {
     fn into(self) -> Token {

@@ -38,6 +38,9 @@ impl RequestSender {
     fn device_sender(&self, device_id: core::DeviceId) -> device::RequestSender {
         device::RequestSender::new(self.req_tx.clone(), device_id)
     }
+    fn probe_sender(&self, probe_id: core::ProbeId) -> probe::RequestSender {
+        probe::RequestSender::new(self.req_tx.clone(), probe_id)
+    }
     fn send(&self, req: Request) -> io::Result<()> {
         self.req_tx.send(reactor::Request::Session(req)).map_err(from_send_error)
     }
@@ -163,6 +166,30 @@ impl Session {
         }
     }
 
+/*****************************************************************************/
+/*                                                                           */
+/* Create probe                                                              */
+/*                                                                           */
+/*****************************************************************************/
+
+    pub fn create_probe(&self) -> io::Result<probe::Probe> {
+        let request = Request::CreateProbe;
+
+        self.call(request, |reply| self.on_create_probe_reply(reply))
+    }
+
+    fn on_create_probe_reply(&self, reply: Reply) -> io::Result<probe::Probe> {
+        match reply {
+            Reply::ProbeCreated(id, rx) => {
+                let sender = self.request_sender.probe_sender(id);
+                let probe = probe::Probe::new(sender, rx);
+
+                Ok(probe)
+            },
+            Reply::Err(e) => Err(e),
+            _ => self.unexpected_reply()
+        }
+    }
 
 /*****************************************************************************/
 /*                                                                           */

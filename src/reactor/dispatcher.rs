@@ -13,12 +13,17 @@ use mio::{Token, Ready, PollOpt};
 use mio::timer::{Timer, Builder};
 use mio::channel::{Receiver};
 
-use core::{SocketId, EndpointId, DeviceId, session, socket, context, endpoint, device};
+use core::{SocketId, EndpointId, DeviceId, ProbeId, session, socket, context, endpoint, device, probe};
 use transport::{Transport, pipe, acceptor};
 use super::{Signal, Request, Task};
 use super::event_loop::{EventLoop, EventHandler};
 use super::bus::EventLoopBus;
-use super::adapter::{EndpointCollection, Schedule, SocketEventLoopContext, DeviceEventLoopContext};
+use super::adapter::{
+    EndpointCollection, 
+    Schedule, 
+    SocketEventLoopContext, 
+    DeviceEventLoopContext,
+    ProbeEventLoopContext };
 use sequence::Sequence;
 
 const CHANNEL_TOKEN: Token = Token(::std::usize::MAX - 1);
@@ -122,7 +127,7 @@ impl Dispatcher {
             Request::Socket(id, req) => self.process_socket_request(el, id, req),
             Request::Endpoint(sid, eid, req) => self.process_endpoint_request(el, sid, eid, req),
             Request::Device(id, req) => self.process_device_request(el, id, req),
-            _ => {}
+            Request::Probe(id, req) => self.process_probe_request(el, id, req),
         }
     }
     fn process_signal(&mut self, el: &mut EventLoop, signal: Signal) {
@@ -192,6 +197,7 @@ impl Dispatcher {
                 self.apply_on_socket(r, |socket, ctx| socket.on_device_plugged(ctx));
                 self.sockets.add_device(l, r);
             },
+            session::Request::CreateProbe => self.sockets.add_probe(),
             session::Request::Shutdown => el.shutdown()
         }
     }
@@ -217,6 +223,11 @@ impl Dispatcher {
     fn process_device_request(&mut self, _: &mut EventLoop, id: DeviceId, request: device::Request) {
         if let device::Request::Check = request { 
             self.apply_on_device(id, |device, ctx| device.check(ctx)) 
+        }
+    }
+    fn process_probe_request(&mut self, _: &mut EventLoop, id: ProbeId, request: probe::Request) {
+        if let probe::Request::Poll = request { 
+            self.apply_on_probe(id, |probe, ctx| probe.poll(ctx)) 
         }
     }
 
@@ -305,6 +316,14 @@ impl Dispatcher {
     where F : FnOnce(&mut device::Device) {
         if let Some(device) = self.sockets.find_device_mut(id) {
             f(device);
+        }
+    }
+
+    fn apply_on_probe<F>(&mut self, id: ProbeId, f: F) 
+    where F : FnOnce(&mut probe::Probe, &mut ProbeEventLoopContext) {
+        if let Some(probe) = self.sockets.get_probe_mut(id) {
+            let mut ctx = ProbeEventLoopContext::new(id, &mut self.bus);
+            f(probe, &mut ctx);
         }
     }
 }

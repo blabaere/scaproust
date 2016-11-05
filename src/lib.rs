@@ -89,6 +89,7 @@ pub use facade::session::SessionBuilder;
 pub use facade::session::Session;
 pub use facade::socket::Socket;
 pub use facade::device::Device;
+pub use facade::probe::Probe;
 pub use facade::endpoint::Endpoint;
 pub use core::Message;
 pub use core::config::ConfigOption;

@@ -8,12 +8,13 @@ use std::collections::HashMap;
 use std::sync::mpsc;
 use std::io;
 
-use core::{SocketId, DeviceId, socket, device};
+use core::{SocketId, DeviceId, ProbeId, socket, device, probe};
 use sequence::Sequence;
 
 pub enum Request {
     CreateSocket(socket::ProtocolCtor),
     CreateDevice(SocketId, SocketId),
+    CreateProbe,
     Shutdown
 }
 
@@ -21,13 +22,15 @@ pub enum Reply {
     Err(io::Error),
     SocketCreated(SocketId, mpsc::Receiver<socket::Reply>),
     DeviceCreated(DeviceId, mpsc::Receiver<device::Reply>),
+    ProbeCreated(ProbeId, mpsc::Receiver<probe::Reply>),
     Shutdown
 }
 
 pub struct Session {
     reply_sender: mpsc::Sender<Reply>,
     sockets: SocketCollection,
-    devices: DeviceCollection
+    devices: DeviceCollection,
+    probes: ProbeCollection
 }
 
 struct SocketCollection {
@@ -41,12 +44,19 @@ struct DeviceCollection {
     devices: HashMap<DeviceId, device::Device>
 }
 
+struct ProbeCollection {
+    ids: Sequence,
+    mapping: HashMap<SocketId, ProbeId>,
+    probes: HashMap<ProbeId, probe::Probe>
+}
+
 impl Session {
     pub fn new(seq: Sequence, reply_tx: mpsc::Sender<Reply>) -> Session {
         Session {
             reply_sender: reply_tx,
             sockets: SocketCollection::new(seq.clone()),
-            devices: DeviceCollection::new(seq.clone())
+            devices: DeviceCollection::new(seq.clone()),
+            probes: ProbeCollection::new(seq.clone())
         }
     }
 
@@ -101,7 +111,38 @@ impl Session {
     pub fn remove_device(&mut self, did: DeviceId) {
         self.devices.remove(did);
     }
+
+/*****************************************************************************/
+/*                                                                           */
+/* Probes                                                                   */
+/*                                                                           */
+/*****************************************************************************/
+
+    pub fn add_probe(&mut self) {
+        let (tx, rx) = mpsc::channel();
+        let id = self.probes.add(tx);
+
+        self.send_reply(Reply::ProbeCreated(id, rx));
+    }
+
+    pub fn get_probe_mut(&mut self, id: ProbeId) -> Option<&mut probe::Probe> {
+        self.probes.get_probe_mut(id)
+    }
+
+    pub fn find_probe_mut(&mut self, id: SocketId) -> Option<&mut probe::Probe> {
+        self.probes.find_probe_mut(id)
+    }
+
+    pub fn remove_probe(&mut self, did: ProbeId) {
+        self.probes.remove(did);
+    }
 }
+
+/*****************************************************************************/
+/*                                                                           */
+/* Socket collection                                                         */
+/*                                                                           */
+/*****************************************************************************/
 
 impl SocketCollection {
     fn new(seq: Sequence) -> SocketCollection {
@@ -128,6 +169,12 @@ impl SocketCollection {
         self.sockets.remove(&id);
     }
 }
+
+/*****************************************************************************/
+/*                                                                           */
+/* Device collection                                                         */
+/*                                                                           */
+/*****************************************************************************/
 
 impl DeviceCollection {
     fn new(seq: Sequence) -> DeviceCollection {
@@ -166,3 +213,48 @@ impl DeviceCollection {
         // TODO cleaup mapping
     }
 }
+
+/*****************************************************************************/
+/*                                                                           */
+/* Probe collection                                                          */
+/*                                                                           */
+/*****************************************************************************/
+
+impl ProbeCollection {
+    fn new(seq: Sequence) -> ProbeCollection {
+        ProbeCollection {
+            ids: seq,
+            mapping: HashMap::new(),
+            probes: HashMap::new()
+        }
+    }
+
+    fn add(&mut self, reply_tx: mpsc::Sender<probe::Reply>) -> ProbeId {
+        let id = ProbeId::from(self.ids.next());
+        let probe = probe::Probe::new(reply_tx);
+
+        self.probes.insert(id, probe);
+        //self.mapping.insert(left, id);
+        //self.mapping.insert(right, id);
+
+        id
+    }
+
+    fn get_probe_mut(&mut self, id: ProbeId) -> Option<&mut probe::Probe> {
+        self.probes.get_mut(&id)
+    }
+
+    fn find_probe_mut(&mut self, sid: SocketId) -> Option<&mut probe::Probe> {
+        if let Some(pid) = self.mapping.get(&sid) {
+            self.probes.get_mut(pid)
+        } else {
+            None
+        }
+    }
+
+    fn remove(&mut self, id: ProbeId) {
+        self.probes.remove(&id);
+        // TODO cleaup mapping
+    }
+}
+
