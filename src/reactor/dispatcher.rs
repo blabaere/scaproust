@@ -148,7 +148,8 @@ impl Dispatcher {
 /*****************************************************************************/
     fn process_tick(&mut self, _: &mut EventLoop, task: Task) {
         match task {
-            Task::Socket(sid, schedulable) => self.process_socket_task(sid, schedulable)
+            Task::Socket(id, schedulable) => self.process_socket_task(id, schedulable),
+            Task::Probe(id, schedulable) => self.process_probe_task(id, schedulable)
         }
     }
 
@@ -161,6 +162,13 @@ impl Dispatcher {
             other                                      => self.apply_on_socket(sid, |socket, ctx| socket.on_timer_tick(ctx, other))
         }
     }
+
+    fn process_probe_task(&mut self, id: ProbeId, task: probe::Schedulable) {
+        match task {
+            probe::Schedulable::PollTimeout => self.apply_on_probe(id, |probe, ctx| probe.on_poll_timeout(ctx))
+        }
+    }
+
 
 /*****************************************************************************/
 /*                                                                           */
@@ -322,7 +330,11 @@ impl Dispatcher {
     fn apply_on_probe<F>(&mut self, id: ProbeId, f: F) 
     where F : FnOnce(&mut probe::Probe, &mut ProbeEventLoopContext) {
         if let Some(probe) = self.sockets.get_probe_mut(id) {
-            let mut ctx = ProbeEventLoopContext::new(id, &mut self.bus);
+            let mut ctx = ProbeEventLoopContext::new(
+                id,
+                &mut self.bus,
+                &mut self.schedule,
+                &mut self.timer);
             f(probe, &mut ctx);
         }
     }

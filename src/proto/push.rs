@@ -292,9 +292,9 @@ mod tests {
     use std::rc::Rc;
     use std::sync::mpsc;
 
-    use core::{EndpointId, Message};
+    use core::{EndpointId, Message, Scheduled};
     use core::socket::{Protocol, Reply};
-    use core::context::{Event, Scheduled};
+    use core::context::{Event};
     use core::tests::*;
 
     use super::*;

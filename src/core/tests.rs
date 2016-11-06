@@ -10,9 +10,9 @@ use std::cell::RefCell;
 use std::io::Result;
 use std::time::Duration;
 
-use super::{SocketId, EndpointId, Message, EndpointTmpl, EndpointDesc, };
+use super::{SocketId, EndpointId, Message, EndpointTmpl, EndpointDesc, Scheduled};
 use super::endpoint::Pipe;
-use super::context::{Context, Scheduler, Schedulable, Scheduled, Event};
+use super::context::{Context, Scheduler, Schedulable, Event};
 use super::network::Network;
 use io_error;
 

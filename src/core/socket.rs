@@ -10,10 +10,10 @@ use std::io;
 use std::boxed::FnBox;
 use std::time::Duration;
 
-use super::{SocketId, EndpointId, Message, EndpointTmpl, EndpointSpec, EndpointDesc, };
+use super::{SocketId, EndpointId, Message, EndpointTmpl, EndpointSpec, EndpointDesc, Scheduled };
 use super::endpoint::{Pipe, Acceptor};
 use super::config::{Config, ConfigOption};
-use super::context::{Context, Schedulable, Scheduled, Event};
+use super::context::{Context, Schedulable, Event};
 use io_error::*;
 
 pub enum Request {
@@ -480,7 +480,7 @@ mod tests {
     use super::*;
     use core::network;
     use core::context::*;
-    use core::{SocketId, EndpointId, Message, EndpointTmpl};
+    use core::{SocketId, EndpointId, Message, EndpointTmpl, Scheduled};
     use core::endpoint::Pipe;
     use io_error::*;
 

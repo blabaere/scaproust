@@ -17,7 +17,7 @@ use core::context;
 use core::device;
 use core::probe;
 use core::network::Network;
-use core::{SocketId, EndpointId, DeviceId, ProbeId, Message, EndpointTmpl};
+use core::{SocketId, EndpointId, DeviceId, ProbeId, Message, EndpointTmpl, Scheduled};
 use transport::{Transport, Destination};
 use transport::endpoint::*;
 use transport::pipe;
@@ -56,7 +56,9 @@ pub struct DeviceEventLoopContext<'a> {
 
 pub struct ProbeEventLoopContext<'a> {
     probe_id: ProbeId,
-    signal_tx: &'a mut EventLoopBus<Signal>
+    signal_tx: &'a mut EventLoopBus<Signal>,
+    schedule: &'a mut Schedule,
+    timer: &'a mut Timer<Task>
 }
 
 pub struct PipeController {
@@ -80,7 +82,7 @@ pub struct EndpointCollection {
 
 pub struct Schedule {
     ids: Sequence,
-    items: HashMap<context::Scheduled, Timeout>
+    items: HashMap<Scheduled, Timeout>
 }
 
 impl Registrar for EventLoop {
@@ -227,12 +229,12 @@ impl Schedule {
             items: HashMap::new() 
         }
     }
-    fn insert(&mut self, handle: Timeout) -> context::Scheduled {
-        let scheduled = context::Scheduled::from(self.ids.next()); 
+    fn insert(&mut self, handle: Timeout) -> Scheduled {
+        let scheduled = Scheduled::from(self.ids.next()); 
         self.items.insert(scheduled, handle);
         scheduled
     }
-    fn remove(&mut self, scheduled: context::Scheduled) -> Option<Timeout> {
+    fn remove(&mut self, scheduled: Scheduled) -> Option<Timeout> {
         self.items.remove(&scheduled)
     }
 }
@@ -374,14 +376,14 @@ impl<'a> Network for SocketEventLoopContext<'a> {
 }
 
 impl<'a> context::Scheduler for SocketEventLoopContext<'a> {
-    fn schedule(&mut self, schedulable: context::Schedulable, delay: Duration) -> io::Result<context::Scheduled> {
+    fn schedule(&mut self, schedulable: context::Schedulable, delay: Duration) -> io::Result<Scheduled> {
         let task = Task::Socket(self.socket_id, schedulable);
         let handle = try!(self.timer.set_timeout(delay, task).map_err(from_timer_error));
         let scheduled = self.schedule.insert(handle);
         
         Ok(scheduled)
     }
-    fn cancel(&mut self, scheduled: context::Scheduled) {
+    fn cancel(&mut self, scheduled: Scheduled) {
         if let Some(handle) = self.schedule.remove(scheduled) {
             self.timer.cancel_timeout(&handle);
         }
@@ -493,10 +495,14 @@ impl<'a> device::Context for DeviceEventLoopContext<'a> {
 impl<'a> ProbeEventLoopContext<'a> {
     pub fn new(
         id: ProbeId,
-        tx: &'a mut EventLoopBus<Signal>) -> ProbeEventLoopContext<'a> {
+        tx: &'a mut EventLoopBus<Signal>,
+        sched: &'a mut Schedule,
+        timer: &'a mut Timer<Task>) -> ProbeEventLoopContext<'a> {
         ProbeEventLoopContext {
             probe_id: id,
-            signal_tx: tx
+            signal_tx: tx,
+            schedule: sched,
+            timer: timer
         }
     }
 }
@@ -512,6 +518,21 @@ impl<'a> probe::Context for ProbeEventLoopContext<'a> {
         let signal = Signal::SocketCmd(sid, context::Command::Poll);
 
         self.signal_tx.send(signal);
+    }
+}
+
+impl<'a> probe::Scheduler for ProbeEventLoopContext<'a> {
+    fn schedule(&mut self, schedulable: probe::Schedulable, delay: Duration) -> io::Result<Scheduled> {
+        let task = Task::Probe(self.probe_id, schedulable);
+        let handle = try!(self.timer.set_timeout(delay, task).map_err(from_timer_error));
+        let scheduled = self.schedule.insert(handle);
+        
+        Ok(scheduled)
+    }
+    fn cancel(&mut self, scheduled: Scheduled) {
+        if let Some(handle) = self.schedule.remove(scheduled) {
+            self.timer.cancel_timeout(&handle);
+        }
     }
 }
 

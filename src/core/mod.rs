@@ -18,6 +18,9 @@ pub mod tests;
 
 use std::fmt;
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Scheduled(usize);
+
 /*****************************************************************************/
 /*                                                                           */
 /* EndpointId                                                                */
@@ -139,6 +142,11 @@ impl From<usize> for ProbeId {
 
 pub struct PollReq {
     pub sid: SocketId,
+    pub recv: bool,
+    pub send: bool
+}
+
+pub struct PollRes {
     pub recv: bool,
     pub send: bool
 }

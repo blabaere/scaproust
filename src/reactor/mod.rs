@@ -33,5 +33,6 @@ pub enum Request {
 }
 
 pub enum Task {
-    Socket(SocketId, context::Schedulable)
+    Socket(SocketId, context::Schedulable),
+    Probe(ProbeId, probe::Schedulable)
 }

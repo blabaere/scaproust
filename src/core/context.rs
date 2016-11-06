@@ -8,7 +8,7 @@ use std::fmt;
 use std::io::Result;
 use std::time::Duration;
 
-use core::{EndpointId, EndpointSpec};
+use core::{EndpointId, EndpointSpec, Scheduled};
 use core::network::Network;
 
 pub trait Context : Network + Scheduler + fmt::Debug {
@@ -50,9 +50,6 @@ pub enum Schedulable {
     ReqResend,
     SurveyCancel
 }
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Scheduled(usize);
 
 impl fmt::Debug for Scheduled {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

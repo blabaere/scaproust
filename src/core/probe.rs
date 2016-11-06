@@ -5,10 +5,10 @@
 // This file may not be copied, modified, or distributed except according to those terms.
 
 use std::sync::mpsc::Sender;
-use std::io;
+use std::io::{Error, Result};
 use std::time::Duration;
 
-use super::{SocketId, PollReq};
+use super::{SocketId, PollReq, Scheduled};
 
 pub enum Request {
     Poll(Duration),
@@ -16,11 +16,20 @@ pub enum Request {
 }
 
 pub enum Reply {
-    Err(io::Error),
+    Err(Error),
     Poll
 }
 
-pub trait Context {
+pub enum Schedulable {
+    PollTimeout
+}
+
+pub trait Scheduler {
+    fn schedule(&mut self, schedulable: Schedulable, delay: Duration) -> Result<Scheduled>;
+    fn cancel(&mut self, scheduled: Scheduled);
+}
+
+pub trait Context : Scheduler {
     fn poll(&mut self, sid: SocketId);
 }
 
@@ -43,5 +52,8 @@ impl Probe {
 
     pub fn poll(&mut self, _: &mut Context, timeout: Duration) {
         self.send_reply(Reply::Poll);
+    }
+
+    pub fn on_poll_timeout(&mut self, _: &mut Context) {
     }
 }

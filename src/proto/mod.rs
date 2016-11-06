@@ -19,7 +19,7 @@ pub mod bus;
 
 mod priolist;
 
-use core::context::Scheduled;
+use core::Scheduled;
 
 #[doc(hidden)]
 pub type Timeout = Option<Scheduled>;
