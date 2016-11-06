@@ -294,10 +294,10 @@ impl Dispatcher {
         match evt {
             context::Event::CanRecv(x) => {
                 self.apply_on_device_link(sid, |device| device.on_socket_can_recv(sid, x));
-                self.apply_on_probe_link(sid, |probe| probe.on_socket_can_recv(sid, x));
+                self.apply_on_probe_link(sid, |probe, ctx| probe.on_socket_can_recv(ctx, sid, x));
             },
             context::Event::CanSend(x) => {
-                self.apply_on_probe_link(sid, |probe| probe.on_socket_can_send(sid, x));
+                self.apply_on_probe_link(sid, |probe, ctx| probe.on_socket_can_send(ctx, sid, x));
 
             },
             context::Event::Closed => self.sockets.remove_socket(sid)
@@ -346,9 +346,14 @@ impl Dispatcher {
     }
 
     fn apply_on_probe_link<F>(&mut self, id: SocketId, f: F) 
-    where F : FnOnce(&mut probe::Probe) {
-        if let Some(probe) = self.sockets.find_probe_mut(id) {
-            f(probe);
+    where F : FnOnce(&mut probe::Probe, &mut ProbeEventLoopContext) {
+        if let Some((pid, probe)) = self.sockets.find_probe_mut(id) {
+            let mut ctx = ProbeEventLoopContext::new(
+                *pid,
+                &mut self.bus,
+                &mut self.schedule,
+                &mut self.timer);
+            f(probe, &mut ctx);
         }
     }
 }

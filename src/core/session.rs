@@ -129,7 +129,7 @@ impl Session {
         self.probes.get_probe_mut(id)
     }
 
-    pub fn find_probe_mut(&mut self, id: SocketId) -> Option<&mut probe::Probe> {
+    pub fn find_probe_mut(&mut self, id: SocketId) -> Option<(&ProbeId, &mut probe::Probe)> {
         self.probes.find_probe_mut(id)
     }
 
@@ -247,9 +247,9 @@ impl ProbeCollection {
         self.probes.get_mut(&id)
     }
 
-    fn find_probe_mut(&mut self, sid: SocketId) -> Option<&mut probe::Probe> {
+    fn find_probe_mut(&mut self, sid: SocketId) -> Option<(&ProbeId, &mut probe::Probe)> {
         if let Some(pid) = self.mapping.get(&sid) {
-            self.probes.get_mut(pid)
+            self.probes.get_mut(pid).map(|probe| (pid, probe))
         } else {
             None
         }

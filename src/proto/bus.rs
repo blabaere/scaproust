@@ -381,7 +381,7 @@ mod tests {
         let timeout = Scheduled::from(0);
         bus.send(&mut ctx, msg, Some(timeout));
 
-        let reply = rx.recv().expect("facade should have been sent a reply !");
+        let reply = rx.try_recv().expect("facade should have been sent a reply !");
         let is_reply_ok = match reply {
             Reply::Send => true,
             _ => false

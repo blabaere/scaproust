@@ -59,7 +59,7 @@ impl Probe {
 
     fn on_poll_reply(&self, reply: Reply) -> io::Result<()> {
         match reply {
-            Reply::Poll   => Ok(()),
+            Reply::Poll(..)   => Ok(()),
             Reply::Err(e) => Err(e)
         }
     }
