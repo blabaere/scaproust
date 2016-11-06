@@ -231,11 +231,14 @@ impl ProbeCollection {
 
     fn add(&mut self, reply_tx: mpsc::Sender<probe::Reply>, poll_opts: Vec<PollReq>) -> ProbeId {
         let id = ProbeId::from(self.ids.next());
+        
+        for poll_opt in &poll_opts {
+            self.mapping.insert(poll_opt.sid, id);
+        }
+
         let probe = probe::Probe::new(reply_tx, poll_opts);
 
         self.probes.insert(id, probe);
-        //self.mapping.insert(left, id);
-        //self.mapping.insert(right, id);
 
         id
     }

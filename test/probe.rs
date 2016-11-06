@@ -28,6 +28,9 @@ describe! can {
         let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
         let requests = vec![push.create_poll_req(false, true), push.create_poll_req(true, false)];
         let mut probe = session.create_probe(requests).expect("Failed to create probe !");
+        let url = urls::tcp::get();
+        push.bind(&url).unwrap();
+        pull.connect(&url).unwrap();
 
         let poll_result = probe.poll(timeout);
 
