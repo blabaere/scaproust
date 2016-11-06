@@ -1,24 +1,4 @@
-To fix device bug and implement client side poll, socket should expose a `poll` function.
-And delegate the call to the protocol which will raise CanSend or CanRecv events accordingly.
-
-PB: device needs to wait until one of the sockets becomes readable, 
-while poll needs to know for each socket if it's readable or writable within the timeout.
-
-Bug scenario:
-While not checking, a device receives two CanRecv notifications.
-Then it is checked, the reply is sent immediatly.
-When checked again, the socket is not seen as 'CanRecv'.
-Now the device can wait forever.
-There is nothing that can be done at the device level, so the socket/protocol must raise 'CanRecv' right after receiving if it is still able to recv.
-And it is probably the same for CanSend.
-
-Poll design:
- - Currently core::context::Event::CanSend is never raised, the protocols must be raising it before implementing poll.
- - Polling requires the front-end to pass a variable number of socket ids to the back-end. This means heap allocation on each call, if this proves problematic, a poller struct could be created on each side. Maybe an Arc could be exchanged back and forth between each side.
- - When a poll is in progress, the polled sockets should not be used. One way to prevent it is to borrow the sockets for the duration of poll.
- - On the back-end side a probe should listen to readable/writable events raised by sockets. This is very similar to the way bridge device currently works so there is probably something to be shared. In the same way, the readable/writable value must be stored between polls.
- - A when the poll timeout is reached, the reply should be sent to the front-end.
- - What if the poller is created after the socket is connected ? The writable events have already been published, and the poller will not receive them ...
+PB: the dispatcher receiving and CanSend/CanRecv events does not know if a device or a probe is 'listening'. What if several probes are interested in the readiness the same socket ?
 
 ### Improvements
 - Reconnect interval max 
@@ -36,7 +16,6 @@ Poll design:
 - TLS transport
 - Implement nanocat
 - STAR protocol ?
-- Polling
 
 ### Vision
 - Expose async io using future-rs ?

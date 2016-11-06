@@ -86,6 +86,8 @@ impl Probe {
         for po in &self.poll_opts {
             ctx.poll(po.sid);
         }
+
+        self.check(ctx);
     }
 
     pub fn on_poll_timeout(&mut self, ctx: &mut Context) {
@@ -98,11 +100,11 @@ impl Probe {
             }
         }).collect();
 
-        self.send_reply(Reply::Poll(poll_results));
+        self.on_poll_succeed(ctx, poll_results);
     }
 
     pub fn on_socket_can_recv(&mut self, ctx: &mut Context, sid: SocketId, can_recv: bool) {
-        #[cfg(debug_assertions)] debug!("Probe on_socket_can_recv {:?} {}", sid, can_recv);
+        #[cfg(debug_assertions)] debug!("[{:?}] on_socket_can_recv {:?} {}", ctx, sid, can_recv);
         if let Some(i) = self.sid_to_idx.get(&sid) {
             self.recv_votes[*i] = Some(can_recv);
         }
@@ -111,7 +113,7 @@ impl Probe {
     }
 
     pub fn on_socket_can_send(&mut self, ctx: &mut Context, sid: SocketId, can_send: bool) {
-        #[cfg(debug_assertions)] debug!("Probe on_socket_can_send {:?} {}", sid, can_send);
+        #[cfg(debug_assertions)] debug!("[{:?}] on_socket_can_send {:?} {}", ctx, sid, can_send);
         if let Some(i) = self.sid_to_idx.get(&sid) {
             self.send_votes[*i] = Some(can_send);
         }
@@ -120,18 +122,20 @@ impl Probe {
     }
 
     fn check(&mut self, ctx: &mut Context) {
+        if self.timeout.is_none() {
+            return;
+        }
+
         for (i, poll_opt) in self.poll_opts.iter().enumerate() {
-            if !is_socket_side_ready(poll_opt.recv, &self.recv_votes[i]) {
+            if !is_vote_over(poll_opt.recv, &self.recv_votes[i]) {
                 return;
             }
-            if !is_socket_side_ready(poll_opt.send, &self.send_votes[i]) {
+            if !is_vote_over(poll_opt.send, &self.send_votes[i]) {
                 return;
             }
         }
 
-        if let Some(timeout) = self.timeout.take() {
-            ctx.cancel(timeout);
-        }
+        #[cfg(debug_assertions)] debug!("[{:?}] check succeed", ctx);
 
         let poll_results = self.poll_opts.iter().map(|po| { 
             PollRes {
@@ -139,15 +143,38 @@ impl Probe {
                 send: po.send
             }
         }).collect();
+        
+        self.on_poll_succeed(ctx, poll_results);
+    }
 
+    fn on_poll_succeed(&mut self, ctx: &mut Context, poll_results: Vec<PollRes>) {
+        if let Some(timeout) = self.timeout.take() {
+            ctx.cancel(timeout);
+        }
+        self.clear_votes();
         self.send_reply(Reply::Poll(poll_results));
+    }
+
+    fn clear_votes(&mut self) {
+        for i in 0..self.poll_opts.len() {
+            self.recv_votes[i] = None;
+            self.send_votes[i] = None;
+        }
+
+    }
+}
+
+fn is_vote_over(interest: bool, vote: &Option<bool>) -> bool {
+    match (interest, *vote) {
+        (false, _) => true,
+        (true, None) => false,
+        (true, Some(x)) => x
     }
 }
 
 fn is_socket_side_ready(interest: bool, vote: &Option<bool>) -> bool {
     match (interest, *vote) {
-        (false, _) => true,
-        (true, None) => false,
+        (false, _) | (true, None) => false,
         (true, Some(x)) => x
     }
 }
@@ -185,6 +212,7 @@ mod tests {
         let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
         let mut probe = Probe::new(tx, vec![poll_req]);
 
+        probe.poll(&mut ctx, Duration::from_millis(100));
         probe.on_socket_can_recv(&mut ctx, sid, false);
         assert!(rx.try_recv().is_err());
     }
@@ -202,6 +230,7 @@ mod tests {
         let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
         let mut probe = Probe::new(tx, vec![poll_req]);
 
+        probe.poll(&mut ctx, Duration::from_millis(100));
         probe.on_socket_can_send(&mut ctx, sid, true);
         assert!(rx.try_recv().is_err());
     }
@@ -219,6 +248,7 @@ mod tests {
         let mut ctx = TestContext::with_sensor(ctx_sensor.clone());
         let mut probe = Probe::new(tx, vec![poll_req]);
 
+        probe.poll(&mut ctx, Duration::from_millis(100));
         probe.on_socket_can_recv(&mut ctx, sid, true);
         let reply = rx.try_recv().expect("facade should have been sent a reply !");
         let reply_poll_res = match reply {

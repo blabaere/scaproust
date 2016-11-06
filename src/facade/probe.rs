@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use super::*;
 use reactor;
-use core::ProbeId;
+use core::{ProbeId, PollRes};
 use core::probe::{Request, Reply};
 use io_error::*;
 
@@ -51,15 +51,15 @@ impl Probe {
         }
     }
 
-    pub fn poll(&mut self, timeout: Duration) -> io::Result<()> {
+    pub fn poll(&mut self, timeout: Duration) -> io::Result<Vec<PollRes>> {
         let request = Request::Poll(timeout);
 
         self.call(request, |reply| self.on_poll_reply(reply))
     }
 
-    fn on_poll_reply(&self, reply: Reply) -> io::Result<()> {
+    fn on_poll_reply(&self, reply: Reply) -> io::Result<Vec<PollRes>> {
         match reply {
-            Reply::Poll(..)   => Ok(()),
+            Reply::Poll(x)   => Ok(x),
             Reply::Err(e) => Err(e)
         }
     }

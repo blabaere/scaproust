@@ -21,8 +21,8 @@ mod pubsub;
 mod survey;
 mod bus;
 mod device;
-mod probe;
 mod reqrep_device;
+mod probe;
 
 pub use std::time::Duration;
 pub use std::thread;
