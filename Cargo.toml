@@ -21,8 +21,9 @@ log = "0.3.6"
 byteorder = "0.5.3"
 time = "0.1.35"
 clippy = "0.0.96"
-mio = "0.6.1"
-mio-uds = "0.6.0"
+#mio = "0.6.1"
+mio = { git = "https://github.com/carllerche/mio", rev = "19d2d2a217199e23766e418dc6527ca509dcab34" }
+#mio-uds = "0.6.0"
 
 [target.'cfg(windows)'.dependencies]
 miow = "0.1.3"
