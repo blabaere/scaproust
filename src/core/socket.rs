@@ -358,6 +358,7 @@ impl Socket {
 /*****************************************************************************/
 
     pub fn send(&mut self, ctx: &mut Context, msg: Message) {
+        #[cfg(debug_assertions)] debug!("[{:?}] send", ctx);
         if let Some(delay) = self.get_send_timeout() {
             let task = Schedulable::SendTimeout;
 
@@ -371,10 +372,12 @@ impl Socket {
     }
 
     pub fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
+        #[cfg(debug_assertions)] debug!("[{:?}] send ack from ep {:?}", ctx, eid);
         self.protocol.on_send_ack(ctx, eid);
     }
 
     pub fn on_send_timeout(&mut self, ctx: &mut Context) {
+        #[cfg(debug_assertions)] debug!("[{:?}] send timeout", ctx);
         self.protocol.on_send_timeout(ctx);
     }
 
@@ -383,6 +386,7 @@ impl Socket {
     }
 
     pub fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        #[cfg(debug_assertions)] debug!("[{:?}] send ready ep {:?}", ctx, eid);
         self.protocol.on_send_ready(ctx, eid)
     }
 
@@ -393,6 +397,7 @@ impl Socket {
 /*****************************************************************************/
 
     pub fn recv(&mut self, ctx: &mut Context) {
+        #[cfg(debug_assertions)] debug!("[{:?}] recv", ctx);
         if let Some(delay) = self.get_recv_timeout() {
             let task = Schedulable::RecvTimeout;
 
@@ -406,10 +411,12 @@ impl Socket {
     }
 
     pub fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message) {
+        #[cfg(debug_assertions)] debug!("[{:?}] recv ack from ep {:?}", ctx, eid);
         self.protocol.on_recv_ack(ctx, eid, msg);
     }
 
     pub fn on_recv_timeout(&mut self, ctx: &mut Context) {
+        #[cfg(debug_assertions)] debug!("[{:?}] recv timeout", ctx);
         self.protocol.on_recv_timeout(ctx);
     }
 
@@ -418,6 +425,7 @@ impl Socket {
     }
 
     pub fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        #[cfg(debug_assertions)] debug!("[{:?}] recv ready ep {:?}", ctx, eid);
         self.protocol.on_recv_ready(ctx, eid)
     }
 
