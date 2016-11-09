@@ -61,13 +61,12 @@
 #![allow(boxed_local)]
 #![allow(bool_comparison)]
 #![allow(len_without_is_empty)]
-//#![allow(explicit_iter_loop)]
 
 #[macro_use]
 extern crate log;
 extern crate byteorder;
 extern crate mio;
-//extern crate mio_uds;
+extern crate mio_uds;
 extern crate time;
 
 #[doc(hidden)]
@@ -95,8 +94,8 @@ pub use core::Message;
 pub use core::config::ConfigOption;
 
 pub use transport::tcp::Tcp;
-//#[cfg(not(windows))]
-//pub use transport::ipc::Ipc;
+#[cfg(not(windows))]
+pub use transport::ipc::Ipc;
 
 pub use proto::pair::Pair;
 pub use proto::publ::Pub;

@@ -27,7 +27,7 @@ const DATE: &'static str = "DATE";
 fn create_session() -> Session {
     SessionBuilder::new().
         with("tcp", Tcp).
-        //with("ipc", Ipc).
+        with("ipc", Ipc).
         build().expect("Failed to create session !")
 }
 
