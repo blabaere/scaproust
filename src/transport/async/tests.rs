@@ -113,6 +113,8 @@ impl TestStepStream {
 }
 
 impl stub::AsyncPipeStub for TestStepStream {
+    #[cfg(windows)]
+    fn read_and_write_void(&mut self) {}
 }
 
 impl mio::Evented for TestStepStream {
