@@ -31,7 +31,7 @@ impl<S : AsyncPipeStub> Active<S> {
         }
     }
     
-    fn raise_and_resync_readiness(&self, ctx: &mut Context, evt: Event) {
+    fn raise_and_resync_readiness(&mut self, ctx: &mut Context, evt: Event) {
         #[cfg(windows)] self.stub.read_and_write_void();
         ctx.raise(evt);
         ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
