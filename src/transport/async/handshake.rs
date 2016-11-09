@@ -43,7 +43,7 @@ impl<S : AsyncPipeStub> Into<HandshakeRx<S>> for HandshakeTx<S> {
 impl<S : AsyncPipeStub> PipeState<S> for HandshakeTx<S> {
     fn name(&self) -> &'static str {"HandshakeTx"}
 
-    fn enter(&self, ctx: &mut Context) {
+    fn enter(&mut self, ctx: &mut Context) {
         ctx.register(self.stub.deref(), Ready::writable(), PollOpt::level());
     }
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
@@ -92,7 +92,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for HandshakeRx<S> {
 
     fn name(&self) -> &'static str {"HandshakeRx"}
 
-    fn enter(&self, ctx: &mut Context) {
+    fn enter(&mut self, ctx: &mut Context) {
         ctx.reregister(self.stub.deref(), Ready::readable(), PollOpt::level());
     }
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn on_enter_tx_should_register() {
         let stub = TestStepStream::new();
-        let state = box HandshakeTx::new(stub, (4, 2));
+        let mut state = box HandshakeTx::new(stub, (4, 2));
         let mut ctx = TestPipeContext::new();
 
         state.enter(&mut ctx);
@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn on_enter_rx_should_reregister() {
         let stub = TestStepStream::new();
-        let state = box HandshakeRx::new(stub, (4, 2));
+        let mut state = box HandshakeRx::new(stub, (4, 2));
         let mut ctx = TestPipeContext::new();
 
         state.enter(&mut ctx);

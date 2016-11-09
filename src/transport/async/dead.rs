@@ -18,7 +18,7 @@ pub struct Dead;
 impl<S : AsyncPipeStub + 'static> PipeState<S> for Dead {
 
     fn name(&self) -> &'static str {"Dead"}
-    fn enter(&self, ctx: &mut Context) {
+    fn enter(&mut self, ctx: &mut Context) {
         ctx.raise(Event::Closed);
     }
     fn open(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn on_enter_an_event_is_raised() {
-        let state = box Dead as Box<PipeState<TestStepStream>>;
+        let mut state = box Dead as Box<PipeState<TestStepStream>>;
         let mut ctx = TestPipeContext::new();
 
         state.enter(&mut ctx);

@@ -37,20 +37,20 @@ pub trait PipeState<S : AsyncPipeStub + 'static> {
     fn ready(self: Box<Self>, _: &mut Context, _: Ready) -> Box<PipeState<S>> {
         box Dead
     }
-    fn enter(&self, _: &mut Context) {
+    fn enter(&mut self, _: &mut Context) {
     }
-    fn leave(&self, _: &mut Context) {
+    fn leave(&mut self, _: &mut Context) {
     }
 }
 
-pub fn transition<F, T, S>(old_state: Box<F>, ctx: &mut Context) -> Box<T> where
+pub fn transition<F, T, S>(mut old_state: Box<F>, ctx: &mut Context) -> Box<T> where
     F : PipeState<S>,
     F : Into<T>,
     T : PipeState<S>,
     S : AsyncPipeStub + 'static
 {
     old_state.leave(ctx);
-    let new_state = Into::into(*old_state);
+    let mut new_state = Into::into(*old_state);
     new_state.enter(ctx);
     box new_state
 }

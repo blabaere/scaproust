@@ -30,12 +30,23 @@ impl<S : AsyncPipeStub> Active<S> {
             readable: false
         }
     }
+    #[cfg(windows)]
+    fn raise_and_resync_readiness(&mut self, ctx: &mut Context, evt: Event) {
+        self.stub.read_and_write_void();
+
+        ctx.raise(evt);
+        ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
+    }
+    #[cfg(not(windows))]
+    fn raise_and_resync_readiness(&self, ctx: &mut Context, evt: Event) {
+        ctx.raise(evt);
+        ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
+    }
     fn on_send_progress(&mut self, ctx: &mut Context, progress: Result<bool>) -> Result<()> {
         progress.map(|sent| if sent { self.on_msg_sent(ctx) } )
     }
     fn on_msg_sent(&mut self, ctx: &mut Context) {
-        ctx.raise(Event::Sent);
-        ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
+        self.raise_and_resync_readiness(ctx, Event::Sent);
     }
     fn writable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
         if events.is_writable() == false {
@@ -58,8 +69,7 @@ impl<S : AsyncPipeStub> Active<S> {
         progress.map(|recv| if let Some(msg) = recv { self.on_msg_received(ctx, msg) } )
     }
     fn on_msg_received(&mut self, ctx: &mut Context, msg: Message) {
-        ctx.raise(Event::Received(msg));
-        ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
+        self.raise_and_resync_readiness(ctx, Event::Received(msg));
     }
     fn readable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
         if events.is_readable() == false {
@@ -92,9 +102,8 @@ impl<S : AsyncPipeStub> Active<S> {
 impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
     fn name(&self) -> &'static str {"Active"}
 
-    fn enter(&self, ctx: &mut Context) {
-        ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::edge());
-        ctx.raise(Event::Opened);
+    fn enter(&mut self, ctx: &mut Context) {
+        self.raise_and_resync_readiness(ctx, Event::Opened);
     }
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         ctx.deregister(self.stub.deref());
@@ -147,7 +156,7 @@ mod tests {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stub);
+        let mut state = box Active::new(stub);
         let mut ctx = TestPipeContext::new();
 
         state.enter(&mut ctx);

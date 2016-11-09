@@ -7,6 +7,8 @@
 use std::ops::Deref;
 use std::rc::Rc;
 use std::io;
+#[cfg(windows)]
+use std::io::{Read, Write};
 
 use mio;
 use mio::tcp::{TcpStream, Shutdown};
@@ -141,4 +143,11 @@ impl Handshake for TcpPipeStub {
 }
 
 impl AsyncPipeStub for TcpPipeStub {
+    #[cfg(windows)]
+    fn read_and_write_void(&mut self) {
+        let mut buffer: [u8; 0] = [0; 0];
+
+        let _ = self.stream.read(&mut buffer);
+        let _ = self.stream.write(&buffer);
+    }
 }
