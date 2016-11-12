@@ -44,6 +44,7 @@ pub struct Endpoint {
 }
 
 impl Endpoint {
+    #[doc(hidden)]
     pub fn new(request_tx: RequestSender, remote: bool) -> Endpoint {
         Endpoint {
             request_sender: request_tx,

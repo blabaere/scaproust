@@ -172,7 +172,7 @@ impl Session {
 /*                                                                           */
 /*****************************************************************************/
 
-    /// Creates a probe
+    /// Creates a probe for polling sockets
     pub fn create_probe(&mut self, poll_opts: Vec<core::PollReq>) -> io::Result<probe::Probe> {
         let request = Request::CreateProbe(poll_opts);
 

@@ -85,6 +85,7 @@ pub struct Bridge {
 }
 
 impl Bridge {
+    #[doc(hidden)]
     pub fn new(
         request_tx: RequestSender, 
         reply_rx: ReplyReceiver,

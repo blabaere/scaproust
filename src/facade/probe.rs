@@ -23,6 +23,7 @@ pub struct RequestSender {
     probe_id: ProbeId
 }
 
+/// Probe is what applications use to poll sockets.  
 pub struct Probe {
     request_sender: RequestSender,
     reply_receiver: ReplyReceiver
@@ -41,6 +42,7 @@ impl RequestSender {
 }
 
 impl Probe {
+    #[doc(hidden)]
     pub fn new(
         request_tx: RequestSender, 
         reply_rx: ReplyReceiver) -> Probe {
@@ -51,6 +53,8 @@ impl Probe {
         }
     }
 
+    /// Checks the sockets and reports whether it’s possible to send a message to the socket and/or receive a message from each socket.
+    /// Returns a vector of [PollRes](struct.PollRes.html), one for each [PollReq](struct.PollReq.html) provided a build time.
     pub fn poll(&mut self, timeout: Duration) -> io::Result<Vec<PollRes>> {
         let request = Request::Poll(timeout);
 

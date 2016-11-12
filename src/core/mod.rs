@@ -140,12 +140,14 @@ impl From<usize> for ProbeId {
     }
 }
 
+/// Request for socket polling, tells whether the poll should wait for the socket to become readable or writable.
 pub struct PollReq {
     pub sid: SocketId,
     pub recv: bool,
     pub send: bool
 }
 
+/// Result of a socket polling, tells whether the socket is readable or writable.
 pub struct PollRes {
     pub recv: bool,
     pub send: bool
