@@ -133,8 +133,8 @@ impl Session {
         self.probes.find_probe_mut(id)
     }
 
-    pub fn remove_probe(&mut self, did: ProbeId) {
-        self.probes.remove(did);
+    pub fn remove_probe(&mut self, id: ProbeId) {
+        self.probes.remove(id);
     }
 }
 
@@ -209,8 +209,10 @@ impl DeviceCollection {
     }
 
     fn remove(&mut self, id: DeviceId) {
-        self.devices.remove(&id);
-        // TODO cleaup mapping
+        if let Some(device) = self.devices.remove(&id) {
+            self.mapping.remove(device.get_left_id());
+            self.mapping.remove(device.get_right_id());
+        }
     }
 }
 
@@ -256,8 +258,13 @@ impl ProbeCollection {
     }
 
     fn remove(&mut self, id: ProbeId) {
-        self.probes.remove(&id);
-        // TODO cleaup mapping
+        if let Some(probe) = self.probes.remove(&id) {
+            let ids = probe.get_socket_ids();
+
+            for id in &ids {
+                self.mapping.remove(id);
+            }
+        }
     }
 }
 

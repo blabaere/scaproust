@@ -60,7 +60,8 @@ impl Probe {
     fn on_poll_reply(&self, reply: Reply) -> io::Result<Vec<PollRes>> {
         match reply {
             Reply::Poll(x)   => Ok(x),
-            Reply::Err(e) => Err(e)
+            Reply::Err(e) => Err(e),
+            Reply::Closed => Err(other_io_error("unexpected reply"))
         }
     }
 
@@ -78,5 +79,12 @@ impl Probe {
 
     fn recv_reply(&self) -> io::Result<Reply> {
         self.reply_receiver.receive()
+    }
+}
+
+impl Drop for Probe {
+    fn drop(&mut self) {
+        let _ = self.send_request(Request::Close);
+        let _ = self.recv_reply();
     }
 }

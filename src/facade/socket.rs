@@ -63,6 +63,8 @@ impl Socket {
         self.request_sender.socket_id
     }
 
+    /// Creates a poll request that can be used to initialize a probe.
+    /// The probe will then allow polling a group of sockets
     pub fn create_poll_req(&self, recv: bool, send: bool) -> PollReq {
         PollReq {
             sid: self.id(),

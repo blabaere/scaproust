@@ -14,7 +14,8 @@ pub enum Request {
 }
 
 pub enum Reply {
-    Check(bool, bool)
+    Check(bool, bool),
+    Closed
 }
 
 pub trait Context {
@@ -44,7 +45,7 @@ impl Device {
 
     pub fn check(&mut self, ctx: &mut Context) {
         if self.left_recv | self.right_recv {
-            self.send_reply();
+            self.send_check_reply();
         } else {
             ctx.poll(self.left);
             ctx.poll(self.right);
@@ -61,13 +62,32 @@ impl Device {
         }
 
         if can_recv && self.waiting {
-            self.send_reply();
+            self.send_check_reply();
         }
     }
 
-    fn send_reply(&mut self) {
-        let _ = self.reply_sender.send(Reply::Check(self.left_recv, self.right_recv));
+    fn send_check_reply(&mut self) {
+        let reply = Reply::Check(self.left_recv, self.right_recv);
 
+        self.send_reply(reply);
         self.waiting = false;
+    }
+
+    fn send_reply(&mut self, reply: Reply) {
+        let _ = self.reply_sender.send(reply);
+    }
+
+    pub fn get_left_id(&self) -> &SocketId {
+        &self.left
+    }
+
+    pub fn get_right_id(&self) -> &SocketId {
+        &self.right
+    }
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        self.send_reply(Reply::Closed)
     }
 }

@@ -19,7 +19,8 @@ pub enum Request {
 
 pub enum Reply {
     Err(Error),
-    Poll(Vec<PollRes>)
+    Poll(Vec<PollRes>),
+    Closed
 }
 
 pub enum Schedulable {
@@ -162,6 +163,10 @@ impl Probe {
         }
 
     }
+
+    pub fn get_socket_ids(&self) -> Vec<SocketId> {
+        self.poll_opts.iter().map(|po| po.sid).collect()
+    }
 }
 
 fn is_vote_over(interest: bool, vote: &Option<bool>) -> bool {
@@ -176,6 +181,12 @@ fn is_socket_side_ready(interest: bool, vote: &Option<bool>) -> bool {
     match (interest, *vote) {
         (false, _) | (true, None) => false,
         (true, Some(x)) => x
+    }
+}
+
+impl Drop for Probe {
+    fn drop(&mut self) {
+        self.send_reply(Reply::Closed)
     }
 }
 

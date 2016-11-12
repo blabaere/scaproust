@@ -234,8 +234,9 @@ impl Dispatcher {
         }
     }
     fn process_probe_request(&mut self, _: &mut EventLoop, id: ProbeId, request: probe::Request) {
-        if let probe::Request::Poll(timeout) = request { 
-            self.apply_on_probe(id, |probe, ctx| probe.poll(ctx, timeout)) 
+        match request {
+            probe::Request::Poll(timeout) => self.apply_on_probe(id, |probe, ctx| probe.poll(ctx, timeout)) ,
+            probe::Request::Close => self.sockets.remove_probe(id)
         }
     }
 

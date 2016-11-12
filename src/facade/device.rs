@@ -112,14 +112,17 @@ impl Bridge {
     }
 
     fn run_once(&mut self, left: &mut socket::Socket, right: &mut socket::Socket) -> io::Result<()> {
-        let Reply::Check(l, r) = try!(self.execute_request(Request::Check));
-
-        match (l, r) {
-            (true, true) => exchange_msg(left, right),
-            (true, _)    => forward_msg(left, right),
-            (_, true)    => forward_msg(right, left),
-            (_, _)       => Ok(())
+        if let Reply::Check(l, r) = try!(self.execute_request(Request::Check)) {
+            match (l, r) {
+                (true, true) => exchange_msg(left, right),
+                (true, _)    => forward_msg(left, right),
+                (_, true)    => forward_msg(right, left),
+                (_, _)       => Ok(())
+            }
+        } else {
+            Err(other_io_error("unexpected reply"))
         }
+
     }
 }
 
@@ -143,4 +146,11 @@ fn exchange_msg(left: &mut socket::Socket, right: &mut socket::Socket) -> io::Re
     let from_right = try!(right.recv_msg());
 
     right.send_msg(from_left).and_then(|_| left.send_msg(from_right))
+}
+
+impl Drop for Bridge {
+    fn drop(&mut self) {
+        let _ = self.send_request(Request::Close);
+        let _ = self.recv_reply();
+    }
 }
