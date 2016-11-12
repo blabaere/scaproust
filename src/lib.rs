@@ -54,7 +54,7 @@
 #![feature(box_syntax)]
 #![feature(fnbox)]
 #![feature(stmt_expr_attributes)]
-
+#![feature(conservative_impl_trait)]
 
 #![feature(plugin)]
 #![plugin(clippy)]
@@ -91,6 +91,8 @@ pub use facade::device::Device;
 pub use facade::probe::Probe;
 pub use facade::endpoint::Endpoint;
 pub use core::Message;
+pub use core::PollReq;
+pub use core::PollRes;
 pub use core::config::ConfigOption;
 
 pub use transport::tcp::Tcp;
