@@ -4,7 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-//! This is documentation for the `proto` module.
+//! Scalability protocols provided by scaproust
 
 pub mod pair;
 pub mod push;

@@ -14,23 +14,6 @@ use core::context::Context;
 use super::{Timeout, PAIR};
 use io_error::*;
 
-/// **One-to-one protocol**   
-///   
-/// Pair protocol is the simplest and least scalable scalability protocol. 
-/// It allows scaling by breaking the application in exactly two pieces. 
-/// For example, if a monolithic application handles both accounting and agenda of HR department, 
-/// it can be split into two applications (accounting vs. HR) that are run on two separate servers. 
-/// These applications can then communicate via `Pair` sockets. 
-/// The downside of this protocol is that its scaling properties are very limited. 
-/// Splitting the application into two pieces allows to scale the two servers. 
-/// To add the third server to the cluster, application has to be split once more, 
-/// say by separating HR functionality into hiring module and salary computation module. 
-/// Whenever possible, try to use one of the more scalable protocols instead.  
-///  
-/// Socket for communication with exactly one peer.
-/// Each party can send messages at any time. 
-/// If the peer is not available or send buffer is full subsequent calls to [send](struct.Socket.html#method.send) 
-/// will block until it’s possible to send the message.
 pub struct Pair {
     inner: Inner,
     state: Option<State>

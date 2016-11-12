@@ -69,7 +69,6 @@ extern crate mio;
 extern crate mio_uds;
 extern crate time;
 
-#[doc(hidden)]
 pub mod core;
 pub mod proto;
 pub mod transport;

@@ -4,20 +4,21 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-pub mod network;
-pub mod context;
-pub mod config;
-pub mod socket;
-pub mod session;
-pub mod endpoint;
-pub mod device;
-pub mod probe;
+#[doc(hidden)] pub mod network;
+#[doc(hidden)] pub mod context;
+#[doc(hidden)] pub mod config;
+#[doc(hidden)] pub mod socket;
+#[doc(hidden)] pub mod session;
+#[doc(hidden)] pub mod endpoint;
+#[doc(hidden)] pub mod device;
+#[doc(hidden)] pub mod probe;
 
 #[cfg(test)]
 pub mod tests;
 
 use std::fmt;
 
+#[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Scheduled(usize);
 
@@ -27,6 +28,7 @@ pub struct Scheduled(usize);
 /*                                                                           */
 /*****************************************************************************/
 
+#[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct EndpointId(usize);
 
@@ -60,16 +62,19 @@ impl<'x> Into<usize> for &'x EndpointId {
 /*                                                                           */
 /*****************************************************************************/
 
+#[doc(hidden)]
 pub struct EndpointTmpl {
     pub pids: (u16, u16),
     pub spec: EndpointSpec
 }
 
+#[doc(hidden)]
 pub struct EndpointSpec {
     pub url: String,
     pub desc: EndpointDesc
 }
 
+#[doc(hidden)]
 pub struct EndpointDesc {
     pub send_priority: u8,
     pub recv_priority: u8,
@@ -83,6 +88,7 @@ pub struct EndpointDesc {
 /*                                                                           */
 /*****************************************************************************/
 
+#[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct SocketId(usize);
 
@@ -104,6 +110,7 @@ impl From<usize> for SocketId {
 /*                                                                           */
 /*****************************************************************************/
 
+#[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct DeviceId(usize);
 
@@ -125,6 +132,7 @@ impl From<usize> for DeviceId {
 /*                                                                           */
 /*****************************************************************************/
 
+#[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ProbeId(usize);
 
