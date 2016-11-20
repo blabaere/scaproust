@@ -211,12 +211,14 @@ impl Dispatcher {
     }
     fn process_socket_request(&mut self, _: &mut EventLoop, id: SocketId, request: socket::Request) {
         match request {
-            socket::Request::Connect(url) => self.apply_on_socket(id, |socket, ctx| socket.connect(ctx, url)),
-            socket::Request::Bind(url)    => self.apply_on_socket(id, |socket, ctx| socket.bind(ctx, url)),
-            socket::Request::Send(msg)    => self.apply_on_socket(id, |socket, ctx| socket.send(ctx, msg)),
-            socket::Request::Recv         => self.apply_on_socket(id, |socket, ctx| socket.recv(ctx)),
-            socket::Request::SetOption(x) => self.apply_on_socket(id, |socket, ctx| socket.set_option(ctx, x)),
-            socket::Request::Close        => self.apply_on_socket(id, |socket, ctx| socket.close(ctx)),
+            socket::Request::Connect(url)     => self.apply_on_socket(id, |socket, ctx| socket.connect(ctx, url)),
+            socket::Request::Bind(url)        => self.apply_on_socket(id, |socket, ctx| socket.bind(ctx, url)),
+            socket::Request::Send(msg, false) => self.apply_on_socket(id, |socket, ctx| socket.send(ctx, msg)),
+            socket::Request::Send(msg, true)  => self.apply_on_socket(id, |socket, ctx| socket.try_send(ctx, msg)),
+            socket::Request::Recv(false)      => self.apply_on_socket(id, |socket, ctx| socket.recv(ctx)),
+            socket::Request::Recv(true)       => self.apply_on_socket(id, |socket, ctx| socket.try_recv(ctx)),
+            socket::Request::SetOption(x)     => self.apply_on_socket(id, |socket, ctx| socket.set_option(ctx, x)),
+            socket::Request::Close            => self.apply_on_socket(id, |socket, ctx| socket.close(ctx)),
         }
     }
     fn process_endpoint_request(&mut self, _: &mut EventLoop, sid: SocketId, eid: EndpointId, request: endpoint::Request) {

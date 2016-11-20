@@ -153,7 +153,19 @@ impl Socket {
     /// Sends a message.
     /// Which of the peers the message will be sent to is determined by the protocol.
     pub fn send_msg(&mut self, msg: Message) -> io::Result<()> {
-        let request = Request::Send(msg);
+        let request = Request::Send(msg, false);
+
+        self.call(request, |reply| self.on_send_reply(reply))
+    }
+
+    /// Non-blocking version of the send method.
+    pub fn try_send(&mut self, buffer: Vec<u8>) -> io::Result<()> {
+        self.try_send_msg(Message::from_body(buffer))
+    }
+
+    /// Non-blocking version of the send_msg method.
+    pub fn try_send_msg(&mut self, msg: Message) -> io::Result<()> {
+        let request = Request::Send(msg, true);
 
         self.call(request, |reply| self.on_send_reply(reply))
     }
@@ -179,7 +191,19 @@ impl Socket {
 
     /// Receives a message.
     pub fn recv_msg(&mut self) -> io::Result<Message> {
-        let request = Request::Recv;
+        let request = Request::Recv(false);
+
+        self.call(request, |reply| self.on_recv_reply(reply))
+    }
+
+    /// Non-blocking version of the recv method.
+    pub fn try_recv(&mut self) -> io::Result<Vec<u8>> {
+        self.try_recv_msg().map(|msg| msg.into())
+    }
+
+    /// Non-blocking version of the recv_msg method.
+    pub fn try_recv_msg(&mut self) -> io::Result<Message> {
+        let request = Request::Recv(true);
 
         self.call(request, |reply| self.on_recv_reply(reply))
     }

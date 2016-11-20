@@ -1,4 +1,15 @@
+Taken from the source: https://github.com/carllerche/mio/blob/getting-started/doc/getting-started.md
+  Important: Even if we just received a ready notification, there is no guarantee that a read from the socket will succeed and not return Ok(None), so we must handle that case as well.
+That sounds pretty bad, maybe this case should be handled, whenever a recv operation is started,
+if the first result is the so-called Ok(None), WouldBlock currently, the operation should be cancelled.
+And the socket owning the pipe should be notified so it can reschedule the operation.
+
 PB: the dispatcher receiving and CanSend/CanRecv events does not know if a device or a probe is 'listening'. What if several probes are interested in the readiness the same socket ?
+
+IDEA: maybe pipe should raise CanSend/Recv(bool) instead of just CanSend/Recv ?
+
+Change doc links of versioned packaged to docs.rs, since it is easy to support several version.
+See https://docs.rs/about
 
 ### Improvements
 - Reconnect interval max 
@@ -11,7 +22,6 @@ PB: the dispatcher receiving and CanSend/CanRecv events does not know if a devic
 - INPROC transport : to be determined (rust channel's are probably doing a better work at this)
 
 ### Features
-- Non-blocking versions of send and recv
 - Websocket transport
 - TLS transport
 - Implement nanocat
@@ -26,7 +36,7 @@ PB: the dispatcher receiving and CanSend/CanRecv events does not know if a devic
 - Document contribution mode
 - AUTOMATE ALL THE THINGS !!! (compat test, benchmark ...)
 - Change copyright header to mention 'authors' and the AUTHORS file
-- Adds coverage to the build and display it
+- Adds coverage to the build and display it : https://github.com/roblabla/cargo-travis
 
 
 ### Things to look at

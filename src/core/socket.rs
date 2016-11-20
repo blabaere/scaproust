@@ -19,8 +19,8 @@ use io_error::*;
 pub enum Request {
     Connect(String),
     Bind(String),
-    Send(Message),
-    Recv,
+    Send(Message, bool),
+    Recv(bool),
     SetOption(ConfigOption),
     Close
 }
@@ -371,6 +371,17 @@ impl Socket {
         }
     }
 
+    pub fn try_send(&mut self, ctx: &mut Context, msg: Message) {
+        #[cfg(debug_assertions)] debug!("[{:?}] try_send", ctx);
+        if self.protocol.is_send_ready() {
+            self.protocol.send(ctx, msg, None);
+        } else {
+            let err = would_block_io_error("socket is not send ready");
+
+            self.send_reply(Reply::Err(err));
+        }
+    }
+
     pub fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
         #[cfg(debug_assertions)] debug!("[{:?}] send ack from ep {:?}", ctx, eid);
         self.protocol.on_send_ack(ctx, eid);
@@ -407,6 +418,17 @@ impl Socket {
             }
         } else {
             self.protocol.recv(ctx, None);
+        }
+    }
+
+    pub fn try_recv(&mut self, ctx: &mut Context) {
+        #[cfg(debug_assertions)] debug!("[{:?}] try_recv", ctx);
+        if self.protocol.is_recv_ready() {
+            self.protocol.recv(ctx, None);
+        } else {
+            let err = would_block_io_error("socket is not recv ready");
+            
+            self.send_reply(Reply::Err(err));
         }
     }
 

@@ -102,3 +102,73 @@ describe! recv {
 
 }
 
+
+describe! try_send {
+
+    before_each {
+        let _ = ::env_logger::init();
+        let mut session = make_session();
+    }
+
+    it "return would block when no peer is connected" {
+        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+        let err = push.try_send(vec![65, 66, 67]).unwrap_err();
+
+        assert_eq!(io::ErrorKind::WouldBlock, err.kind());
+    }
+
+    it "return would block when peer buffer is full" {
+        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+        let url = urls::tcp::get();
+
+        push.bind(&url).unwrap();
+        pull.connect(&url).unwrap();
+        sleep_some();
+
+        let mut sent = false;
+        loop {
+            match push.try_send(vec![6; 512]) {
+                Ok(()) => {
+                    sent = true;
+                    continue;
+                },
+                Err(err) => {
+                    assert!(sent);
+                    assert_eq!(io::ErrorKind::WouldBlock, err.kind());
+                    break;
+                }
+            }
+        }
+    }
+
+}
+
+describe! try_recv {
+
+    before_each {
+        let _ = ::env_logger::init();
+        let mut session = make_session();
+    }
+
+    it "return would block when no peer is connected" {
+        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+        let err = pull.try_recv().unwrap_err();
+
+        assert_eq!(io::ErrorKind::WouldBlock, err.kind());
+    }
+
+    it "return would block when buffer is empty" {
+        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+        let url = urls::tcp::get();
+
+        push.bind(&url).unwrap();
+        pull.connect(&url).unwrap();
+        sleep_some();
+
+        let err = pull.try_recv().unwrap_err();
+        assert_eq!(io::ErrorKind::WouldBlock, err.kind());
+    }
+
+}

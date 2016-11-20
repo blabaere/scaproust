@@ -1,8 +1,10 @@
 ## Unreleased
 
 ### Added
-- Make the transports pluggable
-- Let the user close individual endpoints
+- Non-blocking versions of send and recv
+- Socket polling via a dedicated probe component.
+- Make the transports pluggable.
+- Let the user close individual endpoints.
 - IPC transport on *nix, using unix socket.
 - Expose `recv max size` and `tcp no delay` options. 
 
