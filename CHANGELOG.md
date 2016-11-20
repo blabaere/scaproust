@@ -1,6 +1,4 @@
-0.2.0
-
-## Unreleased
+## 0.2.0 (2016-11-20)
 
 ### Added
 - Non-blocking versions of send and recv

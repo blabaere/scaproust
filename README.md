@@ -27,7 +27,7 @@ First, add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scaproust = "0.1.0"
+scaproust = "0.2.0"
 ```
 
 Next, add this to your crate:
@@ -35,9 +35,6 @@ Next, add this to your crate:
 ```rust
 extern crate scaproust;
 ```
-
-## What's cooking ?
-Polling, because exposing future-rs compatible async operations is going to take a while.
 
 ## Progress
 - [ ] Protocols
