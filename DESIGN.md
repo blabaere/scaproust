@@ -23,7 +23,8 @@ Cmd/Evt are not implemented as regular method call because it would require circ
 
 One thread to rule them all: creating a session will start a thread where all I/O operations will occurs. This is made possible by using [mio](https://github.com/carllerche/mio) which exposes only non-blocking I/O primitives and a polling system. This I/O thread loops over a poll function and fowards the various readiness changes to each impacted backend component. The channel that allows the communication with the user threads is itself plugged to the polling system so the loop wakes up when required.  
 
-Example of workflow (simplified):
+Example of workflow (simplified):  
+  
 1. The user thread call `socket::send`.
 2. The facade socket sends a request through its channel.
 3. The facade socket starts a blocking read on its channel.
