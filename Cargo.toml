@@ -26,7 +26,7 @@ mio-uds = "0.6.0"
 
 [target.'cfg(windows)'.dependencies]
 miow = "0.1.3"
-mio-named-pipes = { git = "https://github.com/alexcrichton/mio-named-pipes" }
+#mio-named-pipes = { git = "https://github.com/alexcrichton/mio-named-pipes" }
 
 [dev-dependencies]
 env_logger = "0.3.5"
