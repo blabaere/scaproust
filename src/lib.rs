@@ -56,11 +56,11 @@
 #![feature(stmt_expr_attributes)]
 #![feature(conservative_impl_trait)]
 
-#![feature(plugin)]
-#![plugin(clippy)]
-#![allow(boxed_local)]
-#![allow(bool_comparison)]
-#![allow(len_without_is_empty)]
+//#![feature(plugin)]
+//#![plugin(clippy)]
+//#![allow(boxed_local)]
+//#![allow(bool_comparison)]
+//#![allow(len_without_is_empty)]
 
 #[macro_use]
 extern crate log;
