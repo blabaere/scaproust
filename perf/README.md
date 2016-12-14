@@ -1,3 +1,6 @@
+## Performance comparaison of scaproust VS nanomsg
+The comparaison is made using the perf utilities shipped with nanomsg and their scaproust counterpart.
+This is probably not of a very subtle benchmark, but given how far the results are, it is still useful.
 
 ### Average latency (µs)
 | Msg Size | Roundtrips | Nanomsg | Scaproust |
@@ -19,7 +22,7 @@
 | 524288 | 2000 | 16215 | 20708 |
 | 1048576 | 1000 | 12501 | 11733 |
 
-Potential scaproust optimization places:
+## Potential scaproust optimization places
 - Message allocations, send side
 - Message allocations, receive side
 - Event loop polling
