@@ -512,7 +512,6 @@ mod tests {
     use core::context::*;
     use core::{SocketId, EndpointId, Message, EndpointTmpl, Scheduled};
     use core::endpoint::Pipe;
-    use io_error::*;
 
     struct TestProto;
 

@@ -29,4 +29,5 @@ This is probably not of a very subtle benchmark, but given how far the results a
 - Synchronization in the downstream mio channel
 - Synchronization in the upstream std channel
 - Incoming messages are not fetched until the user code requests it
+- Registering the stream each time an operation completes is inefficient ?
 - ???
