@@ -11,7 +11,7 @@ use std::net::Shutdown;
 
 use mio;
 
-use mio_uds::UnixStream;
+use mio_named_pipes::NamedPipe;
 
 use core::Message;
 use transport::ipc::send::SendOperation;
@@ -26,7 +26,7 @@ use io_error::*;
 /*****************************************************************************/
 
 pub struct IpcPipeStub {
-    stream: UnixStream,
+    named_pipe: NamedPipe,
     recv_max_size: u64,
     send_operation: Option<SendOperation>,
     recv_operation: Option<RecvOperation>
@@ -35,14 +35,14 @@ pub struct IpcPipeStub {
 impl Deref for IpcPipeStub {
     type Target = mio::Evented;
     fn deref(&self) -> &Self::Target {
-        &self.stream
+        &self.named_pipe
     }
 }
 
 impl IpcPipeStub {
-    pub fn new(stream: UnixStream, recv_max_size: u64) -> IpcPipeStub {
+    pub fn new(named_pipe: NamedPipe, recv_max_size: u64) -> IpcPipeStub {
         IpcPipeStub {
-            stream: stream,
+            named_pipe: named_pipe,
             recv_max_size: recv_max_size,
             send_operation: None,
             recv_operation: None
@@ -50,7 +50,7 @@ impl IpcPipeStub {
     }
 
     fn run_send_operation(&mut self, mut send_operation: SendOperation) -> io::Result<bool> {
-        if try!(send_operation.run(&mut self.stream)) {
+        if try!(send_operation.run(&mut self.named_pipe)) {
             Ok(true)
         } else {
             self.send_operation = Some(send_operation);
@@ -59,7 +59,7 @@ impl IpcPipeStub {
     }
 
     fn run_recv_operation(&mut self, mut recv_operation: RecvOperation) -> io::Result<Option<Message>> {
-        match try!(recv_operation.run(&mut self.stream)) {
+        match try!(recv_operation.run(&mut self.named_pipe)) {
             Some(msg) => Ok(Some(msg)),
             None => {
                 self.recv_operation = Some(recv_operation);
@@ -71,7 +71,7 @@ impl IpcPipeStub {
 
 impl Drop for IpcPipeStub {
     fn drop(&mut self) {
-        let _ = self.stream.shutdown(Shutdown::Both);
+        let _ = self.stream.disconnect();
     }
 }
 

@@ -4,6 +4,10 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
+
+mod send;
+mod recv;
+
 #[cfg(unix)] pub use self::unix::Ipc;
 #[cfg(unix)] mod unix;
 

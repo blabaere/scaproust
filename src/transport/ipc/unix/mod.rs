@@ -6,8 +6,6 @@
 
 
 mod stub;
-mod send;
-mod recv;
 mod acceptor;
 
 use std::io;
