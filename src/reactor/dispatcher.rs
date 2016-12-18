@@ -363,16 +363,11 @@ impl Dispatcher {
 
 impl EventHandler for Dispatcher {
     fn handle(&mut self, el: &mut EventLoop, token: Token, events: Ready) {
-        if token == CHANNEL_TOKEN {
-            return self.process_channel(el);
+        match token {
+            CHANNEL_TOKEN => self.process_channel(el),
+            BUS_TOKEN     => self.process_bus(el),
+            TIMER_TOKEN   => self.process_timer(el),
+            _             => self.process_io(el, token, events)
         }
-        if token == BUS_TOKEN {
-            return self.process_bus(el);
-        }
-        if token == TIMER_TOKEN {
-            return self.process_timer(el);
-        }
-
-        self.process_io(el, token, events)
     }
 }
