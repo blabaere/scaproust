@@ -8,7 +8,6 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::io;
 use std::io::{Read, Write};
-use std::net::Shutdown;
 
 use mio;
 
