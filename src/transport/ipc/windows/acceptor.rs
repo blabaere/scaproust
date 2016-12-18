@@ -30,7 +30,7 @@ impl IpcAcceptor {
     }
 
     fn connect(&mut self, ctx: &mut Context) {
-        let name = format!(r"\\.\pipe\{}", self.addr);
+        let name = format!(r"\\.\{}", self.addr);
 
         match NamedPipe::new(&name) {
             Ok(named_pipe) => {
