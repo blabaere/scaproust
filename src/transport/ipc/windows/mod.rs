@@ -9,9 +9,7 @@ mod stub;
 mod acceptor;
 
 use std::io;
-use std::path;
 use std::fs::OpenOptions;
-use std::io::prelude::*;
 use std::os::windows::fs::*;
 use std::os::windows::io::*;
 
@@ -25,7 +23,6 @@ use transport::{Transport, Destination};
 use transport::pipe::Pipe;
 use transport::acceptor::Acceptor;
 use transport::async::AsyncPipe;
-use io_error::*;
 
 pub struct Ipc;
 
