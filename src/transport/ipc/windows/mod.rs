@@ -6,9 +6,13 @@
 
 
 mod stub;
+mod acceptor;
 
 use std::io;
 use std::path;
+
+use self::stub::IpcPipeStub;
+use self::acceptor::IpcAcceptor;
 
 use transport::{Transport, Destination};
 use transport::pipe::Pipe;
@@ -23,6 +27,9 @@ impl Transport for Ipc {
     }
 
     fn bind(&self, dest: &Destination) -> io::Result<Box<Acceptor>> {
-        Err(other_io_error("Not implemented !!!"))
+        let addr = String::from(dest.addr);
+        let acceptor = box IpcAcceptor::new(addr, dest.pids, dest.recv_max_size);
+
+        Ok(acceptor)
     }
 }
