@@ -63,8 +63,8 @@
 #![allow(len_without_is_empty)]
 
 #[macro_use]
-extern crate time;
 extern crate log;
+extern crate time;
 extern crate byteorder;
 extern crate mio;
 extern crate mio_uds;
