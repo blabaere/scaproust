@@ -19,7 +19,7 @@ describe! can {
         let mut session = make_session();
         let mut left = session.create_socket::<Pair>().expect("Failed to create socket !");
         let mut right = session.create_socket::<Pair>().expect("Failed to create socket !");
-        let url = urls::tcp::get();
+        let url = urls::ipc::get();
         let timeout = make_timeout();
 
         left.set_send_timeout(timeout).expect("Failed to set send timeout !");
