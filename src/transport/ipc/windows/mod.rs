@@ -16,6 +16,7 @@ use std::os::windows::fs::*;
 use std::os::windows::io::*;
 
 use mio_named_pipes::NamedPipe;
+use winapi;
 
 use self::stub::IpcPipeStub;
 use self::acceptor::IpcAcceptor;

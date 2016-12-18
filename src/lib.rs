@@ -63,13 +63,16 @@
 #![allow(len_without_is_empty)]
 
 #[macro_use]
+extern crate time;
 extern crate log;
 extern crate byteorder;
 extern crate mio;
 extern crate mio_uds;
+
 #[cfg(windows)]
 extern crate mio_named_pipes;
-extern crate time;
+#[cfg(windows)]
+extern crate winapi;
 
 pub mod core;
 pub mod proto;
