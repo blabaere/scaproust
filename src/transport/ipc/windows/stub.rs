@@ -71,7 +71,7 @@ impl IpcPipeStub {
 
 impl Drop for IpcPipeStub {
     fn drop(&mut self) {
-        let _ = self.stream.disconnect();
+        let _ = self.named_pipe.disconnect();
     }
 }
 
@@ -135,10 +135,10 @@ impl Receiver for IpcPipeStub {
 
 impl Handshake for IpcPipeStub {
     fn send_handshake(&mut self, pids: (u16, u16)) -> io::Result<()> {
-        send_and_check_handshake(&mut self.stream, pids)
+        send_and_check_handshake(&mut self.named_pipe, pids)
     }
     fn recv_handshake(&mut self, pids: (u16, u16)) -> io::Result<()> {
-        recv_and_check_handshake(&mut self.stream, pids)
+        recv_and_check_handshake(&mut self.named_pipe, pids)
     }
 }
 
@@ -147,7 +147,7 @@ impl AsyncPipeStub for IpcPipeStub {
     fn read_and_write_void(&mut self) {
         let mut buffer: [u8; 0] = [0; 0];
 
-        let _ = self.stream.read(&mut buffer);
-        let _ = self.stream.write(&buffer);
+        let _ = self.named_pipe.read(&mut buffer);
+        let _ = self.named_pipe.write(&buffer);
     }
 }
