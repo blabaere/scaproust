@@ -24,6 +24,7 @@ use self::acceptor::IpcAcceptor;
 use transport::{Transport, Destination};
 use transport::pipe::Pipe;
 use transport::acceptor::Acceptor;
+use transport::async::AsyncPipe;
 use io_error::*;
 
 pub struct Ipc;
