@@ -143,4 +143,11 @@ impl Handshake for IpcPipeStub {
 }
 
 impl AsyncPipeStub for IpcPipeStub {
+    #[cfg(windows)]
+    fn read_and_write_void(&mut self) {
+        let mut buffer: [u8; 0] = [0; 0];
+
+        let _ = self.stream.read(&mut buffer);
+        let _ = self.stream.write(&buffer);
+    }
 }
