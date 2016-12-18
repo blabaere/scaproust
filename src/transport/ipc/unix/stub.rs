@@ -14,8 +14,8 @@ use mio;
 use mio_uds::UnixStream;
 
 use core::Message;
-use transport::ipc::send::SendOperation;
-use transport::ipc::recv::RecvOperation;
+use super::send::SendOperation;
+use super::recv::RecvOperation;
 use transport::async::stub::*;
 use io_error::*;
 
