@@ -52,8 +52,8 @@ describe! can {
     }
 
     it "send a message back and forth" {
-        right.connect(&url).unwrap();
         left.bind(&url).unwrap();
+        right.connect(&url).unwrap();
 
         let sent_ltr = vec![65, 66, 67];
         left.send(sent_ltr).unwrap();
