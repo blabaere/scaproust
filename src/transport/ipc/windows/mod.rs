@@ -51,7 +51,7 @@ impl Transport for Ipc {
     }
 }
 
-impl Transport {
+impl Ipc {
     fn ensure_file_exists(&self, addr: &str) -> io::Result<()> {
         let name = format!(r"\\.\pipe\my-pipe-{}", addr);
         let mut options = OpenOptions::new();
