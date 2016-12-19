@@ -32,6 +32,7 @@ impl Transport for Ipc {
         options.read(true).write(true).custom_flags(winapi::FILE_FLAG_OVERLAPPED);
         //let name = format!(r"\\.\{}", dest.addr);
         let name = format!(r"\\.\pipe\my-pipe-{}", dest.addr);
+        info!("Creating client pipe: {}", &name);
         let file = try!(options.open(name));
         let named_pipe = unsafe { NamedPipe::from_raw_handle(file.into_raw_handle()) };
         let stub = IpcPipeStub::new(named_pipe, dest.recv_max_size);
