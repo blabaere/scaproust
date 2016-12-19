@@ -53,9 +53,13 @@ impl Transport for Ipc {
 
 impl Transport {
     fn ensure_file_exists(&self, addr: &str) -> io::Result<()> {
-        let name = format!(r"\\.\pipe\my-pipe-{}", dest.addr);
+        let name = format!(r"\\.\pipe\my-pipe-{}", addr);
         let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true);
+        options.
+            read(true).
+            write(true).
+            create(true).
+            custom_flags(winapi::FILE_FLAG_OVERLAPPED);
         info!("Creating file pipe: {}", &name);
         let _ = try!(options.open(name));
 
