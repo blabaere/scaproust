@@ -58,7 +58,6 @@ impl Ipc {
         options.
             read(true).
             write(true).
-            create(true).
             custom_flags(winapi::FILE_FLAG_OVERLAPPED);
         info!("Creating file pipe: {}", &name);
         let _ = try!(options.open(name));
