@@ -32,6 +32,7 @@ describe! can {
     it "send a message through local endpoint" {
         left.bind(&url).unwrap();
         right.connect(&url).unwrap();
+        sleep_some();
 
         let sent = vec![65, 66, 67];
         left.send(sent).unwrap();
@@ -43,6 +44,7 @@ describe! can {
     it "send a message through remote endpoint" {
         right.bind(&url).unwrap();
         left.connect(&url).unwrap();
+        sleep_some();
 
         let sent = vec![65, 66, 67];
         left.send(sent).unwrap();
@@ -54,6 +56,7 @@ describe! can {
     it "send a message back and forth" {
         left.bind(&url).unwrap();
         right.connect(&url).unwrap();
+        sleep_some();
 
         let sent_ltr = vec![65, 66, 67];
         left.send(sent_ltr).unwrap();
