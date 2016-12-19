@@ -42,27 +42,9 @@ impl Transport for Ipc {
     }
 
     fn bind(&self, dest: &Destination) -> io::Result<Box<Acceptor>> {
-        try!(self.ensure_file_exists(&dest.addr));
-
         let addr = String::from(dest.addr);
         let acceptor = box IpcAcceptor::new(addr, dest.pids, dest.recv_max_size);
 
         Ok(acceptor)
     }
 }
-
-impl Ipc {
-    fn ensure_file_exists(&self, addr: &str) -> io::Result<()> {
-        let name = format!(r"\\.\pipe\my-pipe-{}", addr);
-        let mut options = OpenOptions::new();
-        options.
-            read(true).
-            write(true).
-            custom_flags(winapi::FILE_FLAG_OVERLAPPED);
-        info!("Creating file pipe: {}", &name);
-        let _ = try!(options.open(name));
-
-        Ok(())
-    } 
-}
-
