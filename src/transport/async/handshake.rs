@@ -45,6 +45,9 @@ impl<S : AsyncPipeStub> PipeState<S> for HandshakeTx<S> {
 
     fn enter(&mut self, ctx: &mut Context) {
         ctx.register(self.stub.deref(), Ready::writable(), PollOpt::level());
+
+        #[cfg(windows)]
+        self.stub.registered();
     }
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         ctx.deregister(self.stub.deref());

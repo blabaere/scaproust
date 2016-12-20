@@ -18,6 +18,8 @@ use io_error::*;
 pub trait AsyncPipeStub : Sender + Receiver + Handshake + Deref<Target=Evented> {
     #[cfg(windows)]
     fn read_and_write_void(&mut self);
+    #[cfg(windows)]
+    fn registered(&mut self) {}
 }
 
 pub trait Sender {

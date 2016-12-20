@@ -150,4 +150,9 @@ impl AsyncPipeStub for IpcPipeStub {
         let _ = self.named_pipe.read(&mut buffer);
         let _ = self.named_pipe.write(&buffer);
     }
+
+    #[cfg(windows)]
+    fn registered(&mut self) {
+        let _ = self.named_pipe.connect();
+    }
 }
