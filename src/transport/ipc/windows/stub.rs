@@ -165,6 +165,8 @@ impl AsyncPipeStub for IpcPipeStub {
 
     #[cfg(windows)]
     fn registered(&mut self) {
-        let _ = self.named_pipe.connect();
+        if self.server {
+            let _ = self.named_pipe.connect();
+        }
     }
 }
