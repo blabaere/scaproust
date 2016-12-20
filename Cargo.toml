@@ -25,8 +25,8 @@ mio = "0.6.2"
 mio-uds = "0.6.0"
 
 [target.'cfg(windows)'.dependencies]
-miow = "0.1.4"
-mio-named-pipes = "0.1.0"
+miow = "0.1.5"
+mio-named-pipes = "0.1.1"
 winapi = "0.2.8"
 
 [dev-dependencies]
