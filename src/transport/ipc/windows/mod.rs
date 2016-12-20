@@ -35,7 +35,7 @@ impl Transport for Ipc {
         info!("Creating client pipe: {}", &name);
         let file = try!(options.open(name));
         let named_pipe = unsafe { NamedPipe::from_raw_handle(file.into_raw_handle()) };
-        let stub = IpcPipeStub::new(named_pipe, dest.recv_max_size);
+        let stub = IpcPipeStub::new_client(named_pipe, dest.recv_max_size);
         let pipe = box AsyncPipe::new(stub, dest.pids);
 
         Ok(pipe)

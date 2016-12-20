@@ -26,6 +26,7 @@ use io_error::*;
 /*****************************************************************************/
 
 pub struct IpcPipeStub {
+    server: bool,
     named_pipe: NamedPipe,
     recv_max_size: u64,
     send_operation: Option<SendOperation>,
@@ -40,8 +41,19 @@ impl Deref for IpcPipeStub {
 }
 
 impl IpcPipeStub {
-    pub fn new(named_pipe: NamedPipe, recv_max_size: u64) -> IpcPipeStub {
+    pub fn new_server(named_pipe: NamedPipe, recv_max_size: u64) -> IpcPipeStub {
         IpcPipeStub {
+            server: true,
+            named_pipe: named_pipe,
+            recv_max_size: recv_max_size,
+            send_operation: None,
+            recv_operation: None
+        }
+    }
+
+    pub fn new_client(named_pipe: NamedPipe, recv_max_size: u64) -> IpcPipeStub {
+        IpcPipeStub {
+            server: false,
             named_pipe: named_pipe,
             recv_max_size: recv_max_size,
             send_operation: None,
