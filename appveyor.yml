@@ -1,9 +1,7 @@
 environment:
   RUST_TEST_THREADS: 1
   RUST_BACKTRACE: 1
-  RUST_LOG: scaproust
   matrix:
-  - TARGET: x86_64-pc-windows-msvc
   - TARGET: i686-pc-windows-msvc
 
 install:
