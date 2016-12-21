@@ -33,6 +33,7 @@ winapi = "0.2.8"
 [dev-dependencies]
 env_logger = "0.3.5"
 stainless = "0.1.10"
+rand = "0.3"
 
 [[test]]
 name = "test"
