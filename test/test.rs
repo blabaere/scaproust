@@ -11,6 +11,7 @@
 extern crate log;
 extern crate env_logger;
 extern crate scaproust;
+extern crate rand;
 
 mod socket;
 mod fair_queue;
@@ -31,6 +32,8 @@ pub use std::io;
 pub use env_logger::*;
 
 pub use scaproust::*;
+
+use rand::Rng;
 
 #[cfg(not(windows))]
 pub const SYS_TIMEOUT: u64 = 300;
@@ -87,7 +90,9 @@ pub mod urls {
     pub mod ipc {
 
         pub fn get() -> String {
-            format!("ipc://named-pipe_{}", super::next_port())
+            let num: u64 = rand::thread_rng().gen();
+            
+            format!("ipc://named-pipe_{}", num)
         }
 
     }
