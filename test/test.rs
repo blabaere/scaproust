@@ -88,7 +88,7 @@ pub mod urls {
 
     pub mod ipc {
 
-        use rand::Rng;
+        use rand;
 
         pub fn get() -> String {
             let num: u64 = rand::thread_rng().gen();
