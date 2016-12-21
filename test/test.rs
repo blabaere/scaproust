@@ -33,7 +33,6 @@ pub use env_logger::*;
 
 pub use scaproust::*;
 
-use rand::Rng;
 
 #[cfg(not(windows))]
 pub const SYS_TIMEOUT: u64 = 300;
@@ -88,6 +87,8 @@ pub mod urls {
     }
 
     pub mod ipc {
+
+        use rand::Rng;
 
         pub fn get() -> String {
             let num: u64 = rand::thread_rng().gen();
