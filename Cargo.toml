@@ -26,8 +26,7 @@ mio-uds = "0.6.0"
 
 [target.'cfg(windows)'.dependencies]
 miow = "0.1.5"
-#mio-named-pipes = "0.1.1"
-mio-named-pipes = { git="https://github.com/alexcrichton/mio-named-pipes", rev="28e7b3b5240ed2261759b74aa27bce1fd878d76b" }
+mio-named-pipes = "0.1.2"
 winapi = "0.2.8"
 
 [dev-dependencies]
