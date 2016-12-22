@@ -30,9 +30,7 @@ impl IpcAcceptor {
     }
 
     fn connect(&mut self, ctx: &mut Context) {
-        let name = format!(r"\\.\pipe\my-pipe-{}", self.addr);
-        info!("creating ipc acceptor named pipe: {}", &name);
-        //let name = format!(r"\\.\{}", self.addr);
+        let name = format!(r"\\.\{}", self.addr);
 
         match NamedPipe::new(&name) {
             Ok(named_pipe) => {
@@ -62,14 +60,12 @@ impl acceptor::Acceptor for IpcAcceptor {
     }
 
     fn open(&mut self, ctx: &mut Context) {
-        info!("opening ipc acceptor");
         ctx.raise(Event::Opened);
 
         self.connect(ctx);
     }
 
     fn close(&mut self, ctx: &mut Context) {
-
         // TODO find a way to drop the created pipe
         ctx.raise(Event::Closed);
     }

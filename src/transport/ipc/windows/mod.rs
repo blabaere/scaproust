@@ -30,9 +30,7 @@ impl Transport for Ipc {
     fn connect(&self, dest: &Destination) -> io::Result<Box<Pipe>> {
         let mut options = OpenOptions::new();
         options.read(true).write(true).custom_flags(winapi::FILE_FLAG_OVERLAPPED);
-        //let name = format!(r"\\.\{}", dest.addr);
-        let name = format!(r"\\.\pipe\my-pipe-{}", dest.addr);
-        info!("Creating client pipe: {}", &name);
+        let name = format!(r"\\.\{}", dest.addr);
         let file = try!(options.open(name));
         let named_pipe = unsafe { NamedPipe::from_raw_handle(file.into_raw_handle()) };
         let stub = IpcPipeStub::new_client(named_pipe, dest.recv_max_size);
