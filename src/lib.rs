@@ -87,6 +87,8 @@ mod facade;
 mod sequence;
 #[doc(hidden)]
 mod io_error;
+#[doc(hidden)]
+mod sync;
 
 pub use facade::session::SessionBuilder;
 pub use facade::session::Session;
