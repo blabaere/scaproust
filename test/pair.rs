@@ -31,6 +31,7 @@ describe! can {
 
     it "send a message back and forth" {
         left.bind(&url).unwrap();
+        sleep_some();
         right.connect(&url).unwrap();
         sleep_some();
 
@@ -39,9 +40,9 @@ describe! can {
         let received_ltr = right.recv().unwrap();
         assert_eq!(vec![65, 66, 67], received_ltr);
 
-        /*let sent_rtl = vec![67, 66, 65];
+        let sent_rtl = vec![67, 66, 65];
         right.send(sent_rtl).unwrap();
         let received_rtl = left.recv().unwrap();
-        assert_eq!(vec![67, 66, 65], received_rtl);*/
+        assert_eq!(vec![67, 66, 65], received_rtl);
     }
 }
