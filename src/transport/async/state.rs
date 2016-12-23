@@ -17,16 +17,20 @@ use transport::pipe::{Event, Context};
 pub trait PipeState<S : AsyncPipeStub + 'static> {
 
     fn name(&self) -> &'static str;
-    fn open(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
+    fn open(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        error!("[{:?}] open while {}", ctx, self.name());
         box Dead
     }
-    fn close(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
+    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        error!("[{:?}] close while {}", ctx, self.name());
         box Dead
     }
-    fn send(self: Box<Self>, _: &mut Context, _: Rc<Message>) -> Box<PipeState<S>> {
+    fn send(self: Box<Self>, ctx: &mut Context, _: Rc<Message>) -> Box<PipeState<S>> {
+        error!("[{:?}] send while {}", ctx, self.name());
         box Dead
     }
-    fn recv(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
+    fn recv(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+        error!("[{:?}] recv while {}", ctx, self.name());
         box Dead
     }
     fn error(self: Box<Self>, ctx: &mut Context, err: Error) -> Box<PipeState<S>> {
@@ -36,7 +40,8 @@ pub trait PipeState<S : AsyncPipeStub + 'static> {
 
         box Dead
     }
-    fn ready(self: Box<Self>, _: &mut Context, _: Ready) -> Box<PipeState<S>> {
+    fn ready(self: Box<Self>, ctx: &mut Context, _: Ready) -> Box<PipeState<S>> {
+        error!("[{:?}] ready while {}", ctx, self.name());
         box Dead
     }
     fn enter(&mut self, _: &mut Context) {
