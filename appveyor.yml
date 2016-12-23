@@ -1,6 +1,7 @@
 environment:
   RUST_TEST_THREADS: 1
   RUST_BACKTRACE: 1
+  RUST_LOG: mio,scaproust,test
   matrix:
   - TARGET: i686-pc-windows-msvc
 #  - TARGET: x86_64-pc-windows-msvc
