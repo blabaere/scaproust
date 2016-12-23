@@ -29,9 +29,9 @@ describe! can {
         right.set_recv_timeout(timeout).expect("Failed to set recv timeout !");
     }
 
-    it "send a message through local endpoint" {
-        left.bind(&url).unwrap();
-        right.connect(&url).unwrap();
+    it "send a message through remote endpoint" {
+        right.bind(&url).unwrap();
+        left.connect(&url).unwrap();
         sleep_some();
 
         let sent = vec![65, 66, 67];
