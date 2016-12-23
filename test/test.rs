@@ -13,17 +13,17 @@ extern crate env_logger;
 extern crate scaproust;
 extern crate rand;
 
-//mod socket;
-//mod fair_queue;
+mod socket;
+mod fair_queue;
 mod pair;
-//mod pipeline;
-//mod reqrep;
-//mod pubsub;
-//mod survey;
-//mod bus;
-//mod device;
-//mod reqrep_device;
-//mod probe;
+mod pipeline;
+mod reqrep;
+mod pubsub;
+mod survey;
+mod bus;
+mod device;
+mod reqrep_device;
+mod probe;
 
 pub use std::time::Duration;
 pub use std::thread;

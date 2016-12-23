@@ -29,6 +29,32 @@ describe! can {
         right.set_recv_timeout(timeout).expect("Failed to set recv timeout !");
     }
 
+    it "send a message through local endpoint" {
+        left.bind(&url).unwrap();
+        sleep_some();
+        right.connect(&url).unwrap();
+        sleep_some();
+
+        let sent = vec![65, 66, 67];
+        left.send(sent).unwrap();
+        let received = right.recv().unwrap();
+
+        assert_eq!(vec![65, 66, 67], received)
+    }
+
+    it "send a message through remote endpoint" {
+        right.bind(&url).unwrap();
+        sleep_some();
+        left.connect(&url).unwrap();
+        sleep_some();
+
+        let sent = vec![65, 66, 67];
+        left.send(sent).unwrap();
+        let received = right.recv().unwrap();
+
+        assert_eq!(vec![65, 66, 67], received)
+    }
+
     it "send a message back and forth" {
         left.bind(&url).unwrap();
         sleep_some();
