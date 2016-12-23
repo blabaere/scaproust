@@ -18,7 +18,6 @@ See https://docs.rs/about
 - Req prefetch replies
 - Use a pool for payloads and buffers (if any)
 - Find something more efficient than a channel for sending replies from the event loop back to the facade (a mailbox?)
-- IPC transport on windows : See https://github.com/mmacedoeu/pipetoredis.rs
 - INPROC transport : to be determined (rust channel's are probably doing a better work at this)
 
 ### Features
@@ -43,9 +42,6 @@ See https://docs.rs/about
 
 gather/scatter io operations
 https://github.com/seanmonstar/vecio
-
-Windows named pipes
-https://github.com/mmacedoeu/pipetoredis.rs
 
 https://pascalhertleif.de/artikel/good-practices-for-writing-rust-libraries/
 http://keepachangelog.com
