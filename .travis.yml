@@ -8,6 +8,7 @@ os:
 before_script:
   - rustc --version --verbose
   - cargo install clippy --force
+  - cargo install cargo-travis --force
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 
 #RUST_LOG=scaproust,test 
@@ -17,6 +18,7 @@ script:
 
 after_success:
   - travis-cargo doc-upload
+  - cargo coveralls
     
 env:
   global:
@@ -26,10 +28,14 @@ env:
 addons:
   apt:
     packages:
-#      - libiberty-dev
+      - libiberty-dev
+      - libssl-dev
       - libcurl4-openssl-dev
       - libelf-dev
       - libdw-dev
       - cmake
       - gcc
       - binutils-dev
+      - elfutils
+    sources:
+      - kalakris-cmake
