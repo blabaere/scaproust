@@ -13,6 +13,7 @@ install:
   - SET PATH=%PATH%;C:\MinGW\bin
   - rustc -vV
   - cargo -vV
+  - cargo install clippy
 
 build: false
 
