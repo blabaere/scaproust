@@ -7,7 +7,7 @@ os:
 
 before_script:
   - rustc --version --verbose
-#  - cargo install clippy
+  - cargo install clippy --force
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 
 #RUST_LOG=scaproust,test 
