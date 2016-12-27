@@ -56,11 +56,9 @@
 #![feature(stmt_expr_attributes)]
 #![feature(conservative_impl_trait)]
 
-#![feature(plugin)]
-#![plugin(clippy)]
-#![allow(boxed_local)]
-#![allow(bool_comparison)]
-#![allow(len_without_is_empty)]
+#[cfg_attr(feature = "cargo-clippy", allow(boxed_local))]
+#[cfg_attr(feature = "cargo-clippy", allow(bool_comparison))]
+#[cfg_attr(feature = "cargo-clippy", allow(len_without_is_empty))]
 
 #[macro_use]
 extern crate log;

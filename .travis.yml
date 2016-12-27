@@ -12,7 +12,7 @@ before_script:
 #RUST_LOG=scaproust,test 
 #RUST_TEST_THREADS=1 
 script:
-  - cargo test && cargo doc --no-deps
+  - cargo test && && cargo clippy && cargo doc --no-deps
 
 after_success:
   - travis-cargo doc-upload
