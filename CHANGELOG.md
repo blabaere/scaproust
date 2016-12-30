@@ -3,6 +3,10 @@
 ### Added
 - IPC transport on Windows, using named pipes.
 
+### Fixed
+- Fix perf issue with TCP transport on *nix
+- Remove hard dependency on clippy
+
 ## 0.2.0 (2016-11-20)
 
 ### Added
