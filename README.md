@@ -58,10 +58,10 @@ extern crate scaproust;
     - [x] SURVEYOR deadline
     - [x] RESPONDENT  
 
-- [ ] Transports
+- [x] Transports
   - [x] TCP
   - [x] IPC (*nix)
-  - [ ] IPC (Windows)
+  - [x] IPC (Windows)
 
 - [ ] Socket options
   - [ ] Linger
