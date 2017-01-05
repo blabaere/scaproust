@@ -57,8 +57,8 @@ fn node(args: Vec<&str>) {
     socket.bind(args[2]).expect("Failed to bind socket !");
     sleep_ms(100);
     if args.len() > 2 {
-        for x in 3..args.len() {
-            socket.connect(args[x]).expect("Failed to connect socket !");
+        for arg in args.iter().skip(3) {
+            socket.connect(arg).expect("Failed to connect socket !");
         }
     }
     sleep_ms(1000);

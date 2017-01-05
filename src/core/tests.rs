@@ -170,7 +170,7 @@ impl Network for TestContext {
 }
 
 impl Scheduler for TestContext {
-    fn schedule(&mut self, schedulable: Schedulable, delay: Duration) -> Result<Scheduled> {
+    fn schedule(&mut self, _: Schedulable, _: Duration) -> Result<Scheduled> {
         if let Some(scheduled) = self.schedule_result.take() {
             Ok(scheduled)
         } else {

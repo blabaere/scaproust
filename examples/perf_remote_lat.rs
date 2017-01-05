@@ -37,8 +37,8 @@ fn main() {
     }
 
     let url = &args[1];
-    let msg_size = usize::from_str(&args[2]).expect("Failed to parse msg-size");
-    let roundtrips = usize::from_str(&args[3]).expect("Failed to parse roundtrips");
+    let msg_size = usize::from_str(args[2]).expect("Failed to parse msg-size");
+    let roundtrips = usize::from_str(args[3]).expect("Failed to parse roundtrips");
 
     let mut session = create_session();
     let mut socket = session.create_socket::<Pair>().expect("Failed to create socket !");

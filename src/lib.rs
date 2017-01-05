@@ -56,9 +56,9 @@
 #![feature(stmt_expr_attributes)]
 #![feature(conservative_impl_trait)]
 
-#[cfg_attr(feature = "cargo-clippy", allow(boxed_local))]
-#[cfg_attr(feature = "cargo-clippy", allow(bool_comparison))]
-#[cfg_attr(feature = "cargo-clippy", allow(len_without_is_empty))]
+#![cfg_attr(feature = "cargo-clippy", allow(boxed_local))]
+#![cfg_attr(feature = "cargo-clippy", allow(bool_comparison))]
+#![cfg_attr(feature = "cargo-clippy", allow(len_without_is_empty))]
 
 #[macro_use]
 extern crate log;
@@ -85,8 +85,6 @@ mod facade;
 mod sequence;
 #[doc(hidden)]
 mod io_error;
-#[doc(hidden)]
-mod sync;
 
 pub use facade::session::SessionBuilder;
 pub use facade::session::Session;

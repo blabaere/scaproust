@@ -107,9 +107,6 @@ impl TestStepStream {
             pending_recv: false
         }
     }
-    pub fn set_send_handshake_ok(&mut self, send_handshake_ok: bool) {
-        self.send_handshake_ok = send_handshake_ok;
-    }
 }
 
 impl stub::AsyncPipeStub for TestStepStream {
