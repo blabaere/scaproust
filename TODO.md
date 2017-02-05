@@ -1,3 +1,5 @@
+Use a BTreeMap instead of a HashMap for all things with an usize ID ?
+
 Taken from the source: https://github.com/carllerche/mio/blob/getting-started/doc/getting-started.md
   Important: Even if we just received a ready notification, there is no guarantee that a read from the socket will succeed and not return Ok(None), so we must handle that case as well.
 That sounds pretty bad, maybe this case should be handled, whenever a recv operation is started,
@@ -28,6 +30,8 @@ See https://docs.rs/about
 
 ### Vision
 - Expose async io using future-rs ?
+- Change the facade API to have "typed sockets" ?
+
 
 ### Tasks
 - Use github issues instead of this file
