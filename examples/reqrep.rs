@@ -8,7 +8,7 @@
 // See http://tim.dysinger.net/posts/2013-09-16-getting-started-with-nanomsg.html
 // and https://github.com/dysinger/nanomsg-examples.
 
-#[macro_use] extern crate log;
+extern crate log;
 extern crate env_logger;
 extern crate scaproust;
 

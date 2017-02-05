@@ -7,7 +7,6 @@
 #![feature(plugin)]
 #![cfg_attr(test, plugin(stainless))]
 
-#[macro_use]
 extern crate log;
 extern crate env_logger;
 extern crate scaproust;
