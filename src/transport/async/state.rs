@@ -34,7 +34,7 @@ pub trait PipeState<S : AsyncPipeStub + 'static> {
         box Dead
     }
     fn error(self: Box<Self>, ctx: &mut Context, err: Error) -> Box<PipeState<S>> {
-        error!("[{:?}] error while {}: {:?}", ctx, self.name(), err);
+        info!("[{:?}] error while {}: {:?}", ctx, self.name(), err);
         
         ctx.raise(Event::Error(err));
 
