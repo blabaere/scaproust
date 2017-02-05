@@ -19,7 +19,7 @@ exclude       = [
 [dependencies]
 log = "0.3.6"
 byteorder = "0.5.3"
-time = "0.1.35"
+time = "0.1.36"
 mio = "0.6.2"
 mio-uds = "0.6.0"
 
