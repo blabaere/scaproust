@@ -20,11 +20,11 @@ exclude       = [
 log = "0.3.6"
 byteorder = "0.5.3"
 time = "0.1.36"
-mio = "0.6.2"
-mio-uds = "0.6.0"
+mio = "0.6.4"
+mio-uds = "0.6.2"
 
 [target.'cfg(windows)'.dependencies]
-miow = "0.1.5"
+miow = "0.2.0"
 mio-named-pipes = "0.1.2"
 winapi = "0.2.8"
 
