@@ -90,7 +90,15 @@ pub mod urls {
         use rand;
         use rand::Rng;
 
-        pub fn get() -> String {
+        #[cfg(not(windows))]
+         pub fn get() -> String {
+            let num: u64 = rand::thread_rng().gen();
+            
+            format!("ipc:///tmp/named-pipe_{}", num)
+        }
+
+        #[cfg(windows)]
+         pub fn get() -> String {
             let num: u64 = rand::thread_rng().gen();
             
             format!("ipc://named-pipe_{}", num)
