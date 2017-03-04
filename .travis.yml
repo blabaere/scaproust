@@ -7,14 +7,13 @@ os:
 
 before_script:
   - rustc --version --verbose
-  - cargo install clippy --force
   - cargo install cargo-travis --force
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 
 #RUST_LOG=scaproust,test 
 #RUST_TEST_THREADS=1 
 script:
-  - cargo test && cargo clippy && cargo doc --no-deps
+  - cargo test && cargo doc --no-deps
 
 after_success:
   - travis-cargo doc-upload
