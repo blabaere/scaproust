@@ -1,5 +1,3 @@
-Use a BTreeMap instead of a HashMap for all things with an usize ID ?
-
 Taken from the source: https://github.com/carllerche/mio/blob/getting-started/doc/getting-started.md
   Important: Even if we just received a ready notification, there is no guarantee that a read from the socket will succeed and not return Ok(None), so we must handle that case as well.
 That sounds pretty bad, maybe this case should be handled, whenever a recv operation is started,
@@ -21,25 +19,25 @@ See https://docs.rs/about
 - Use a pool for payloads and buffers (if any)
 - Find something more efficient than a channel for sending replies from the event loop back to the facade (a mailbox?)
 - INPROC transport : to be determined (rust channel's are probably doing a better work at this)
+  
 
 ### Features
 - Websocket transport
 - TLS transport
 - Implement nanocat
 - STAR protocol ?
+  
 
 ### Vision
 - Expose async io using future-rs ?
 - Change the facade API to have "typed sockets" ?
-
+  
 
 ### Tasks
 - Use github issues instead of this file
 - Document release process
 - Document contribution mode
 - AUTOMATE ALL THE THINGS !!! (compat test, benchmark ...)
-- Change copyright header to mention 'authors' and the AUTHORS file
-- Adds coverage to the build and display it : https://github.com/roblabla/cargo-travis
 
 
 ### Things to look at
