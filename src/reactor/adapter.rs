@@ -17,7 +17,7 @@ use core::context;
 use core::device;
 use core::probe;
 use core::network::Network;
-use core::{SocketId, EndpointId, DeviceId, ProbeId, Message, EndpointTmpl, Scheduled};
+use core::{BuildIdHasher, SocketId, EndpointId, DeviceId, ProbeId, Message, EndpointTmpl, Scheduled};
 use transport::{Transport, Destination};
 use transport::endpoint::*;
 use transport::pipe;
@@ -75,14 +75,14 @@ pub struct AcceptorController {
 
 pub struct EndpointCollection {
     ids: Sequence,
-    transports: HashMap<String, Box<Transport + Send>>,
-    pipes: HashMap<EndpointId, PipeController>,
-    acceptors: HashMap<EndpointId, AcceptorController>
+    transports: HashMap<String, Box<Transport + Send>, BuildIdHasher>,
+    pipes: HashMap<EndpointId, PipeController, BuildIdHasher>,
+    acceptors: HashMap<EndpointId, AcceptorController, BuildIdHasher>
 }
 
 pub struct Schedule {
     ids: Sequence,
-    items: HashMap<Scheduled, Timeout>
+    items: HashMap<Scheduled, Timeout, BuildIdHasher>
 }
 
 impl Registrar for EventLoop {
@@ -158,12 +158,12 @@ impl AcceptorController {
 }
 
 impl EndpointCollection {
-    pub fn new(seq: Sequence, transports: HashMap<String, Box<Transport + Send>>) -> EndpointCollection {
+    pub fn new(seq: Sequence, transports: HashMap<String, Box<Transport + Send>, BuildIdHasher>) -> EndpointCollection {
         EndpointCollection {
             ids: seq,
             transports: transports,
-            pipes: HashMap::new(),
-            acceptors: HashMap::new()
+            pipes: HashMap::default(),
+            acceptors: HashMap::default()
         }
     }
 
@@ -226,7 +226,7 @@ impl Schedule {
     pub fn new(seq: Sequence) -> Schedule {
         Schedule { 
             ids: seq,
-            items: HashMap::new() 
+            items: HashMap::default() 
         }
     }
     fn insert(&mut self, handle: Timeout) -> Scheduled {

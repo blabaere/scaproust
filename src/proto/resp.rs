@@ -4,7 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 
@@ -15,6 +15,7 @@ use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
 use core::context::{Context, Event};
 use super::priolist::Priolist;
+use super::pipes::PipeCollection;
 use super::{Timeout, SURVEYOR, RESPONDENT};
 use io_error::*;
 
@@ -34,7 +35,7 @@ enum State {
 
 struct Inner {
     reply_tx: Sender<Reply>,
-    pipes: HashMap<EndpointId, Pipe>,
+    pipes: PipeCollection,
     fq: Priolist,
     sd: HashSet<EndpointId>,
     ttl: u8,
@@ -334,7 +335,7 @@ impl Inner {
     fn new(tx: Sender<Reply>) -> Inner {
         Inner {
             reply_tx: tx,
-            pipes: HashMap::new(),
+            pipes: PipeCollection::new(),
             fq: Priolist::new(),
             sd: HashSet::new(),
             ttl: 8,
@@ -361,7 +362,7 @@ impl Inner {
     }
     fn send_to(&mut self, ctx: &mut Context, msg: Rc<Message>, eid: EndpointId) -> bool {
         self.sd.remove(&eid);
-        self.pipes.get_mut(&eid).map(|pipe| pipe.send(ctx, msg)).is_some()
+        self.pipes.send_to(ctx, msg, eid).is_some()
     }
     fn on_send_ack(&self, ctx: &mut Context, timeout: Timeout) {
         let _ = self.reply_tx.send(Reply::Send);
@@ -391,13 +392,7 @@ impl Inner {
     }
 
     fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
-        self.fq.pop().map_or(None, |eid| self.recv_from(ctx, eid))
-    }
-    fn recv_from(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointId> {
-        self.pipes.get_mut(&eid).map_or(None, |pipe| {
-            pipe.recv(ctx); 
-            Some(eid)
-        })
+        self.fq.pop().map_or(None, |eid| self.pipes.recv_from(ctx, eid))
     }
     fn on_recv_ready(&mut self, eid: EndpointId) {
         self.fq.activate(&eid)
@@ -487,8 +482,6 @@ impl Inner {
         self.backtrace.clear();
     }
     fn close(&mut self, ctx: &mut Context) {
-        for (_, pipe) in self.pipes.drain() {
-            pipe.close(ctx);
-        }
+        self.pipes.close_all(ctx)
     }
 }

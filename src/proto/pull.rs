@@ -4,7 +4,6 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 
@@ -13,6 +12,7 @@ use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
 use core::context::Context;
 use super::priolist::Priolist;
+use super::pipes::PipeCollection;
 use super::{Timeout, PUSH, PULL};
 use io_error::*;
 
@@ -29,7 +29,7 @@ enum State {
 
 struct Inner {
     reply_tx: Sender<Reply>,
-    pipes: HashMap<EndpointId, Pipe>,
+    pipes: PipeCollection,
     fq: Priolist
 }
 
@@ -64,7 +64,7 @@ impl From<Sender<Reply>> for Pull {
         Pull {
             inner: Inner {
                 reply_tx: tx,
-                pipes: HashMap::new(),
+                pipes: PipeCollection::new(),
                 fq: Priolist::new()
             },
             state: Some(State::Idle)
@@ -246,13 +246,7 @@ impl Inner {
     }
 
     fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
-        self.fq.pop().map_or(None, |eid| self.recv_from(ctx, eid))
-    }
-    fn recv_from(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointId> {
-        self.pipes.get_mut(&eid).map_or(None, |pipe| {
-            pipe.recv(ctx); 
-            Some(eid)
-        })
+        self.fq.pop().map_or(None, |eid| self.pipes.recv_from(ctx, eid))
     }
     fn on_recv_ready(&mut self, eid: EndpointId) {
         self.fq.activate(&eid)
@@ -271,9 +265,7 @@ impl Inner {
         self.fq.peek()
     }
     fn close(&mut self, ctx: &mut Context) {
-        for (_, pipe) in self.pipes.drain() {
-            pipe.close(ctx);
-        }
+        self.pipes.close_all(ctx)
     }
 }
 

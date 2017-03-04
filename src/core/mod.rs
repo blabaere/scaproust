@@ -17,6 +17,7 @@
 pub mod tests;
 
 use std::fmt;
+use std::hash::{BuildHasher, Hasher};
 
 #[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -226,4 +227,91 @@ impl From<Vec<u8>> for Message {
     fn from(value: Vec<u8>) -> Message {
         Message::from_body(value)
     }
+}
+
+/*****************************************************************************/
+/*                                                                           */
+/* Hash                                                                      */
+/*                                                                           */
+/*****************************************************************************/
+
+pub struct IdHasher(u64);
+
+impl Default for IdHasher {
+    fn default() -> IdHasher {
+        IdHasher(0)
+    }
+}
+
+impl Hasher for IdHasher {
+
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.0 = self.0.wrapping_add(i);
+    }
+
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        for x in bytes {
+            self.write_u64(*x as u64);
+        }
+    }
+    #[inline]
+    fn write_u8(&mut self, i: u8) {
+        self.write_u64(i as u64)
+    }
+    #[inline]
+    fn write_u16(&mut self, i: u16) {
+        self.write_u64(i as u64)
+    }
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.write_u64(i as u64)
+    }
+    #[inline]
+    fn write_usize(&mut self, i: usize) {
+        self.write_u64(i as u64)
+    }
+    #[inline]
+    fn write_i8(&mut self, i: i8) {
+        self.write_u64(i as u64)
+    }
+    #[inline]
+    fn write_i16(&mut self, i: i16) {
+        self.write_u64(i as u64)
+    }
+    #[inline]
+    fn write_i32(&mut self, i: i32) {
+        self.write_u64(i as u64)
+    }
+    #[inline]
+    fn write_i64(&mut self, i: i64) {
+        self.write_u64(i as u64)
+    }
+    #[inline]
+    fn write_isize(&mut self, i: isize) {
+        self.write_u64(i as u64)
+    }  
+}
+
+pub struct BuildIdHasher;
+
+impl Default for BuildIdHasher {
+    fn default() -> BuildIdHasher {
+        BuildIdHasher
+    }
+}
+
+impl BuildHasher for BuildIdHasher {
+    type Hasher = IdHasher;
+
+    #[inline]
+    fn build_hasher(&self) -> IdHasher {
+        IdHasher(0)
+    }     
 }

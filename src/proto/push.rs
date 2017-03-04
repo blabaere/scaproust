@@ -4,7 +4,6 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 
@@ -13,6 +12,7 @@ use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
 use core::context::Context;
 use super::priolist::Priolist;
+use super::pipes::PipeCollection;
 use super::{Timeout, PUSH, PULL};
 use io_error::*;
 
@@ -29,7 +29,7 @@ enum State {
 
 struct Inner {
     reply_tx: Sender<Reply>,
-    pipes: HashMap<EndpointId, Pipe>,
+    pipes: PipeCollection,
     lb: Priolist
 }
 
@@ -64,7 +64,7 @@ impl From<Sender<Reply>> for Push {
         Push {
             inner: Inner {
                 reply_tx: tx,
-                pipes: HashMap::new(),
+                pipes: PipeCollection::default(),
                 lb: Priolist::new()
             },
             state: Some(State::Idle)
@@ -240,13 +240,7 @@ impl Inner {
         self.pipes.remove(&eid)
     }
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>) -> Option<EndpointId> {
-        self.lb.pop().map_or(None, |eid| self.send_to(ctx, msg, eid))
-    }
-    fn send_to(&mut self, ctx: &mut Context, msg: Rc<Message>, eid: EndpointId) -> Option<EndpointId> {
-        self.pipes.get_mut(&eid).map_or(None, |pipe| {
-            pipe.send(ctx, msg); 
-            Some(eid)
-        })
+        self.lb.pop().map_or(None, |eid| self.pipes.send_to(ctx, msg, eid))
     }
     fn on_send_ready(&mut self, eid: EndpointId) {
         self.lb.activate(&eid)
@@ -272,10 +266,9 @@ impl Inner {
             ctx.cancel(sched);
         }
     }
+
     fn close(&mut self, ctx: &mut Context) {
-        for (_, pipe) in self.pipes.drain() {
-            pipe.close(ctx);
-        }
+        self.pipes.close_all(ctx)
     }
 }
 

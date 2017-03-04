@@ -17,6 +17,7 @@ pub mod surv;
 pub mod resp;
 pub mod bus;
 
+mod pipes;
 mod priolist;
 
 use core::Scheduled;

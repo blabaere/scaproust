@@ -13,7 +13,7 @@ use mio::{Token, Ready, PollOpt};
 use mio::timer::{Timer, Builder};
 use mio::channel::{Receiver};
 
-use core::{SocketId, EndpointId, DeviceId, ProbeId, session, socket, context, endpoint, device, probe};
+use core::{BuildIdHasher, SocketId, EndpointId, DeviceId, ProbeId, session, socket, context, endpoint, device, probe};
 use transport::{Transport, pipe, acceptor};
 use super::{Signal, Request, Task};
 use super::event_loop::{EventLoop, EventHandler};
@@ -44,7 +44,7 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     pub fn dispatch(
-        transports: HashMap<String, Box<Transport + Send>>,
+        transports: HashMap<String, Box<Transport + Send>, BuildIdHasher>,
         rx: Receiver<Request>,
         tx: Sender<session::Reply>) -> io::Result<()> {
 
@@ -53,7 +53,7 @@ impl Dispatcher {
         dispatcher.run()
     }
     pub fn new(
-        transports: HashMap<String, Box<Transport + Send>>,
+        transports: HashMap<String, Box<Transport + Send>, BuildIdHasher>,
         rx: Receiver<Request>, 
         tx: Sender<session::Reply>) -> Dispatcher {
 

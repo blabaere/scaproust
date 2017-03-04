@@ -10,7 +10,7 @@ use std::io;
 use std::boxed::FnBox;
 use std::time::Duration;
 
-use super::{SocketId, EndpointId, Message, EndpointTmpl, EndpointSpec, EndpointDesc, Scheduled };
+use super::{BuildIdHasher, SocketId, EndpointId, Message, EndpointTmpl, EndpointSpec, EndpointDesc, Scheduled };
 use super::endpoint::{Pipe, Acceptor};
 use super::config::{Config, ConfigOption};
 use super::context::{Context, Schedulable, Event};
@@ -38,8 +38,8 @@ pub struct Socket {
     id: SocketId,
     reply_sender: Sender<Reply>,
     protocol: Box<Protocol>,
-    pipes: HashMap<EndpointId, Pipe>,
-    acceptors: HashMap<EndpointId, Acceptor>,
+    pipes: HashMap<EndpointId, Pipe, BuildIdHasher>,
+    acceptors: HashMap<EndpointId, Acceptor, BuildIdHasher>,
     config: Config
 }
 
@@ -92,8 +92,8 @@ impl Socket {
             id: id,
             reply_sender: reply_tx,
             protocol: proto,
-            pipes: HashMap::new(),
-            acceptors: HashMap::new(),
+            pipes: HashMap::default(),
+            acceptors: HashMap::default(),
             config: Config::default()
         }
     }

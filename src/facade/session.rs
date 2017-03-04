@@ -49,14 +49,14 @@ impl RequestSender {
 /// Creates the session and starts the I/O thread.
 #[derive(Default)]
 pub struct SessionBuilder {
-    transports: HashMap<String, Box<Transport + Send>>
+    transports: HashMap<String, Box<Transport + Send>, core::BuildIdHasher>
 }
 
 impl SessionBuilder {
 
     pub fn new() -> SessionBuilder {
         SessionBuilder {
-            transports: HashMap::new()
+            transports: HashMap::with_hasher(core::BuildIdHasher)
         }
     }
 

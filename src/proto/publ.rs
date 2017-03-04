@@ -4,7 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 
@@ -12,12 +12,13 @@ use core::{EndpointId, Message};
 use core::socket::{Protocol, Reply};
 use core::endpoint::Pipe;
 use core::context::{Context, Event};
+use super::pipes::PipeCollection;
 use super::{Timeout, PUB, SUB};
 use io_error::*;
 
 pub struct Pub {
     reply_tx: Sender<Reply>,
-    pipes: HashMap<EndpointId, Pipe>,
+    pipes: PipeCollection,
     bc: HashSet<EndpointId>
 }
 
@@ -31,7 +32,7 @@ impl From<Sender<Reply>> for Pub {
     fn from(tx: Sender<Reply>) -> Pub {
         Pub {
             reply_tx: tx,
-            pipes: HashMap::new(),
+            pipes: PipeCollection::new(),
             bc: HashSet::new()
         }
     }
@@ -101,8 +102,6 @@ impl Protocol for Pub {
         false
     }
     fn close(&mut self, ctx: &mut Context) {
-        for (_, pipe) in self.pipes.drain() {
-            pipe.close(ctx);
-        }
+        self.pipes.close_all(ctx)
     }
 }

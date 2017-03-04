@@ -10,7 +10,7 @@ use std::sync::mpsc::Sender;
 use std::io::{Error, Result};
 use std::time::Duration;
 
-use super::{SocketId, PollReq, PollRes, Scheduled};
+use super::{BuildIdHasher, SocketId, PollReq, PollRes, Scheduled};
 
 pub enum Request {
     Poll(Duration),
@@ -41,13 +41,13 @@ pub struct Probe {
     poll_opts: Vec<PollReq>,
     recv_votes: Vec<Option<bool>>,
     send_votes: Vec<Option<bool>>,
-    sid_to_idx: HashMap<SocketId, usize>,
+    sid_to_idx: HashMap<SocketId, usize, BuildIdHasher>,
     timeout: Option<Scheduled>
 }
 
 impl Probe {
     pub fn new(reply_tx: Sender<Reply>, poll_opts: Vec<PollReq>) -> Probe {
-        let mut mappings = HashMap::new();
+        let mut mappings = HashMap::default();
         let mut recv_votes = Vec::with_capacity(poll_opts.len());
         let mut send_votes = Vec::with_capacity(poll_opts.len());
 

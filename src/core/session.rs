@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::mpsc;
 use std::io;
 
-use core::{SocketId, DeviceId, ProbeId, PollReq, socket, device, probe};
+use core::{BuildIdHasher, SocketId, DeviceId, ProbeId, PollReq, socket, device, probe};
 use sequence::Sequence;
 
 pub enum Request {
@@ -35,19 +35,19 @@ pub struct Session {
 
 struct SocketCollection {
     ids: Sequence,
-    sockets: HashMap<SocketId, socket::Socket>
+    sockets: HashMap<SocketId, socket::Socket, BuildIdHasher>
 }
 
 struct DeviceCollection {
     ids: Sequence,
-    mapping: HashMap<SocketId, DeviceId>,
-    devices: HashMap<DeviceId, device::Device>
+    mapping: HashMap<SocketId, DeviceId, BuildIdHasher>,
+    devices: HashMap<DeviceId, device::Device, BuildIdHasher>
 }
 
 struct ProbeCollection {
     ids: Sequence,
-    mapping: HashMap<SocketId, ProbeId>,
-    probes: HashMap<ProbeId, probe::Probe>
+    mapping: HashMap<SocketId, ProbeId, BuildIdHasher>,
+    probes: HashMap<ProbeId, probe::Probe, BuildIdHasher>
 }
 
 impl Session {
@@ -148,7 +148,7 @@ impl SocketCollection {
     fn new(seq: Sequence) -> SocketCollection {
         SocketCollection {
             ids: seq,
-            sockets: HashMap::new()
+            sockets: HashMap::default()
         }
     }
 
@@ -180,8 +180,8 @@ impl DeviceCollection {
     fn new(seq: Sequence) -> DeviceCollection {
         DeviceCollection {
             ids: seq,
-            mapping: HashMap::new(),
-            devices: HashMap::new()
+            mapping: HashMap::default(),
+            devices: HashMap::default()
         }
     }
 
@@ -226,8 +226,8 @@ impl ProbeCollection {
     fn new(seq: Sequence) -> ProbeCollection {
         ProbeCollection {
             ids: seq,
-            mapping: HashMap::new(),
-            probes: HashMap::new()
+            mapping: HashMap::default(),
+            probes: HashMap::default()
         }
     }
 

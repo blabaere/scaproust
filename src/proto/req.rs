@@ -4,7 +4,7 @@
 // or the MIT license <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your option.
 // This file may not be copied, modified, or distributed except according to those terms.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::mpsc::Sender;
 use std::io;
@@ -20,6 +20,7 @@ use core::config::ConfigOption;
 use core::endpoint::Pipe;
 use core::context::{Context, Schedulable};
 use super::priolist::Priolist;
+use super::pipes::PipeCollection;
 use super::{Timeout, REQ, REP};
 use io_error::*;
 
@@ -39,7 +40,7 @@ enum State {
 
 struct Inner {
     reply_tx: Sender<Reply>,
-    pipes: HashMap<EndpointId, Pipe>,
+    pipes: PipeCollection,
     lb: Priolist,
     fq: Priolist,
     rv: HashSet<EndpointId>,
@@ -384,7 +385,7 @@ impl Inner {
     fn new(tx: Sender<Reply>) -> Inner {
         Inner {
             reply_tx: tx,
-            pipes: HashMap::new(),
+            pipes: PipeCollection::new(),
             lb: Priolist::new(),
             fq: Priolist::new(),
             rv: HashSet::new(),
@@ -405,13 +406,7 @@ impl Inner {
         self.pipes.remove(&eid)
     }
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>) -> Option<EndpointId> {
-        self.lb.pop().map_or(None, |eid| self.send_to(ctx, msg, eid))
-    }
-    fn send_to(&mut self, ctx: &mut Context, msg: Rc<Message>, eid: EndpointId) -> Option<EndpointId> {
-        self.pipes.get_mut(&eid).map_or(None, |pipe| {
-            pipe.send(ctx, msg); 
-            Some(eid)
-        })
+        self.lb.pop().map_or(None, |eid| self.pipes.send_to(ctx, msg, eid))
     }
     fn on_send_ready(&mut self, eid: EndpointId) {
         self.lb.activate(&eid)
@@ -443,13 +438,7 @@ impl Inner {
     }
 
     fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
-        self.fq.pop().map_or(None, |eid| self.recv_from(ctx, eid))
-    }
-    fn recv_from(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointId> {
-        self.pipes.get_mut(&eid).map_or(None, |pipe| {
-            pipe.recv(ctx); 
-            Some(eid)
-        })
+        self.fq.pop().map_or(None, |eid| self.pipes.recv_from(ctx, eid))
     }
     fn recv_reply_from(&mut self, ctx: &mut Context, eid: EndpointId) -> bool {
         self.rv.remove(&eid);
@@ -522,9 +511,7 @@ impl Inner {
         self.resend_ivl = ivl;
     }
     fn close(&mut self, ctx: &mut Context) {
-        for (_, pipe) in self.pipes.drain() {
-            pipe.close(ctx);
-        }
+        self.pipes.close_all(ctx)
     }
 }
 
