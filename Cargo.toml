@@ -5,6 +5,7 @@ authors       = ["blabaere <benoit.labaere@gmail.com>"]
 description   = "Nanomsg scalability protocols implementation in rust. Various messaging patterns over pluggable transports"
 readme        = "README.md"
 keywords      = ["io", "nanomsg", "messaging", "protocol"]
+categories    = ["network-programming"]
 license       = "MIT/Apache-2.0"
 documentation = "https://blabaere.github.io/scaproust"
 homepage      = "https://github.com/blabaere/scaproust"
