@@ -17,6 +17,7 @@ use core::context::Context;
 use super::priolist::Priolist;
 use super::pipes::PipeCollection;
 use super::{Timeout, REQ, REP};
+use super::policy::fair_queue;
 use io_error::*;
 
 pub struct Rep {
@@ -388,7 +389,7 @@ impl Inner {
     }
 
     fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
-        self.fq.pop().map_or(None, |eid| self.pipes.recv_from(ctx, eid))
+        fair_queue::recv(&mut self.fq, &mut self.pipes, ctx)
     }
     fn on_recv_ready(&mut self, eid: EndpointId) {
         self.fq.activate(&eid)

@@ -22,6 +22,7 @@ use core::context::{Context, Schedulable};
 use super::priolist::Priolist;
 use super::pipes::PipeCollection;
 use super::{Timeout, SURVEYOR, RESPONDENT};
+use super::policy::{broadcast, fair_queue};
 use io_error::*;
 
 pub struct Surveyor {
@@ -359,9 +360,7 @@ impl Inner {
         self.pipes.remove(&eid)
     }
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>, timeout: Timeout) -> PendingSurvey {
-        for id in self.bc.drain() {
-            self.pipes.get_mut(&id).map(|pipe| pipe.send(ctx, msg.clone()));
-        }
+        broadcast::send_to_all(&mut self.bc, &mut self.pipes, ctx, msg);
 
         let _ = self.reply_tx.send(Reply::Send);
         if let Some(sched) = timeout {
@@ -381,7 +380,7 @@ impl Inner {
     }
 
     fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
-        self.fq.pop().map_or(None, |eid| self.pipes.recv_from(ctx, eid))
+        fair_queue::recv(&mut self.fq, &mut self.pipes, ctx)
     }
     fn recv_when_inactive(&mut self, ctx: &mut Context, timeout: Timeout) {
         let error = other_io_error("Can't recv: no active survey");

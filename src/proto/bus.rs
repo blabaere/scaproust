@@ -17,6 +17,7 @@ use core::context::Context;
 use super::priolist::Priolist;
 use super::pipes::PipeCollection;
 use super::{Timeout, BUS};
+use super::policy::{broadcast, fair_queue};
 use io_error::*;
 
 pub struct Bus {
@@ -271,15 +272,10 @@ impl Inner {
         }
     }
     fn send_to_all(&mut self, ctx: &mut Context, msg: Rc<Message>) {
-        for id in self.bc.drain() {
-            self.pipes.get_mut(&id).map(|pipe| pipe.send(ctx, msg.clone()));
-        }
+        broadcast::send_to_all(&mut self.bc, &mut self.pipes, ctx, msg)
     }
     fn send_to_all_except(&mut self, ctx: &mut Context, msg: Rc<Message>, except: EndpointId) {
-        for id in self.bc.drain().filter(|x| *x != except) {
-            self.pipes.get_mut(&id).map(|pipe| pipe.send(ctx, msg.clone()));
-        }
-        self.bc.insert(except);
+        broadcast::send_to_all_except(&mut self.bc, &mut self.pipes, ctx, msg, except)
     }
     fn on_send_ready(&mut self, _: &mut Context, eid: EndpointId) {
         self.bc.insert(eid);
@@ -289,7 +285,7 @@ impl Inner {
     }
 
     fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
-        self.fq.pop().map_or(None, |eid| self.pipes.recv_from(ctx, eid))
+        fair_queue::recv(&mut self.fq, &mut self.pipes, ctx)
     }
     fn on_recv_ready(&mut self, eid: EndpointId) {
         self.fq.activate(&eid)

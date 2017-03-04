@@ -22,6 +22,7 @@ use core::context::{Context, Schedulable};
 use super::priolist::Priolist;
 use super::pipes::PipeCollection;
 use super::{Timeout, REQ, REP};
+use super::policy::{load_balancing, fair_queue};
 use io_error::*;
 
 pub struct Req {
@@ -406,7 +407,7 @@ impl Inner {
         self.pipes.remove(&eid)
     }
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>) -> Option<EndpointId> {
-        self.lb.pop().map_or(None, |eid| self.pipes.send_to(ctx, msg, eid))
+        load_balancing::send(&mut self.lb, &mut self.pipes, ctx, msg)
     }
     fn on_send_ready(&mut self, eid: EndpointId) {
         self.lb.activate(&eid)
@@ -438,7 +439,7 @@ impl Inner {
     }
 
     fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
-        self.fq.pop().map_or(None, |eid| self.pipes.recv_from(ctx, eid))
+        fair_queue::recv(&mut self.fq, &mut self.pipes, ctx)
     }
     fn recv_reply_from(&mut self, ctx: &mut Context, eid: EndpointId) -> bool {
         self.rv.remove(&eid);

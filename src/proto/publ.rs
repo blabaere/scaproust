@@ -14,6 +14,7 @@ use core::endpoint::Pipe;
 use core::context::{Context, Event};
 use super::pipes::PipeCollection;
 use super::{Timeout, PUB, SUB};
+use super::policy::broadcast;
 use io_error::*;
 
 pub struct Pub {
@@ -61,10 +62,7 @@ impl Protocol for Pub {
     fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Timeout) {
         let msg = Rc::new(msg);
 
-        for id in self.bc.drain() {
-            self.pipes.get_mut(&id).map(|pipe| pipe.send(ctx, msg.clone()));
-        }
-
+        broadcast::send_to_all(&mut self.bc, &mut self.pipes, ctx, msg);
         ctx.raise(Event::CanSend(false));
 
         let _ = self.reply_tx.send(Reply::Send);

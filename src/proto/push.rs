@@ -14,6 +14,7 @@ use core::context::Context;
 use super::priolist::Priolist;
 use super::pipes::PipeCollection;
 use super::{Timeout, PUSH, PULL};
+use super::policy::load_balancing;
 use io_error::*;
 
 pub struct Push {
@@ -240,7 +241,7 @@ impl Inner {
         self.pipes.remove(&eid)
     }
     fn send(&mut self, ctx: &mut Context, msg: Rc<Message>) -> Option<EndpointId> {
-        self.lb.pop().map_or(None, |eid| self.pipes.send_to(ctx, msg, eid))
+        load_balancing::send(&mut self.lb, &mut self.pipes, ctx, msg)
     }
     fn on_send_ready(&mut self, eid: EndpointId) {
         self.lb.activate(&eid)

@@ -19,6 +19,7 @@ pub mod bus;
 
 mod pipes;
 mod priolist;
+mod policy;
 
 use core::Scheduled;
 
