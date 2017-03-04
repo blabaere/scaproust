@@ -28,7 +28,7 @@ First, add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scaproust = "0.2.0"
+scaproust = "0.3.0"
 ```
 
 Next, add this to your crate:
