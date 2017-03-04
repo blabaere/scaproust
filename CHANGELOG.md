@@ -1,5 +1,7 @@
 ## Unreleased
 
+## 0.3.0
+
 ### Added
 - IPC transport on Windows, using named pipes.
 
