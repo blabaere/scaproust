@@ -17,3 +17,6 @@ master.zip
 
 # Cargo or VSCode ?
 **/*.swp
+
+# VSCode
+.vscode
