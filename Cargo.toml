@@ -1,6 +1,6 @@
 [package]
 name          = "scaproust"
-version       = "0.2.0"
+version       = "0.3.0"
 authors       = ["blabaere <benoit.labaere@gmail.com>"]
 description   = "Nanomsg scalability protocols implementation in rust. Various messaging patterns over pluggable transports"
 readme        = "README.md"
