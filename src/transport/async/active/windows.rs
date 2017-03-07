@@ -97,8 +97,8 @@ impl<S : AsyncPipeStub> Active<S> {
 
     fn hang_up_changed(&mut self, hup: bool) -> Result<()> {
         if hup {
-            self.writable = false;
-            self.readable = false;
+            self.can_send_msg = false;
+            self.can_recv_msg = false;
             Err(other_io_error("hup"))
         } else {
             Ok(())
