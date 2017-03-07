@@ -121,7 +121,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
         let progress = self.stub.start_send(msg);
         let res = self.on_send_progress(ctx, progress);
 
-        self.writable = false;
+        self.can_send_msg = false;
 
         no_transition_if_ok(self, ctx, res)
     }
@@ -129,7 +129,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
         let progress = self.stub.start_recv();
         let res = self.on_recv_progress(ctx, progress);
 
-        self.readable = false;
+        self.can_recv_msg = false;
 
         no_transition_if_ok(self, ctx, res)
     }
@@ -272,7 +272,7 @@ mod tests {
 
         let evt = &ctx.get_raised_events()[0];
         let is_can_send = match *evt {
-            pipe::Event::CanSend => true,
+            pipe::Event::CanSend(x) => x,
             _ => false,
         };
 
@@ -385,7 +385,7 @@ mod tests {
 
         let evt = &ctx.get_raised_events()[0];
         let is_can_recv = match *evt {
-            pipe::Event::CanRecv => true,
+            pipe::Event::CanRecv(x) => x,
             _ => false,
         };
 
