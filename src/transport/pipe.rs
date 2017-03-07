@@ -23,8 +23,8 @@ pub enum Command {
 pub enum Event {
     Opened,
     Closed,
-    CanSend,
-    CanRecv,
+    CanSend(bool),
+    CanRecv(bool),
     Sent,
     Received(Message),
     Error(io::Error)
@@ -70,8 +70,8 @@ impl Event {
         match *self {
             Event::Opened      => "Opened",
             Event::Closed      => "Closed",
-            Event::CanSend     => "CanSend",
-            Event::CanRecv     => "CanRecv",
+            Event::CanSend(_)  => "CanSend",
+            Event::CanRecv(_)  => "CanRecv",
             Event::Sent        => "Sent",
             Event::Received(_) => "Received",
             Event::Error(_)    => "Error",

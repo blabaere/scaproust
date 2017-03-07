@@ -18,16 +18,16 @@ use io_error::*;
 
 pub struct Active<S> {
     stub: S,
-    writable: bool,
-    readable: bool
+    can_send_msg: bool,
+    can_recv_msg: bool
 }
 
 impl<S : AsyncPipeStub> Active<S> {
     pub fn new(s: S) -> Active<S> {
         Active {
             stub: s,
-            writable: false,
-            readable: false
+            can_send_msg: false,
+            can_recv_msg: false
         }
     }
     
@@ -44,19 +44,26 @@ impl<S : AsyncPipeStub> Active<S> {
     }
     fn writable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
         if events.is_writable() == false {
-            return Ok(());
+            return Ok(self.change_can_send(ctx, false));
         }
+
         if self.stub.has_pending_send() {
             let progress = self.stub.resume_send();
 
             return self.on_send_progress(ctx, progress);
         }
-        if events.is_hup() == false && self.writable == false {
-            self.writable = true;
-            ctx.raise(Event::CanSend);
+
+        if events.is_hup() == false {
+            return Ok(self.change_can_send(ctx, true));
         }
 
         Ok(())
+    }
+    fn change_can_send(&mut self, ctx: &mut Context, can_send: bool) {
+        if self.can_send_msg != can_send {
+            self.can_send_msg = can_send;
+            ctx.raise(Event::CanSend(can_send));
+        }
     }
 
     fn on_recv_progress(&mut self, ctx: &mut Context, progress: Result<Option<Message>>) -> Result<()> {
@@ -67,19 +74,25 @@ impl<S : AsyncPipeStub> Active<S> {
     }
     fn readable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
         if events.is_readable() == false {
-            return Ok(());
+            return Ok(self.change_can_recv(ctx, false));
         }
+
         if self.stub.has_pending_recv() {
             let progress = self.stub.resume_recv();
-
             return self.on_recv_progress(ctx, progress);
         }
-        if events.is_hup() == false && self.readable == false {
-            self.readable = true;
-            ctx.raise(Event::CanRecv);
+        
+        if events.is_hup() == false {
+            return Ok(self.change_can_recv(ctx, true));
         }
 
         Ok(())
+    }
+    fn change_can_recv(&mut self, ctx: &mut Context, can_recv: bool) {
+        if self.can_recv_msg != can_recv {
+            self.can_recv_msg = can_recv;
+            ctx.raise(Event::CanRecv(can_recv));
+        }
     }
 
     fn hang_up_changed(&mut self, hup: bool) -> Result<()> {

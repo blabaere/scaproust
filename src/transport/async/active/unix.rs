@@ -16,18 +16,22 @@ use transport::async::dead::Dead;
 use transport::pipe::{Event, Context};
 use io_error::*;
 
+// pipe readiness value is different from the underlying I/O readiness
+// because while an operation is in progress, must be finished
+// before being able to start another one. 
+
 pub struct Active<S> {
     stub: S,
-    should_raise_can_send: bool,
-    should_raise_can_recv: bool
+    can_send_msg: bool,
+    can_recv_msg: bool
 }
 
 impl<S : AsyncPipeStub> Active<S> {
     pub fn new(s: S) -> Active<S> {
         Active {
             stub: s,
-            should_raise_can_send: true,
-            should_raise_can_recv: true
+            can_send_msg: false,
+            can_recv_msg: false
         }
     }
     fn on_send_progress(&mut self, ctx: &mut Context, progress: Result<bool>) -> Result<()> {
@@ -38,19 +42,25 @@ impl<S : AsyncPipeStub> Active<S> {
     }
     fn writable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
         if events.is_writable() == false {
-            return Ok(());
+            return Ok(self.change_can_send(ctx, false));
         }
+
         if self.stub.has_pending_send() {
             let progress = self.stub.resume_send();
-
             return self.on_send_progress(ctx, progress);
         }
-        if events.is_hup() == false && self.should_raise_can_send {
-            self.should_raise_can_send = false;
-            ctx.raise(Event::CanSend);
+
+        if events.is_hup() == false {
+            return Ok(self.change_can_send(ctx, true));
         }
 
         Ok(())
+    }
+    fn change_can_send(&mut self, ctx: &mut Context, can_send: bool) {
+        if self.can_send_msg != can_send {
+            self.can_send_msg = can_send;
+            ctx.raise(Event::CanSend(can_send));
+        }
     }
 
     fn on_recv_progress(&mut self, ctx: &mut Context, progress: Result<Option<Message>>) -> Result<()> {
@@ -61,25 +71,31 @@ impl<S : AsyncPipeStub> Active<S> {
     }
     fn readable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
         if events.is_readable() == false {
-            return Ok(());
+            return Ok(self.change_can_recv(ctx, false));
         }
+
         if self.stub.has_pending_recv() {
             let progress = self.stub.resume_recv();
-
             return self.on_recv_progress(ctx, progress);
         }
-        if events.is_hup() == false && self.should_raise_can_recv {
-            self.should_raise_can_recv = false;
-            ctx.raise(Event::CanRecv);
+
+        if events.is_hup() == false {
+            return Ok(self.change_can_recv(ctx, true));
         }
 
         Ok(())
     }
+    fn change_can_recv(&mut self, ctx: &mut Context, can_recv: bool) {
+        if self.can_recv_msg != can_recv {
+            self.can_recv_msg = can_recv;
+            ctx.raise(Event::CanRecv(can_recv));
+        }
+    }
 
     fn hang_up_changed(&mut self, hup: bool) -> Result<()> {
         if hup {
-            self.should_raise_can_send = false;
-            self.should_raise_can_recv = false;
+            self.can_send_msg = false;
+            self.can_recv_msg = false;
             Err(other_io_error("hup"))
         } else {
             Ok(())
@@ -100,7 +116,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
         box Dead
     }
     fn send(mut self: Box<Self>, ctx: &mut Context, msg: Rc<Message>) -> Box<PipeState<S>> {
-        self.should_raise_can_send = true;
+        self.can_send_msg = false;
 
         let progress = self.stub.start_send(msg);
         let res = self.on_send_progress(ctx, progress);
@@ -108,7 +124,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
         no_transition_if_ok(self, ctx, res)
     }
     fn recv(mut self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
-        self.should_raise_can_recv = true;
+        self.can_recv_msg = false;
 
         let progress = self.stub.start_recv();
         let res = self.on_recv_progress(ctx, progress);
@@ -252,7 +268,7 @@ mod tests {
 
         let evt = &ctx.get_raised_events()[0];
         let is_can_send = match *evt {
-            pipe::Event::CanSend => true,
+            pipe::Event::CanSend(x) => x,
             _ => false,
         };
 
@@ -365,7 +381,7 @@ mod tests {
 
         let evt = &ctx.get_raised_events()[0];
         let is_can_recv = match *evt {
-            pipe::Event::CanRecv => true,
+            pipe::Event::CanRecv(x) => x,
             _ => false,
         };
 
