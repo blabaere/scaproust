@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::io;
-use std::boxed::FnBox;
 use std::time::Duration;
 
 use super::{BuildIdHasher, SocketId, EndpointId, Message, EndpointTmpl, EndpointSpec, EndpointDesc, Scheduled };

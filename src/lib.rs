@@ -53,7 +53,6 @@
 
 #![feature(box_syntax)]
 #![feature(stmt_expr_attributes)]
-#![feature(conservative_impl_trait)]
 
 #![cfg_attr(feature = "cargo-clippy", allow(boxed_local))]
 #![cfg_attr(feature = "cargo-clippy", allow(bool_comparison))]
