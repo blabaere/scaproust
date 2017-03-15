@@ -52,7 +52,6 @@
 
 
 #![feature(box_syntax)]
-#![feature(fnbox)]
 #![feature(stmt_expr_attributes)]
 #![feature(conservative_impl_trait)]
 

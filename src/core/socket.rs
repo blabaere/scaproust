@@ -78,7 +78,7 @@ pub trait Protocol {
     fn close(&mut self, ctx: &mut Context);
 }
 
-pub type ProtocolCtor = Box<FnBox(Sender<Reply>) -> Box<Protocol> + Send>;
+pub type ProtocolCtor = Box<Fn(Sender<Reply>) -> Box<Protocol> + Send>;
 
 /*****************************************************************************/
 /*                                                                           */
