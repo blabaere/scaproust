@@ -14,135 +14,138 @@ pub use scaproust::*;
 pub use super::urls;
 pub use super::{make_session, make_timeout, sleep_some};
 
-describe! can {
+fn before_each() -> (Session, Option<Duration>) {
+    let _ = ::env_logger::init();
+    let session = make_session();
+    let timeout = make_timeout();
 
-    before_each {
-        let _ = ::env_logger::init();
-        let mut session = make_session();
-        let timeout = make_timeout();
-    }
+    (session, timeout)
+}
 
-    it "relay messages" {
-        let mut server = session.create_socket::<Bus>().expect("Failed to create socket !");
-        let mut client1 = session.create_socket::<Bus>().expect("Failed to create socket !");
-        let mut client2 = session.create_socket::<Bus>().expect("Failed to create socket !");
-        let url = urls::tcp::get();
+#[test]
+fn relay_messages() {
+    let (mut session, timeout) = before_each();
+    let mut server = session.create_socket::<Bus>().expect("Failed to create socket !");
+    let mut client1 = session.create_socket::<Bus>().expect("Failed to create socket !");
+    let mut client2 = session.create_socket::<Bus>().expect("Failed to create socket !");
+    let url = urls::tcp::get();
 
-        server.bind(&url).unwrap();
-        client1.connect(&url).unwrap();
-        client2.connect(&url).unwrap();
+    server.bind(&url).unwrap();
+    client1.connect(&url).unwrap();
+    client2.connect(&url).unwrap();
 
-        client1.set_send_timeout(timeout).unwrap();
-        client2.set_send_timeout(timeout).unwrap();
-        client1.set_recv_timeout(timeout).unwrap();
-        client2.set_recv_timeout(timeout).unwrap();
+    client1.set_send_timeout(timeout).unwrap();
+    client2.set_send_timeout(timeout).unwrap();
+    client1.set_recv_timeout(timeout).unwrap();
+    client2.set_recv_timeout(timeout).unwrap();
 
-        sleep_some();
+    sleep_some();
 
-        let device = session.create_relay_device(server).unwrap();
-        let device_thread = thread::spawn(move || device.run());
+    let device = session.create_relay_device(server).unwrap();
+    let device_thread = thread::spawn(move || device.run());
 
-        sleep_some();
+    sleep_some();
 
-        client1.send(vec![65, 66, 67]).unwrap();
-        let received = client2.recv().unwrap();
-        assert_eq!(vec![65, 66, 67], received);
+    client1.send(vec![65, 66, 67]).unwrap();
+    let received = client2.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received);
 
-        let err = client1.recv().unwrap_err();
-        assert_eq!(io::ErrorKind::TimedOut, err.kind());
+    let err = client1.recv().unwrap_err();
+    assert_eq!(io::ErrorKind::TimedOut, err.kind());
 
-        drop(session); // this is required to stop the device
-        device_thread.join().unwrap().unwrap_err();
-    }
+    drop(session); // this is required to stop the device
+    device_thread.join().unwrap().unwrap_err();
+}
 
-    it "forward messages" {
+#[test]
+fn forward_messages() {
+    let (mut session, timeout) = before_each();
+    let mut d_push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let mut d_pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+    let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
 
-        let mut d_push = session.create_socket::<Push>().expect("Failed to create socket !");
-        let mut d_pull = session.create_socket::<Pull>().expect("Failed to create socket !");
-        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
-        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+    let d_push_url = urls::tcp::get();
+    let d_pull_url = urls::tcp::get();
 
-        let d_push_url = urls::tcp::get();
-        let d_pull_url = urls::tcp::get();
+    d_push.bind(&d_push_url).unwrap();
+    d_pull.bind(&d_pull_url).unwrap();
 
-        d_push.bind(&d_push_url).unwrap();
-        d_pull.bind(&d_pull_url).unwrap();
+    push.set_send_timeout(timeout).unwrap();
+    pull.set_recv_timeout(timeout).unwrap();
 
-        push.set_send_timeout(timeout).unwrap();
-        pull.set_recv_timeout(timeout).unwrap();
+    let barrier = Arc::new(Barrier::new(2));
+    let d_barrier = barrier.clone();
+    let device = session.create_bridge_device(d_pull, d_push).unwrap();
+    let device_thread = thread::spawn(move || {
+        d_barrier.wait();
+        let res = device.run();
+        res
+    });
 
-        let barrier = Arc::new(Barrier::new(2));
-        let d_barrier = barrier.clone();
-        let device = session.create_bridge_device(d_pull, d_push).unwrap();
-        let device_thread = thread::spawn(move || {
-            d_barrier.wait();
-            let res = device.run();
-            res
-        });
+    barrier.wait();
+    sleep_some();
 
-        barrier.wait();
-        sleep_some();
+    push.connect(&d_pull_url).unwrap();
+    pull.connect(&d_push_url).unwrap();
+    sleep_some();
 
-        push.connect(&d_pull_url).unwrap();
-        pull.connect(&d_push_url).unwrap();
-        sleep_some();
+    push.send(vec![65, 66, 67]).expect("Push should have sent a message");
+    let received = pull.recv().expect("Pull should have received a message");
+    assert_eq!(vec![65, 66, 67], received);
 
-        push.send(vec![65, 66, 67]).expect("Push should have sent a message");
-        let received = pull.recv().expect("Pull should have received a message");
-        assert_eq!(vec![65, 66, 67], received);
+    let err = pull.recv().unwrap_err();
+    assert_eq!(io::ErrorKind::TimedOut, err.kind());
 
-        let err = pull.recv().unwrap_err();
-        assert_eq!(io::ErrorKind::TimedOut, err.kind());
+    drop(session);
+    device_thread.join().unwrap().unwrap_err();
+}
 
-        drop(session);
-        device_thread.join().unwrap().unwrap_err();
-    }
+#[test]
+fn forward_messages_back_and_forth() {
+    let (mut session, timeout) = before_each();
+    let mut d_req = session.create_socket::<Req>().expect("Failed to create socket !");
+    let mut d_rep = session.create_socket::<Rep>().expect("Failed to create socket !");
+    let mut req = session.create_socket::<Req>().expect("Failed to create socket !");
+    let mut rep = session.create_socket::<Rep>().expect("Failed to create socket !");
 
-    it "forward messages back and forth" {
+    let d_req_url = urls::tcp::get();
+    let d_rep_url = urls::tcp::get();
 
-        let mut d_req = session.create_socket::<Req>().expect("Failed to create socket !");
-        let mut d_rep = session.create_socket::<Rep>().expect("Failed to create socket !");
-        let mut req = session.create_socket::<Req>().expect("Failed to create socket !");
-        let mut rep = session.create_socket::<Rep>().expect("Failed to create socket !");
+    d_req.bind(&d_req_url).unwrap();
+    d_rep.bind(&d_rep_url).unwrap();
 
-        let d_req_url = urls::tcp::get();
-        let d_rep_url = urls::tcp::get();
+    req.set_send_timeout(timeout).unwrap();
+    req.set_recv_timeout(timeout).unwrap();
+    rep.set_send_timeout(timeout).unwrap();
+    rep.set_recv_timeout(timeout).unwrap();
 
-        d_req.bind(&d_req_url).unwrap();
-        d_rep.bind(&d_rep_url).unwrap();
+    let barrier = Arc::new(Barrier::new(2));
+    let d_barrier = barrier.clone();
+    let device = session.create_bridge_device(d_rep, d_req).unwrap();
+    let device_thread = thread::spawn(move || {
+        d_barrier.wait();
+        let res = device.run();
+        res
+    });
 
-        req.set_send_timeout(timeout).unwrap();
-        req.set_recv_timeout(timeout).unwrap();
-        rep.set_send_timeout(timeout).unwrap();
-        rep.set_recv_timeout(timeout).unwrap();
+    barrier.wait();
+    sleep_some();
 
-        let barrier = Arc::new(Barrier::new(2));
-        let d_barrier = barrier.clone();
-        let device = session.create_bridge_device(d_rep, d_req).unwrap();
-        let device_thread = thread::spawn(move || {
-            d_barrier.wait();
-            let res = device.run();
-            res
-        });
+    req.connect(&d_rep_url).unwrap();
+    rep.connect(&d_req_url).unwrap();
+    sleep_some();
 
-        barrier.wait();
-        sleep_some();
+    let sent_request = vec![65, 66, 67];
+    req.send(sent_request).expect("Req should have sent a request");
+    let received_request = rep.recv().expect("Rep should have received a request");
+    assert_eq!(vec![65, 66, 67], received_request);
 
-        req.connect(&d_rep_url).unwrap();
-        rep.connect(&d_req_url).unwrap();
-        sleep_some();
+    let sent_reply = vec![66, 65, 67];
+    rep.send(sent_reply).expect("Rep should have sent a reply");
+    let received_reply = req.recv().expect("Req should have received a reply");
+    assert_eq!(vec![66, 65, 67], received_reply);
 
-        let sent_request = vec![65, 66, 67];
-        req.send(sent_request).expect("Req should have sent a request");
-        let received_request = rep.recv().expect("Rep should have received a request");
-        assert_eq!(vec![65, 66, 67], received_request);
-
-        let sent_reply = vec![66, 65, 67];
-        rep.send(sent_reply).expect("Rep should have sent a reply");
-        let received_reply = req.recv().expect("Req should have received a reply");
-        assert_eq!(vec![66, 65, 67], received_reply);
-
-        drop(session);
-        device_thread.join().unwrap().unwrap_err();
-    }
+    drop(session);
+    device_thread.join().unwrap().unwrap_err();
 }

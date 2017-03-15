@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn on_enter_an_event_is_raised() {
-        let mut state = box Dead as Box<PipeState<TestStepStream>>;
+        let mut state = Box::new(Dead) as Box<PipeState<TestStepStream>>;
         let mut ctx = TestPipeContext::new();
 
         state.enter(&mut ctx);

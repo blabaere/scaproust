@@ -49,7 +49,7 @@ mod tests {
     #[test]
     fn open_should_cause_transition_to_handshake() {
         let stub = TestStepStream::new();
-        let state = box Initial::new(stub, (1, 1));
+        let state = Box::new(Initial::new(stub, (1, 1)));
         let mut ctx = TestPipeContext::new();
         let new_state = state.open(&mut ctx);
 
@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn close_should_cause_a_transition_to_dead() {
         let stub = TestStepStream::new();
-        let state = box Initial::new(stub, (1, 1));
+        let state = Box::new(Initial::new(stub, (1, 1)));
         let mut ctx = TestPipeContext::new();
         let new_state = state.close(&mut ctx);
 

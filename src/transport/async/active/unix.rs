@@ -161,7 +161,7 @@ mod tests {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
-        let mut state = box Active::new(stub);
+        let mut state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
 
         state.enter(&mut ctx);
@@ -190,7 +190,7 @@ mod tests {
     #[test]
     fn close_should_deregister_and_cause_a_transition_to_dead() {
         let stub = TestStepStream::new();
-        let state = box Active::new(stub);
+        let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
         let new_state = state.close(&mut ctx);
 
@@ -206,7 +206,7 @@ mod tests {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stub);
+        let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
         let payload = vec!(66, 65, 67);
         let msg = Rc::new(Message::from_body(payload));
@@ -228,7 +228,7 @@ mod tests {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stub);
+        let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
 
         sensor.borrow_mut().set_start_send_result(Some(false));
@@ -259,7 +259,7 @@ mod tests {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stub);
+        let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
         let events = mio::Ready::writable();
         let new_state = state.ready(&mut ctx, events);
@@ -280,7 +280,7 @@ mod tests {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stub);
+        let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
         let events = mio::Ready::writable();
         let new_state = state.ready(&mut ctx, events);
@@ -297,7 +297,7 @@ mod tests {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stub);
+        let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
         let events = mio::Ready::writable() | mio::Ready::hup();
         let new_state = state.ready(&mut ctx, events);
@@ -318,7 +318,7 @@ mod tests {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stub);
+        let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
         let payload = vec!(66, 65, 67);
         let msg = Message::from_body(payload);
@@ -342,7 +342,7 @@ mod tests {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stub);
+        let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
         let payload = vec!(66, 65, 67);
         let msg = Message::from_body(payload);
@@ -372,7 +372,7 @@ mod tests {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stub);
+        let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
         let events = mio::Ready::readable();
         let new_state = state.ready(&mut ctx, events);
@@ -393,7 +393,7 @@ mod tests {
         let sensor_srv = TestStepStreamSensor::new();
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
-        let state = box Active::new(stub);
+        let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
         let events = mio::Ready::readable() | mio::Ready::hup();
         let new_state = state.ready(&mut ctx, events);

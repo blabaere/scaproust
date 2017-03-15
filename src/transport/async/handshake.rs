@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn on_enter_tx_should_register() {
         let stub = TestStepStream::new();
-        let mut state = box HandshakeTx::new(stub, (4, 2));
+        let mut state = Box::new(HandshakeTx::new(stub, (4, 2)));
         let mut ctx = TestPipeContext::new();
 
         state.enter(&mut ctx);
@@ -149,7 +149,7 @@ mod tests {
     #[test]
     fn tx_close_should_deregister_and_cause_a_transition_to_dead() {
         let stub = TestStepStream::new();
-        let state = box HandshakeTx::new(stub, (1, 1));
+        let state = Box::new(HandshakeTx::new(stub, (1, 1)));
         let mut ctx = TestPipeContext::new();
         let new_state = state.close(&mut ctx);
 
@@ -166,7 +166,7 @@ mod tests {
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
         let pids = (4, 2);
-        let state = box HandshakeTx::new(stub, pids);
+        let state = Box::new(HandshakeTx::new(stub, pids));
         let mut ctx = TestPipeContext::new();
         let events = mio::Ready::writable();
         let new_state = state.ready(&mut ctx, events);
@@ -180,7 +180,7 @@ mod tests {
     #[test]
     fn on_enter_rx_should_reregister() {
         let stub = TestStepStream::new();
-        let mut state = box HandshakeRx::new(stub, (4, 2));
+        let mut state = Box::new(HandshakeRx::new(stub, (4, 2)));
         let mut ctx = TestPipeContext::new();
 
         state.enter(&mut ctx);
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn rx_close_should_deregister_and_cause_a_transition_to_dead() {
         let stub = TestStepStream::new();
-        let state = box HandshakeRx::new(stub, (1, 1));
+        let state = Box::new(HandshakeRx::new(stub, (1, 1)));
         let mut ctx = TestPipeContext::new();
         let new_state = state.close(&mut ctx);
 
@@ -217,7 +217,7 @@ mod tests {
         let sensor = Rc::new(RefCell::new(sensor_srv));
         let stub = TestStepStream::with_sensor(sensor.clone());
         let pids = (6, 6);
-        let state = box HandshakeRx::new(stub, pids);
+        let state = Box::new(HandshakeRx::new(stub, pids));
         let mut ctx = TestPipeContext::new();
         let events = mio::Ready::readable();
         let new_state = state.ready(&mut ctx, events);
