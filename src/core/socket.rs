@@ -396,9 +396,11 @@ impl Socket {
         self.config.send_timeout
     }
 
-    pub fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
-        #[cfg(debug_assertions)] debug!("[{:?}] send ready ep {:?}", ctx, eid);
-        self.protocol.on_send_ready(ctx, eid)
+    pub fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId, ready: bool) {
+        #[cfg(debug_assertions)] debug!("[{:?}] ep {:?} send ready: {} ", ctx, eid, ready);
+        if ready {
+            self.protocol.on_send_ready(ctx, eid)
+        }
     }
 
 /*****************************************************************************/
@@ -446,9 +448,11 @@ impl Socket {
         self.config.recv_timeout
     }
 
-    pub fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
-        #[cfg(debug_assertions)] debug!("[{:?}] recv ready ep {:?}", ctx, eid);
-        self.protocol.on_recv_ready(ctx, eid)
+    pub fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId, ready: bool) {
+        #[cfg(debug_assertions)] debug!("[{:?}] ep {:?} recv ready: {}", ctx, eid, ready);
+        if ready {
+            self.protocol.on_recv_ready(ctx, eid)
+        }
     }
 
 /*****************************************************************************/

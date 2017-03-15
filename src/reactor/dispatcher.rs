@@ -271,9 +271,9 @@ impl Dispatcher {
     fn process_pipe_evt(&mut self, _: &mut EventLoop, sid: SocketId, eid: EndpointId, evt: pipe::Event) {
         match evt {
             pipe::Event::Opened        => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_opened(ctx, eid)),
-            pipe::Event::CanSend(_)    => self.apply_on_socket(sid, |socket, ctx| socket.on_send_ready(ctx, eid)),
+            pipe::Event::CanSend(x)    => self.apply_on_socket(sid, |socket, ctx| socket.on_send_ready(ctx, eid, x)),
             pipe::Event::Sent          => self.apply_on_socket(sid, |socket, ctx| socket.on_send_ack(ctx, eid)),
-            pipe::Event::CanRecv(_)    => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_ready(ctx, eid)),
+            pipe::Event::CanRecv(x)    => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_ready(ctx, eid, x)),
             pipe::Event::Received(msg) => self.apply_on_socket(sid, |socket, ctx| socket.on_recv_ack(ctx, eid, msg)),
             pipe::Event::Error(err)    => self.apply_on_socket(sid, |socket, ctx| socket.on_pipe_error(ctx, eid, err)),
             pipe::Event::Closed        => self.endpoints.remove_pipe(eid)
