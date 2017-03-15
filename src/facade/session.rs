@@ -142,7 +142,7 @@ impl Session {
 
     /// Creates a loopback device that loops and sends any messages received from the socket back to itself.
     pub fn create_relay_device(&self, socket: socket::Socket) -> io::Result<Box<device::Device>> {
-        Ok(box device::Relay::new(socket))
+        Ok(Box::new(device::Relay::new(socket)))
     }
 
     /// Creates a bridge device to forward messages between two sockets. 
@@ -159,7 +159,7 @@ impl Session {
                 let sender = self.request_sender.device_sender(id);
                 let bridge = device::Bridge::new(sender, rx, left, right);
                 
-                Ok(box bridge)
+                Ok(Box::new(bridge))
             },
             Reply::Err(e) => Err(e),
             _ => self.unexpected_reply()

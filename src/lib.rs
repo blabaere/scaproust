@@ -51,9 +51,6 @@
 #![doc(html_root_url = "https://blabaere.github.io/scaproust/")]
 
 
-#![feature(box_syntax)]
-#![feature(stmt_expr_attributes)]
-
 #![cfg_attr(feature = "cargo-clippy", allow(boxed_local))]
 #![cfg_attr(feature = "cargo-clippy", allow(bool_comparison))]
 #![cfg_attr(feature = "cargo-clippy", allow(len_without_is_empty))]

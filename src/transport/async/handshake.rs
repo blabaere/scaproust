@@ -52,7 +52,7 @@ impl<S : AsyncPipeStub> PipeState<S> for HandshakeTx<S> {
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         ctx.deregister(self.stub.deref());
 
-        box Dead
+        Box::new(Dead)
     }
     fn ready(mut self: Box<Self>, ctx: &mut Context, events: Ready) -> Box<PipeState<S>> {
         if events.is_writable() {
@@ -101,7 +101,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for HandshakeRx<S> {
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         ctx.deregister(self.stub.deref());
 
-        box Dead
+        Box::new(Dead)
     }
     fn ready(mut self: Box<Self>, ctx: &mut Context, events: Ready) -> Box<PipeState<S>> {
         if events.is_readable() {

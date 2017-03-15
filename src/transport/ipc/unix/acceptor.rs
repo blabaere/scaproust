@@ -62,7 +62,7 @@ impl IpcAcceptor {
     fn create_pipe(&self, stream: UnixStream) -> Box<pipe::Pipe> {
         let stub = IpcPipeStub::new(stream, self.recv_max_size);
 
-        box AsyncPipe::new(stub, self.proto_ids)
+        Box::new(AsyncPipe::new(stub, self.proto_ids))
     }
 }
 

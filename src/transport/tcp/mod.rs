@@ -30,15 +30,15 @@ impl Tcp {
         let stream = try!(TcpStream::connect(addr));
         try!(stream.set_nodelay(dest.tcp_no_delay));
         let stub = TcpPipeStub::new(stream, dest.recv_max_size);
-        let pipe = box AsyncPipe::new(stub, dest.pids);
+        let pipe = AsyncPipe::new(stub, dest.pids);
 
-        Ok(pipe)
+        Ok(Box::new(pipe))
     }
     fn bind(&self, addr: &net::SocketAddr, dest: &Destination) -> io::Result<Box<Acceptor>> {
         let listener = try!(TcpListener::bind(addr));
-        let acceptor = box TcpAcceptor::new(listener, dest);
+        let acceptor = TcpAcceptor::new(listener, dest);
 
-        Ok(acceptor)
+        Ok(Box::new(acceptor))
     }
 }
 

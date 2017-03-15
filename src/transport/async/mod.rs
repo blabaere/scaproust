@@ -35,7 +35,7 @@ pub struct AsyncPipe<S : AsyncPipeStub + 'static> {
 
 impl<S : AsyncPipeStub + 'static> AsyncPipe<S> {
     pub fn new(stub: S, pids: (u16, u16)) -> AsyncPipe<S> {
-        let initial_state = box initial::Initial::new(stub, pids);
+        let initial_state = Box::new(initial::Initial::new(stub, pids));
 
         AsyncPipe { state: Some(initial_state) }
     }

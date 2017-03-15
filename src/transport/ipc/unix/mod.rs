@@ -27,16 +27,16 @@ impl Transport for Ipc {
         let filename = path::Path::new(dest.addr);
         let stream = try!(UnixStream::connect(filename));
         let stub = IpcPipeStub::new(stream, dest.recv_max_size);
-        let pipe = box AsyncPipe::new(stub, dest.pids);
+        let pipe = AsyncPipe::new(stub, dest.pids);
 
-        Ok(pipe)
+        Ok(Box::new(pipe))
     }
 
     fn bind(&self, dest: &Destination) -> io::Result<Box<Acceptor>> {
         let filename = path::Path::new(dest.addr);
         let listener = try!(UnixListener::bind(filename));
-        let acceptor = box IpcAcceptor::new(listener, dest.pids, dest.recv_max_size);
+        let acceptor = IpcAcceptor::new(listener, dest.pids, dest.recv_max_size);
 
-        Ok(acceptor)
+        Ok(Box::new(acceptor))
     }
 }

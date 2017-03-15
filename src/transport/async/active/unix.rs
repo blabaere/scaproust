@@ -113,7 +113,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         ctx.deregister(self.stub.deref());
 
-        box Dead
+        Box::new(Dead)
     }
     fn send(mut self: Box<Self>, ctx: &mut Context, msg: Rc<Message>) -> Box<PipeState<S>> {
         self.can_send_msg = false;

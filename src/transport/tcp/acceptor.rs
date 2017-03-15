@@ -61,7 +61,7 @@ impl TcpAcceptor {
     fn create_pipe(&self, stream: TcpStream) -> Box<pipe::Pipe> {
         let stub = TcpPipeStub::new(stream, self.recv_max_size);
 
-        box AsyncPipe::new(stub, self.proto_ids)
+        Box::new(AsyncPipe::new(stub, self.proto_ids))
     }
 }
 

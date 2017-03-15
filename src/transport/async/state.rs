@@ -19,30 +19,30 @@ pub trait PipeState<S : AsyncPipeStub + 'static> {
     fn name(&self) -> &'static str;
     fn open(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         error!("[{:?}] open while {}", ctx, self.name());
-        box Dead
+        Box::new(Dead)
     }
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         error!("[{:?}] close while {}", ctx, self.name());
-        box Dead
+        Box::new(Dead)
     }
     fn send(self: Box<Self>, ctx: &mut Context, _: Rc<Message>) -> Box<PipeState<S>> {
         error!("[{:?}] send while {}", ctx, self.name());
-        box Dead
+        Box::new(Dead)
     }
     fn recv(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
         error!("[{:?}] recv while {}", ctx, self.name());
-        box Dead
+        Box::new(Dead)
     }
     fn error(self: Box<Self>, ctx: &mut Context, err: Error) -> Box<PipeState<S>> {
         info!("[{:?}] error while {}: {:?}", ctx, self.name(), err);
         
         ctx.raise(Event::Error(err));
 
-        box Dead
+        Box::new(Dead)
     }
     fn ready(self: Box<Self>, ctx: &mut Context, _: Ready) -> Box<PipeState<S>> {
         error!("[{:?}] ready while {}", ctx, self.name());
-        box Dead
+        Box::new(Dead)
     }
     fn enter(&mut self, _: &mut Context) {
     }
@@ -59,7 +59,7 @@ pub fn transition<F, T, S>(mut old_state: Box<F>, ctx: &mut Context) -> Box<T> w
     old_state.leave(ctx);
     let mut new_state = Into::into(*old_state);
     new_state.enter(ctx);
-    box new_state
+    Box::new(new_state)
 }
 
 pub fn transition_if_ok<F, T, S>(f: Box<F>, ctx: &mut Context, res: Result<()>) -> Box<PipeState<S>> where
