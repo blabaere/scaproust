@@ -12,39 +12,46 @@ pub use scaproust::*;
 
 pub use super::{urls, make_session, make_timeout, sleep_some};
 
-describe! can {
+fn before_each() -> (Session, Socket, Socket, String) {
+    let _ = ::env_logger::init();
+    let mut session = make_session();
+    let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+    let url = urls::tcp::get();
+    let timeout = make_timeout();
 
-    before_each {
-        let _ = ::env_logger::init();
-        let mut session = make_session();
-        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
-        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
-        let url = urls::tcp::get();
-        let timeout = make_timeout();
+    push.set_send_timeout(timeout).expect("Failed to set send timeout !");
+    pull.set_recv_timeout(timeout).expect("Failed to set recv timeout !");
 
-        push.set_send_timeout(timeout).expect("Failed to set send timeout !");
-        pull.set_recv_timeout(timeout).expect("Failed to set recv timeout !");
-    }
+    (session, push, pull, url)
+}
 
-    it "send a message through local endpoint" {
-        push.bind(&url).unwrap();
-        pull.connect(&url).unwrap();
+#[test]
+fn send_a_message_through_local_endpoint() {
+    let (session, mut push, mut pull, url) = before_each();
 
-        let sent = vec![65, 66, 67];
-        push.send(sent).unwrap();
-        let received = pull.recv().unwrap();
+    push.bind(&url).unwrap();
+    pull.connect(&url).unwrap();
 
-        assert_eq!(vec![65, 66, 67], received)
-    }
+    let sent = vec![65, 66, 67];
+    push.send(sent).unwrap();
+    let received = pull.recv().unwrap();
 
-    it "send a message through remote endpoint" {
-        pull.bind(&url).unwrap();
-        push.connect(&url).unwrap();
+    assert_eq!(vec![65, 66, 67], received);
+    drop(session);
+}
 
-        let sent = vec![65, 66, 67];
-        push.send(sent).unwrap();
-        let received = pull.recv().unwrap();
+#[test]
+fn send_a_message_through_remote_endpoint() {
+    let (session, mut push, mut pull, url) = before_each();
 
-        assert_eq!(vec![65, 66, 67], received)
-    }
+    pull.bind(&url).unwrap();
+    push.connect(&url).unwrap();
+
+    let sent = vec![65, 66, 67];
+    push.send(sent).unwrap();
+    let received = pull.recv().unwrap();
+
+    assert_eq!(vec![65, 66, 67], received);
+    drop(session);
 }

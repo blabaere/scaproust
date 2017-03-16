@@ -12,163 +12,157 @@ pub use scaproust::*;
 
 pub use super::{urls, make_session, make_timeout, sleep_some};
 
-describe! send {
+fn before_each() -> (Session, String) {
+    let _ = ::env_logger::init();
+    let session = make_session();
+    let url = urls::tcp::get();
 
-    before_each {
-        let _ = ::env_logger::init();
-        let mut session = make_session();
-        let url = urls::tcp::get();
-    }
+    (session, url)
+}
 
-    it "can complete when initiated before any connection" {
-        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
-        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
-        let pull_url = url.clone();
+#[test]
+fn send_can_complete_when_initiated_before_any_connection() {
+    let (mut session, url) = before_each();
+    let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+    let pull_url = url.clone();
 
-        let pull_thread = thread::spawn(move || {
-            thread::sleep(Duration::from_millis(50));
-            pull.set_recv_timeout(make_timeout()).unwrap();
-            pull.connect(&pull_url).unwrap();
-            let received = pull.recv().unwrap();
-            assert_eq!(vec![65, 66, 67], received)
-        });
+    let pull_thread = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(50));
+        pull.set_recv_timeout(make_timeout()).unwrap();
+        pull.connect(&pull_url).unwrap();
+        let received = pull.recv().unwrap();
+        assert_eq!(vec![65, 66, 67], received)
+    });
+
+    push.set_send_timeout(make_timeout()).unwrap();
+    push.bind(&url).unwrap();
+    push.send(vec![65, 66, 67]).unwrap();
+
+    pull_thread.join().unwrap();
+    drop(session);
+}
+
+#[test]
+fn send_should_return_an_error_when_timed_out() {
+    let (mut session, url) = before_each();
+    let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let timeout = Some(Duration::from_millis(50));
+
+    push.bind(&url).unwrap();
+    push.set_send_timeout(timeout).unwrap();
+
+    let err = push.send(vec![65, 66, 67]).unwrap_err();
+
+    assert_eq!(io::ErrorKind::TimedOut, err.kind());
+    drop(session);
+}
+
+#[test]
+fn recv_can_complete_when_initiated_before_any_connection() {
+    let (mut session, url) = before_each();
+    let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+    let push_url = url.clone();
+
+    pull.set_recv_timeout(make_timeout()).unwrap();
+    pull.bind(&url).unwrap();
+
+    let push_thread = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(50));
 
         push.set_send_timeout(make_timeout()).unwrap();
-        push.bind(&url).unwrap();
+        push.connect(&push_url).unwrap();
         push.send(vec![65, 66, 67]).unwrap();
 
-        pull_thread.join().unwrap();
-    }
+        thread::sleep(Duration::from_millis(50));
+    });
 
-    it "should return an error when timed out" {
-        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
-        let timeout = Some(Duration::from_millis(50));
+    let received = pull.recv().unwrap();
+    assert_eq!(vec![65, 66, 67], received);
 
-        push.bind(&url).unwrap();
-        push.set_send_timeout(timeout).unwrap();
-
-        let err = push.send(vec![65, 66, 67]).unwrap_err();
-
-        assert_eq!(io::ErrorKind::TimedOut, err.kind());
-    }
-
+    push_thread.join().unwrap();
+    drop(session);
 }
 
-describe! recv {
+#[test]
+fn recv_should_return_an_error_when_timed_out() {
+    let (mut session, url) = before_each();
+    let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+    let timeout = Some(Duration::from_millis(50));
 
-    before_each {
-        let mut session = make_session();
-        let url = urls::tcp::get();
-    }
+    pull.set_recv_timeout(timeout).unwrap();
+    pull.bind(&url).unwrap();
+    push.connect(&url).unwrap();
+    sleep_some();
 
-    it "can complete when initiated before any connection" {
-        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
-        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
-        let push_url = url.clone();
+    let err = pull.recv().unwrap_err();
 
-        pull.set_recv_timeout(make_timeout()).unwrap();
-        pull.bind(&url).unwrap();
-
-        let push_thread = thread::spawn(move || {
-            thread::sleep(Duration::from_millis(50));
-
-            push.set_send_timeout(make_timeout()).unwrap();
-            push.connect(&push_url).unwrap();
-            push.send(vec![65, 66, 67]).unwrap();
-
-            thread::sleep(Duration::from_millis(50));
-        });
-
-        let received = pull.recv().unwrap();
-        assert_eq!(vec![65, 66, 67], received);
-
-        push_thread.join().unwrap();
-    }
-
-    it "should return an error when timed out" {
-        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
-        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
-        let timeout = Some(Duration::from_millis(50));
-
-        pull.set_recv_timeout(timeout).unwrap();
-        pull.bind(&url).unwrap();
-        push.connect(&url).unwrap();
-        sleep_some();
-
-        let err = pull.recv().unwrap_err();
-
-        assert_eq!(io::ErrorKind::TimedOut, err.kind());
-    }
-
+    assert_eq!(io::ErrorKind::TimedOut, err.kind());
+    drop(session);
 }
 
+#[test]
+fn try_send_return_would_block_when_no_peer_is_connected() {
+    let (mut session, _) = before_each();
+    let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let err = push.try_send(vec![65, 66, 67]).unwrap_err();
 
-describe! try_send {
+    assert_eq!(io::ErrorKind::WouldBlock, err.kind());
+    drop(session);
+}
 
-    before_each {
-        let _ = ::env_logger::init();
-        let mut session = make_session();
-    }
+#[test]
+fn try_send_return_would_block_when_peer_buffer_is_full() {
+    let (mut session, _) = before_each();
+    let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+    let url = urls::tcp::get();
 
-    it "return would block when no peer is connected" {
-        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
-        let err = push.try_send(vec![65, 66, 67]).unwrap_err();
+    push.bind(&url).unwrap();
+    pull.connect(&url).unwrap();
+    sleep_some();
 
-        assert_eq!(io::ErrorKind::WouldBlock, err.kind());
-    }
-
-    it "return would block when peer buffer is full" {
-        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
-        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
-        let url = urls::tcp::get();
-
-        push.bind(&url).unwrap();
-        pull.connect(&url).unwrap();
-        sleep_some();
-
-        let mut sent = false;
-        loop {
-            match push.try_send(vec![6; 512]) {
-                Ok(()) => {
-                    sent = true;
-                    continue;
-                },
-                Err(err) => {
-                    assert!(sent);
-                    assert_eq!(io::ErrorKind::WouldBlock, err.kind());
-                    break;
-                }
+    let mut sent = false;
+    loop {
+        match push.try_send(vec![6; 512]) {
+            Ok(()) => {
+                sent = true;
+                continue;
+            },
+            Err(err) => {
+                assert!(sent);
+                assert_eq!(io::ErrorKind::WouldBlock, err.kind());
+                break;
             }
         }
     }
-
+    drop(session);
 }
 
-describe! try_recv {
+#[test]
+fn try_recv_return_would_block_when_no_peer_is_connected() {
+    let (mut session, _) = before_each();
+    let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+    let err = pull.try_recv().unwrap_err();
 
-    before_each {
-        let _ = ::env_logger::init();
-        let mut session = make_session();
-    }
+    assert_eq!(io::ErrorKind::WouldBlock, err.kind());
+    drop(session);
+}
 
-    it "return would block when no peer is connected" {
-        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
-        let err = pull.try_recv().unwrap_err();
+#[test]
+fn try_recv_return_would_block_when_buffer_is_empty() {
+    let (mut session, _) = before_each();
+    let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
+    let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
+    let url = urls::tcp::get();
 
-        assert_eq!(io::ErrorKind::WouldBlock, err.kind());
-    }
+    push.bind(&url).unwrap();
+    pull.connect(&url).unwrap();
+    sleep_some();
 
-    it "return would block when buffer is empty" {
-        let mut push = session.create_socket::<Push>().expect("Failed to create socket !");
-        let mut pull = session.create_socket::<Pull>().expect("Failed to create socket !");
-        let url = urls::tcp::get();
-
-        push.bind(&url).unwrap();
-        pull.connect(&url).unwrap();
-        sleep_some();
-
-        let err = pull.try_recv().unwrap_err();
-        assert_eq!(io::ErrorKind::WouldBlock, err.kind());
-    }
-
+    let err = pull.try_recv().unwrap_err();
+    assert_eq!(io::ErrorKind::WouldBlock, err.kind());
+    drop(session);
 }
