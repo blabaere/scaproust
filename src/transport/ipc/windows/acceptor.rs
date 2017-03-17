@@ -51,7 +51,7 @@ impl IpcAcceptor {
     fn create_pipe(&self, named_pipe: NamedPipe) -> Box<pipe::Pipe> {
         let stub = IpcPipeStub::new_server(named_pipe, self.recv_max_size);
 
-        box AsyncPipe::new(stub, self.proto_ids)
+        Box::new(AsyncPipe::new(stub, self.proto_ids))
     }
 }
 

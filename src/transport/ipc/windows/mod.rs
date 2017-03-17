@@ -34,14 +34,14 @@ impl Transport for Ipc {
         let file = try!(options.open(name));
         let named_pipe = unsafe { NamedPipe::from_raw_handle(file.into_raw_handle()) };
         let stub = IpcPipeStub::new_client(named_pipe, dest.recv_max_size);
-        let pipe = box AsyncPipe::new(stub, dest.pids);
+        let pipe = Box::new(AsyncPipe::new(stub, dest.pids));
 
         Ok(pipe)
     }
 
     fn bind(&self, dest: &Destination) -> io::Result<Box<Acceptor>> {
         let addr = String::from(dest.addr);
-        let acceptor = box IpcAcceptor::new(addr, dest.pids, dest.recv_max_size);
+        let acceptor = Box::new(IpcAcceptor::new(addr, dest.pids, dest.recv_max_size));
 
         Ok(acceptor)
     }
