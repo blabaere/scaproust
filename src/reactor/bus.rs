@@ -72,7 +72,7 @@ impl<T> Evented for EventLoopBus<T> {
 
     fn reregister(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> Result<()> {
         match *self.registration.borrow_mut() {
-            Some(ref registration) => registration.reregister(poll, token, interest, opts),
+            Some(ref registration) => Evented::reregister(registration, poll, token, interest, opts),
             None => Err(other_io_error("bus not registered")),
         }
     }
