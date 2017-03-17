@@ -37,7 +37,7 @@ impl<T> EventLoopBus<T> {
 
     pub fn recv(&mut self) -> Option<T> {
         if self.queue.len() == 1 {
-            self.set_readiness(Ready::none());
+            self.set_readiness(Ready::empty());
         }
 
         self.queue.pop_front()
@@ -56,7 +56,9 @@ impl<T> Evented for EventLoopBus<T> {
             return Err(other_io_error("bus already registered"));
         }
 
-        let (registration, readiness) = Registration::new(poll, token, interest, opts);
+        let (registration, readiness) = Registration::new2();
+
+        try!(poll.register(&registration, token, interest, opts));
 
         if self.queue.is_empty() == false {
             let _ = readiness.set_readiness(Ready::readable());
@@ -70,14 +72,14 @@ impl<T> Evented for EventLoopBus<T> {
 
     fn reregister(&self, poll: &Poll, token: Token, interest: Ready, opts: PollOpt) -> Result<()> {
         match *self.registration.borrow_mut() {
-            Some(ref registration) => registration.update(poll, token, interest, opts),
+            Some(ref registration) => registration.reregister(poll, token, interest, opts),
             None => Err(other_io_error("bus not registered")),
         }
     }
 
     fn deregister(&self, poll: &Poll) -> Result<()> {
         match *self.registration.borrow_mut() {
-            Some(ref registration) => registration.deregister(poll),
+            Some(ref registration) => Evented::deregister(registration, poll),
             None => Err(other_io_error("bus not registered")),
         }
     }

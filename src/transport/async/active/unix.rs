@@ -8,6 +8,7 @@ use std::rc::Rc;
 use std::io::Result;
 
 use mio::{Ready, PollOpt};
+use mio::unix::UnixReady;
 
 use core::Message;
 use transport::async::stub::*;
@@ -50,7 +51,7 @@ impl<S : AsyncPipeStub> Active<S> {
             return self.on_send_progress(ctx, progress);
         }
 
-        if events.is_hup() == false {
+        if UnixReady::from(events).is_hup() == false {
             return Ok(self.change_can_send(ctx, true));
         }
 
@@ -79,7 +80,7 @@ impl<S : AsyncPipeStub> Active<S> {
             return self.on_recv_progress(ctx, progress);
         }
 
-        if events.is_hup() == false {
+        if UnixReady::from(events).is_hup() == false {
             return Ok(self.change_can_recv(ctx, true));
         }
 
@@ -103,11 +104,19 @@ impl<S : AsyncPipeStub> Active<S> {
     }
 }
 
+fn interest() -> Ready {
+    let interest = Ready::readable() | Ready::writable();
+    let unix_interest = UnixReady::from(interest) | UnixReady::hup() | UnixReady::error();
+
+    Ready::from(unix_interest)
+}
+
+
 impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
     fn name(&self) -> &'static str {"Active"}
 
     fn enter(&mut self, ctx: &mut Context) {
-        ctx.reregister(self.stub.deref(), Ready::all(), PollOpt::level());
+        ctx.reregister(self.stub.deref(), interest(), PollOpt::level());
         ctx.raise(Event::Opened);
     }
     fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
@@ -135,7 +144,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
         let res = 
             self.readable_changed(ctx, events).and_then(|_|
             self.writable_changed(ctx, events).and_then(|_| 
-            self.hang_up_changed(events.is_hup()))
+            self.hang_up_changed(UnixReady::from(events).is_hup()))
         );
 
         no_transition_if_ok(self, ctx, res)
@@ -171,7 +180,7 @@ mod tests {
         assert_eq!(0, ctx.get_deregistrations());
 
         let (ref interest, ref poll_opt) = ctx.get_reregistrations()[0];
-        let all = mio::Ready::all();
+        let all = super::interest();
         let level = mio::PollOpt::level();
 
         assert_eq!(&all, interest);

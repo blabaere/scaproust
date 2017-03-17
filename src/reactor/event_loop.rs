@@ -72,7 +72,7 @@ impl EventLoop {
         while i < count {
             let event = self.events.get(i).unwrap();
 
-            event_handler.handle(self, event.token(), event.kind());
+            event_handler.handle(self, event.token(), event.readiness());
 
             i += 1;
         }
