@@ -157,6 +157,7 @@ mod tests {
     use std::cell::RefCell;
 
     use mio;
+    use mio::unix::UnixReady;
 
     use core::Message;
     use transport::*;
@@ -308,7 +309,9 @@ mod tests {
         let stub = TestStepStream::with_sensor(sensor.clone());
         let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
-        let events = mio::Ready::writable() | mio::Ready::hup();
+        let hup = UnixReady::hup();
+        let writable = mio::Ready::writable();
+        let events = writable | mio::Ready::from(hup);
         let new_state = state.ready(&mut ctx, events);
         assert_eq!("Dead", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
@@ -404,7 +407,9 @@ mod tests {
         let stub = TestStepStream::with_sensor(sensor.clone());
         let state = Box::new(Active::new(stub));
         let mut ctx = TestPipeContext::new();
-        let events = mio::Ready::readable() | mio::Ready::hup();
+        let readable = mio::Ready::readable();
+        let hup = UnixReady::hup();
+        let events = readable | mio::Ready::from(hup);
         let new_state = state.ready(&mut ctx, events);
         assert_eq!("Dead", new_state.name());
         assert_eq!(1, ctx.get_raised_events().len());
