@@ -8,7 +8,7 @@ environment:
 
 install:
   - ps: Start-FileDownload "https://static.rust-lang.org/dist/rust-1.16.0-${env:TARGET}.msi"
-  - msiexec /i "rust-1.16.0-${env:TARGET}.msi" /passive /norestart
+  - ps: msiexec /i "rust-1.16.0-${env:TARGET}.msi" /passive /norestart
   - SET PATH=%PATH%;C:\Program Files (x86)\Rust\bin
   - rustc -vV
   - cargo -vV
