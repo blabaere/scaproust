@@ -139,6 +139,26 @@ impl Priolist {
         self.current.is_some()
     }
 
+    pub fn deactivate(&mut self, id: &EndpointId) {
+        if let Some(index) = self.find_by_id_in_all(id) {
+            self.deactivate_at_index(index);
+        }
+    }
+
+    fn deactivate_at_index(&mut self, index: usize) {
+        if !self.is_index_active(index) {
+            return;
+        }
+
+        let priority = self.items[index].priority;
+
+        self.set_index_active(index, false);
+
+        if self.current == Some((index, priority)) {
+            self.compute_next(index, priority);
+        }
+    }
+
     fn compute_next(&mut self, pivot: usize, priority: u8) {
         if let Some(index) = self.find(|x| x.active && x.priority == priority, pivot..self.len()) {
             return self.set_current(index, priority);
@@ -415,5 +435,55 @@ mod tests {
 
         priolist.activate(&three);
         assert_eq!(Some(three), priolist.pop());
+    }
+
+    #[test]
+    fn deactivate_single_can_make_next_unavailable() {
+        let mut priolist = Priolist::new();
+        let eid = EndpointId::from(0);
+
+        priolist.insert(eid, 8);
+        priolist.activate(&eid);
+        assert_eq!(priolist.peek(), true);
+
+        priolist.deactivate(&eid);
+        assert_eq!(priolist.peek(), false);
+    }
+
+    #[test]
+    fn deactivate_current_can_make_next_unavailable() {
+        let mut priolist = Priolist::new();
+        let one = EndpointId::from(0);
+        let two = EndpointId::from(1);
+        let three = EndpointId::from(2);
+        let four = EndpointId::from(3);
+
+        priolist.insert(one, 0);
+        priolist.insert(two, 8);
+        priolist.insert(three, 0);
+        priolist.insert(four, 8);
+
+        priolist.activate(&three);
+        priolist.deactivate(&three);
+        assert_eq!(priolist.peek(), false);
+    }
+
+    #[test]
+    fn deactivate_current_can_move_forward() {
+        let mut priolist = Priolist::new();
+        let one = EndpointId::from(0);
+        let two = EndpointId::from(1);
+        let three = EndpointId::from(2);
+        let four = EndpointId::from(3);
+
+        priolist.insert(one, 8);
+        priolist.insert(two, 8);
+        priolist.insert(three, 8);
+        priolist.insert(four, 8);
+
+        priolist.activate(&three);
+        priolist.activate(&four);
+        priolist.deactivate(&three);
+        assert_eq!(Some(four), priolist.pop());
     }
 }
