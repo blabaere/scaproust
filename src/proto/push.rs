@@ -111,6 +111,9 @@ impl Protocol for Push {
     fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_ready(ctx, inner, eid))
     }
+    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.apply(ctx, |s, ctx, inner| s.on_send_not_ready(ctx, inner, eid))
+    }
     fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
         self.apply(ctx, |s, ctx, inner| s.recv(ctx, inner, timeout))
     }
@@ -122,6 +125,9 @@ impl Protocol for Push {
     }
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
+    }
+    fn on_recv_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.apply(ctx, |s, ctx, inner| s.on_recv_not_ready(ctx, inner, eid))
     }
     fn is_send_ready(&self) -> bool {
         self.inner.is_send_ready()
@@ -203,6 +209,10 @@ impl State {
             any => any
         }
     }
+    fn on_send_not_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        inner.on_send_not_ready(eid);
+        self
+    }
 
 /*****************************************************************************/
 /*                                                                           */
@@ -221,6 +231,9 @@ impl State {
         self
     }
     fn on_recv_ready(self, _: &mut Context, _: &mut Inner, _: EndpointId) -> State {
+        self
+    }
+    fn on_recv_not_ready(self, _: &mut Context, _: &mut Inner, _: EndpointId) -> State {
         self
     }
 }
@@ -245,6 +258,9 @@ impl Inner {
     }
     fn on_send_ready(&mut self, eid: EndpointId) {
         self.lb.activate(&eid)
+    }
+    fn on_send_not_ready(&mut self, eid: EndpointId) {
+        self.lb.deactivate(&eid)
     }
     fn on_send_ack(&self, ctx: &mut Context, timeout: Timeout) {
         let _ = self.reply_tx.send(Reply::Send);
