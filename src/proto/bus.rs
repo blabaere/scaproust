@@ -124,6 +124,9 @@ impl Protocol for Bus {
     fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_ready(ctx, inner, eid))
     }
+    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.apply(ctx, |s, ctx, inner| s.on_send_not_ready(ctx, inner, eid))
+    }
     fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
         self.apply(ctx, |s, ctx, inner| s.recv(ctx, inner, timeout))
     }
@@ -136,6 +139,9 @@ impl Protocol for Bus {
     }
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
+    }
+    fn on_recv_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.apply(ctx, |s, ctx, inner| s.on_recv_not_ready(ctx, inner, eid))
     }
     fn is_send_ready(&self) -> bool {
         self.inner.is_send_ready()
@@ -198,6 +204,10 @@ impl State {
         inner.on_send_ready(ctx, eid);
         self
     }
+    fn on_send_not_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        inner.on_send_not_ready(ctx, eid);
+        self
+    }
 
 /*****************************************************************************/
 /*                                                                           */
@@ -236,6 +246,10 @@ impl State {
             any => any
         }
     }
+    fn on_recv_not_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        inner.on_recv_not_ready(eid);
+        self
+    }    
 }
 
 /*****************************************************************************/
@@ -280,6 +294,9 @@ impl Inner {
     fn on_send_ready(&mut self, _: &mut Context, eid: EndpointId) {
         self.bc.insert(eid);
     }
+    fn on_send_not_ready(&mut self, _: &mut Context, eid: EndpointId) {
+        self.bc.remove(&eid);
+    }
     fn is_send_ready(&self) -> bool {
         !self.bc.is_empty()
     }
@@ -289,6 +306,9 @@ impl Inner {
     }
     fn on_recv_ready(&mut self, eid: EndpointId) {
         self.fq.activate(&eid)
+    }
+    fn on_recv_not_ready(&mut self, eid: EndpointId) {
+        self.fq.deactivate(&eid)
     }
     fn on_recv_ack(&self, ctx: &mut Context, timeout: Timeout, msg: Message) {
         let _ = self.reply_tx.send(Reply::Recv(msg));
