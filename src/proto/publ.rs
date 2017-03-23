@@ -80,6 +80,16 @@ impl Protocol for Pub {
         }
         self.bc.insert(eid);
     }
+    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        let was_empty = self.bc.is_empty();
+
+        self.bc.remove(&eid);
+
+        let is_empty = self.bc.is_empty();
+        if was_empty ^ is_empty {
+            ctx.raise(Event::CanSend(false));
+        }
+    }
     fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
         let error = other_io_error("Recv is not supported by pub protocol");
         let _ = self.reply_tx.send(Reply::Err(error));
@@ -92,6 +102,8 @@ impl Protocol for Pub {
     fn on_recv_timeout(&mut self, _: &mut Context) {
     }
     fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {
+    }
+    fn on_recv_not_ready(&mut self, _: &mut Context, _: EndpointId) {
     }
     fn is_send_ready(&self) -> bool {
         !self.bc.is_empty()
