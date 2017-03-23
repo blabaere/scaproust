@@ -112,6 +112,9 @@ impl Protocol for Pair {
     fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_ready(ctx, inner, eid))
     }
+    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.apply(ctx, |s, ctx, inner| s.on_send_not_ready(ctx, inner, eid))
+    }    
     fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
         self.apply(ctx, |s, ctx, inner| s.recv(ctx, inner, timeout))
     }
@@ -123,6 +126,9 @@ impl Protocol for Pair {
     }
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
+    }
+    fn on_recv_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.apply(ctx, |s, ctx, inner| s.on_recv_not_ready(ctx, inner, eid))
     }
     fn is_send_ready(&self) -> bool {
         self.inner.send_ready
@@ -215,7 +221,11 @@ impl State {
             any => any
         }
     }
-
+    fn on_send_not_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        inner.on_send_not_ready(eid);
+        self
+    }
+    
 /*****************************************************************************/
 /*                                                                           */
 /* recv                                                                      */
@@ -252,6 +262,10 @@ impl State {
             State::RecvOnHold(timeout) => State::Idle.recv(ctx, inner, timeout),
             any => any
         }
+    }
+    fn on_recv_not_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        inner.on_recv_not_ready(eid);
+        self
     }
 }
 
@@ -300,6 +314,11 @@ impl Inner {
             self.send_ready = true;
         }
     }
+    fn on_send_not_ready(&mut self, eid: EndpointId) {
+        if self.pipe.as_ref().map(|&(ref id, _)| *id) == Some(eid) {
+            self.send_ready = false;
+        }
+    }
     fn on_send_ack(&self, ctx: &mut Context, timeout: Timeout) {
         let _ = self.reply_tx.send(Reply::Send);
         if let Some(sched) = timeout {
@@ -325,6 +344,11 @@ impl Inner {
     fn on_recv_ready(&mut self, eid: EndpointId) {
         if self.pipe.as_ref().map(|&(ref id, _)| *id) == Some(eid) {
             self.recv_ready = true;
+        }
+    }
+    fn on_recv_not_ready(&mut self, eid: EndpointId) {
+        if self.pipe.as_ref().map(|&(ref id, _)| *id) == Some(eid) {
+            self.recv_ready = false;
         }
     }
     fn on_recv_ack(&self, ctx: &mut Context, timeout: Timeout, msg: Message) {
