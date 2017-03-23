@@ -136,6 +136,9 @@ impl Protocol for Req {
     fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_ready(ctx, inner, eid))
     }
+    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.apply(ctx, |s, ctx, inner| s.on_send_not_ready(ctx, inner, eid))
+    }
     fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
         self.apply(ctx, |s, ctx, inner| s.recv(ctx, inner, timeout))
     }
@@ -151,6 +154,9 @@ impl Protocol for Req {
     }
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
+    }
+    fn on_recv_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.apply(ctx, |s, ctx, inner| s.on_recv_not_ready(ctx, inner, eid))
     }
     fn set_option(&mut self, opt: ConfigOption) -> io::Result<()> {
         match opt {
@@ -276,6 +282,10 @@ impl State {
             any => any
         }
     }
+    fn on_send_not_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        inner.on_send_not_ready(eid);
+        self
+    }
     fn is_send_ready(&self, inner: &Inner) -> bool {
         inner.is_send_ready()
     }
@@ -358,6 +368,10 @@ impl State {
             any => any
         }
     }
+    fn on_recv_not_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        inner.on_recv_not_ready(eid);
+        self
+    }
     fn on_retry_timeout(self, ctx: &mut Context, inner: &mut Inner) -> State {
         if let State::Active(_, p) = self {
             State::Idle.send(ctx, inner, p.req, None, true)
@@ -411,6 +425,9 @@ impl Inner {
     }
     fn on_send_ready(&mut self, eid: EndpointId) {
         self.lb.activate(&eid)
+    }
+    fn on_send_not_ready(&mut self, eid: EndpointId) {
+        self.lb.deactivate(&eid)
     }
     fn on_send_ack(&self, ctx: &mut Context, timeout: Timeout, retry: bool) -> Timeout {
         if !retry {
@@ -475,6 +492,10 @@ impl Inner {
     fn on_recv_ready(&mut self, eid: EndpointId) {
         self.fq.activate(&eid);
         self.rv.insert(eid);
+    }
+    fn on_recv_not_ready(&mut self, eid: EndpointId) {
+        self.fq.deactivate(&eid);
+        self.rv.remove(&eid);
     }
     fn is_recv_ready_from(&self, eid: &EndpointId) -> bool {
         self.rv.contains(eid)
