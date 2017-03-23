@@ -129,6 +129,9 @@ impl Protocol for Rep {
     fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_ready(ctx, inner, eid))
     }
+    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.apply(ctx, |s, ctx, inner| s.on_send_not_ready(ctx, inner, eid))
+    }
     fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
         self.apply(ctx, |s, ctx, inner| s.recv(ctx, inner, timeout))
     }
@@ -144,6 +147,9 @@ impl Protocol for Rep {
     }
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
+    }
+    fn on_recv_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+        self.apply(ctx, |s, ctx, inner| s.on_recv_not_ready(ctx, inner, eid))
     }
     fn on_device_plugged(&mut self, _: &mut Context) {
         self.inner.is_device_item = true;
@@ -266,6 +272,10 @@ impl State {
             any => any
         }
     }
+    fn on_send_not_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        inner.on_send_not_ready(eid);
+        self
+    }
     fn is_send_ready(&self, inner: &Inner) -> bool {
         if inner.is_device_item {
             inner.is_send_ready()
@@ -317,6 +327,10 @@ impl State {
             State::RecvOnHold(timeout) => State::Idle.recv(ctx, inner, timeout),
             any => any
         }
+    }
+    fn on_recv_not_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+        inner.on_recv_not_ready(eid);
+        self
     }
     fn is_recv_ready(&self, inner: &Inner) -> bool {
         inner.is_recv_ready()
@@ -381,6 +395,9 @@ impl Inner {
     fn on_send_ready(&mut self, eid: EndpointId) {
         self.sd.insert(eid);
     }
+    fn on_send_not_ready(&mut self, eid: EndpointId) {
+        self.sd.remove(&eid);
+    }
     fn is_send_ready(&self) -> bool {
         !self.sd.is_empty()
     }
@@ -393,6 +410,9 @@ impl Inner {
     }
     fn on_recv_ready(&mut self, eid: EndpointId) {
         self.fq.activate(&eid)
+    }
+    fn on_recv_not_ready(&mut self, eid: EndpointId) {
+        self.fq.deactivate(&eid)
     }
     fn on_recv_ack(&mut self, ctx: &mut Context, timeout: Timeout, mut msg: Message) {
         if !self.is_device_item {
