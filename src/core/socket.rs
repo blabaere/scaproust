@@ -59,13 +59,13 @@ pub trait Protocol {
     fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId);
     fn on_send_timeout(&mut self, ctx: &mut Context);
     fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId);
-    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {}
+    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId);
     
     fn recv(&mut self, ctx: &mut Context, timeout: Option<Scheduled>);
     fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message);
     fn on_recv_timeout(&mut self, ctx: &mut Context);
     fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId);
-    fn on_recv_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {}
+    fn on_recv_not_ready(&mut self, ctx: &mut Context, eid: EndpointId);
 
     fn is_send_ready(&self) -> bool;
     fn is_recv_ready(&self) -> bool;
@@ -533,10 +533,12 @@ mod tests {
         fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {}
         fn on_send_timeout(&mut self, _: &mut Context) {}
         fn on_send_ready(&mut self, _: &mut Context, _: EndpointId) {}
+        fn on_send_not_ready(&mut self, _: &mut Context, _: EndpointId) {}
         fn recv(&mut self, _: &mut Context, _: Option<Scheduled>) {}
         fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
         fn on_recv_timeout(&mut self, _: &mut Context) {}
         fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {}
+        fn on_recv_not_ready(&mut self, _: &mut Context, _: EndpointId) {}
         fn is_send_ready(&self) -> bool { false }
         fn is_recv_ready(&self) -> bool { false }
         fn close(&mut self, _: &mut Context) {}
