@@ -272,7 +272,7 @@ impl State {
             any => any
         }
     }
-    fn on_send_not_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_send_not_ready(self, _: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_send_not_ready(eid);
         self
     }
@@ -331,7 +331,7 @@ impl State {
             }
         }
     }
-    fn on_recv_not_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_recv_not_ready(self, _: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_recv_not_ready(eid);
         self
     }
