@@ -1,12 +1,11 @@
+Use iovec for send msg operations ? For example send an iovec of three slices (transport header, protocol header, payload)
+
 Taken from the source: https://github.com/carllerche/mio/blob/getting-started/doc/getting-started.md
   Important: Even if we just received a ready notification, there is no guarantee that a read from the socket will succeed and not return Ok(None), so we must handle that case as well.
-That sounds pretty bad, maybe this case should be handled, whenever a recv operation is started,
-if the first result is the so-called Ok(None), WouldBlock currently, the operation should be cancelled.
-And the socket owning the pipe should be notified so it can reschedule the operation.
+That sounds pretty bad, maybe this case should be handled, whenever an operation is started,
+if the first result is the so-called Ok(None), WouldBlock currently, the operation should be cancelled. And the socket owning the pipe should be notified so it can retry or reschedule the operation.
 
-PB: the dispatcher receiving and CanSend/CanRecv events does not know if a device or a probe is 'listening'. What if several probes are interested in the readiness the same socket ?
-
-IDEA: maybe pipe should raise CanSend/Recv(bool) instead of just CanSend/Recv ?
+PB: the dispatcher receiving CanSend/CanRecv events does not know if a device or a probe is 'listening'. What if several probes are interested in the readiness the same socket ?
 
 Change doc links of versioned packaged to docs.rs, since it is easy to support several version.
 See https://docs.rs/about
@@ -42,9 +41,6 @@ See https://docs.rs/about
 
 ### Things to look at
 
-gather/scatter io operations
-https://github.com/seanmonstar/vecio
-
 https://pascalhertleif.de/artikel/good-practices-for-writing-rust-libraries/
 http://keepachangelog.com
 
@@ -62,7 +58,6 @@ http://carllerche.github.io/pool/pool/
 https://github.com/tailhook/rotor  
 https://github.com/dwrensha/gj  
 https://github.com/zonyitoo/simplesched  
-https://github.com/alexcrichton/wio (for appveyor ci script and doc publication too)  
 
 
 Websocket
