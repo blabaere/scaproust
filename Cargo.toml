@@ -25,7 +25,7 @@ appveyor = { repository = "blabaere/scaproust" }
 log = "0.3.7"
 byteorder = "0.5.3"
 time = "0.1.36"
-mio = "0.6.5"
+mio = "0.6.6"
 mio-uds = "0.6.3"
 
 [target.'cfg(windows)'.dependencies]
