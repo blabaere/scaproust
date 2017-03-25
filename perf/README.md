@@ -15,12 +15,12 @@ This is probably not of a very subtle benchmark, but given how far the results a
 ### Average throughput (Mb/s)
 | Msg Size | Msg Count | Nanomsg | Scaproust |
 | ---: | ---: | ---: | ---: |
-| 512 | 1000000 | 3091 | 425 |
-| 1024 | 500000 | 5511 | 822 |
-| 8192 | 50000 | 13865 | 4843 |
-| 131072 | 10000 | 19694 | 20840 |
-| 524288 | 2000 | 16215 | 26298 |
-| 1048576 | 1000 | 12501 | 10927 |
+| 512 | 1000000 | 3091 | 468 |
+| 1024 | 500000 | 5511 | 911 |
+| 8192 | 50000 | 13865 | 5653 |
+| 131072 | 10000 | 19694 | 22219 |
+| 524288 | 2000 | 16215 | 29206 |
+| 1048576 | 1000 | 12501 | 13055 |
 
 ## Potential scaproust optimization places
 - Message allocations, send side

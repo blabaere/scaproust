@@ -6,11 +6,14 @@
 
 use std::rc::Rc;
 use std::io;
+use std::io::Write;
 
 use byteorder::{ BigEndian, ByteOrder };
 
+use mio::tcp::TcpStream;
+use iovec::IoVec;
+
 use core::Message;
-use transport::async::stub::*;
 use io_error::*;
 
 pub struct SendOperation {
@@ -24,7 +27,7 @@ impl SendOperation {
         }
     }
 
-    pub fn run<T:io::Write>(&mut self, stream: &mut T) -> io::Result<bool> {
+    pub fn run(&mut self, stream: &mut TcpStream) -> io::Result<bool> {
         if let Some(step) = self.step.take() {
             self.resume_at(stream, step)
         } else {
@@ -32,7 +35,7 @@ impl SendOperation {
         }
     }
 
-    fn resume_at<T:io::Write>(&mut self, stream: &mut T, step: SendOperationStep) -> io::Result<bool> {
+    fn resume_at(&mut self, stream: &mut TcpStream, step: SendOperationStep) -> io::Result<bool> {
         let mut cur_step = step;
 
         loop {
@@ -59,9 +62,9 @@ enum SendOperationStep {
 }
 
 impl SendOperationStep {
-    /// Writes one of the buffers composing the message.
-    /// Returns whether the buffer was fully sent, and what is the next step.
-    fn advance<T:io::Write>(self, stream: &mut T) -> io::Result<(bool, SendOperationStep)> {
+    /// Writes one he buffers composing the message.
+    /// Returns whether the step has passed, and what is the next step.
+    fn advance(self, stream: &mut TcpStream) -> io::Result<(bool, SendOperationStep)> {
         match self {
             SendOperationStep::TransportHdr(msg, written) => write_transport_hdr(stream, msg, written),
             SendOperationStep::ProtocolHdr(msg, written) => write_protocol_hdr(stream, msg, written),
@@ -78,65 +81,111 @@ impl SendOperationStep {
     }
 }
 
-fn write_transport_hdr<T:io::Write>(stream: &mut T, msg: Rc<Message>, mut written: usize) -> io::Result<(bool, SendOperationStep)> {
-    let msg_len = msg.len() as u64;
+fn write_transport_hdr(stream: &mut TcpStream, msg: Rc<Message>, mut written: usize) -> io::Result<(bool, SendOperationStep)> {
     let mut buffer = [0u8; 8];
 
-    BigEndian::write_u64(&mut buffer, msg_len);
+    BigEndian::write_u64(&mut buffer, msg.len() as u64);
 
-    let sent = try!(stream.write_buffer(&buffer, &mut written));
-    if sent {
-        Ok((true, SendOperationStep::ProtocolHdr(msg, 0)))
+    let transport_hdr = if written == 0 {
+        &buffer
     } else {
-        Ok((false, SendOperationStep::TransportHdr(msg, written)))
-    }
-}
+        &buffer[written..]
+    };
 
-fn write_protocol_hdr<T:io::Write>(stream: &mut T, msg: Rc<Message>, mut written: usize) -> io::Result<(bool, SendOperationStep)> {
     if msg.get_header().len() == 0 {
-        return Ok((true, SendOperationStep::UsrPayload(msg, 0)));
-    }
+        let payload = msg.get_body();
+        let buffers: &[&IoVec] = &[transport_hdr.into(), payload.into()];
 
-    let sent = try!(stream.write_buffer(msg.get_header(), &mut written));
-    if sent {
-        Ok((true, SendOperationStep::UsrPayload(msg, 0)))
+        written += try!(write_buffers(stream, buffers));
     } else {
-        Ok((false, SendOperationStep::ProtocolHdr(msg, written)))
-    }
-}
+        let proto_hdr = msg.get_header();
+        let payload = msg.get_body();
+        let buffers: &[&IoVec] = &[transport_hdr.into(), proto_hdr.into(), payload.into()];
 
-fn write_usr_payload<T:io::Write>(stream: &mut T, msg: Rc<Message>, mut written: usize) -> io::Result<(bool, SendOperationStep)> {
-    if msg.get_body().len() == 0 {
-        return Ok((true, SendOperationStep::Terminal));
+        written += try!(write_buffers(stream, buffers));
     }
 
-    let sent = try!(stream.write_buffer(msg.get_body(), &mut written));
-    if sent {
+    let transport_limit = 8;
+    let proto_hdr_limit = transport_limit + msg.get_header().len();
+    let payload_limit = proto_hdr_limit + msg.get_body().len();
+
+    if written < transport_limit {
+        Ok((false, SendOperationStep::TransportHdr(msg, written)))
+    } else if written < proto_hdr_limit {
+        Ok((false, SendOperationStep::ProtocolHdr(msg, written - transport_limit)))
+    } else if written < payload_limit {
+        Ok((false, SendOperationStep::UsrPayload(msg, written - proto_hdr_limit)))
+    } else {
         Ok((true, SendOperationStep::Terminal))
-    } else {
-        Ok((false, SendOperationStep::UsrPayload(msg, written)))
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::ops::Deref;
-    use std::rc::Rc;
+fn write_protocol_hdr(stream: &mut TcpStream, msg: Rc<Message>, mut written: usize) -> io::Result<(bool, SendOperationStep)> {
+    if written == 0 {
+        let proto_hdr = msg.get_header();
+        let payload = msg.get_body();
+        let buffers: &[&IoVec] = &[proto_hdr.into(), payload.into()];
 
-    use core::Message;
-    use super::*;
+        written += try!(write_buffers(stream, buffers));
+    } else {
+        let proto_hdr = msg.get_header();
+        let proto_hdr = &proto_hdr[written..];
+        let payload = msg.get_body();
+        let buffers: &[&IoVec] = &[proto_hdr.into(), payload.into()];
 
-    #[test]
-    fn send_in_one_run() {
-        let header = vec!(1, 4, 3, 2);
-        let payload = vec!(65, 66, 67, 69);
-        let msg = Message::from_header_and_body(header, payload);
-        let mut operation = SendOperation::new(Rc::new(msg));
-        let mut stream = Vec::new();
-        let result = operation.run(&mut stream).expect("send should have succeeded");
-        let expected_bytes = [0u8, 0, 0, 0, 0, 0, 0, 8, 1, 4, 3, 2, 65, 66, 67, 69];
+        written += try!(write_buffers(stream, buffers));
+    }
 
-        assert!(result);
-        assert_eq!(&expected_bytes, stream.deref());
+    let proto_hdr_limit = msg.get_header().len();
+    let payload_limit = proto_hdr_limit + msg.get_body().len();
+
+    if written < proto_hdr_limit {
+        Ok((false, SendOperationStep::ProtocolHdr(msg, written)))
+    } else if written < payload_limit {
+        Ok((false, SendOperationStep::UsrPayload(msg, written - proto_hdr_limit)))
+    } else {
+        Ok((true, SendOperationStep::Terminal))
+    }
+}
+
+fn write_usr_payload(stream: &mut TcpStream, msg: Rc<Message>, mut written: usize) -> io::Result<(bool, SendOperationStep)> {
+    if written == 0 {
+        let payload = msg.get_body();
+
+        written += try!(write_buffer(stream, payload));
+    } else {
+        let payload = msg.get_body();
+        let payload = &payload[written..];
+
+        written += try!(write_buffer(stream, payload));
+    }
+
+    let payload_limit = msg.get_body().len();
+
+    if written < payload_limit {
+        Ok((false, SendOperationStep::UsrPayload(msg, written)))
+    } else {
+        Ok((true, SendOperationStep::Terminal))
+    }
+}
+
+fn write_buffer(stream: &mut TcpStream, buffer: &[u8]) -> io::Result<usize> {
+    flatten_would_block(stream.write(buffer))
+}
+
+fn write_buffers(stream: &mut TcpStream, buffers: &[&IoVec]) -> io::Result<usize> {
+    flatten_would_block(stream.write_bufs(buffers))
+}
+
+fn flatten_would_block(result: io::Result<usize>) -> io::Result<usize> {
+    match result {
+        Ok(x)  => Ok(x),
+        Err(e) => {
+            if e.kind() == io::ErrorKind::WouldBlock {
+                Ok(0)
+            } else {
+                Err(e)
+            }
+        }
     }
 }

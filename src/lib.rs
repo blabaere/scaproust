@@ -61,6 +61,7 @@ extern crate time;
 extern crate byteorder;
 extern crate mio;
 extern crate mio_uds;
+extern crate iovec;
 
 #[cfg(windows)]
 extern crate mio_named_pipes;
