@@ -5,12 +5,12 @@ This is probably not of a very subtle benchmark, but given how far the results a
 ### Average latency (µs)
 | Msg Size | Roundtrips | Nanomsg | Scaproust |
 | ---: | ---: | ---: | ---: |
-| 512 | 50000 | 19 | 19 |
-| 1024 | 10000 | 21 | 17 |
+| 512 | 50000 | 19 | 16 |
+| 1024 | 10000 | 21 | 16 |
 | 8192 | 10000 | 23 | 21 |
 | 102400 | 2000 | 56 | 38 |
 | 524288 | 500 | 323 | 132 |
-| 1048576 | 100 | 794 | 489 |
+| 1048576 | 100 | 794 | 471 |
 
 ### Average throughput (Mb/s)
 | Msg Size | Msg Count | Nanomsg | Scaproust |
