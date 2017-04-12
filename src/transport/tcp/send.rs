@@ -62,7 +62,7 @@ enum SendOperationStep {
 }
 
 impl SendOperationStep {
-    /// Writes one he buffers composing the message.
+    /// Writes the buffers composing the message to the specified stream.
     /// Returns whether the step has passed, and what is the next step.
     fn advance(self, stream: &mut TcpStream) -> io::Result<(bool, SendOperationStep)> {
         match self {
