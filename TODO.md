@@ -1,5 +1,3 @@
-Use iovec for send msg operations ? For example send an iovec of three slices (transport header, protocol header, payload)
-
 Taken from the source: https://github.com/carllerche/mio/blob/getting-started/doc/getting-started.md
   Important: Even if we just received a ready notification, there is no guarantee that a read from the socket will succeed and not return Ok(None), so we must handle that case as well.
 That sounds pretty bad, maybe this case should be handled, whenever an operation is started,
