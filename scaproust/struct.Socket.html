@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Socket` struct in crate `scaproust`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Socket">
+
+    <title>scaproust::Socket - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../normalize.css">
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc struct">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='index.html'>scaproust</a></p><script>window.sidebarCurrent = {name: 'Socket', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content">
+<h1 class='fqn'><span class='in-band'>Struct <a href='index.html'>scaproust</a>::<wbr><a class="struct" href=''>Socket</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a class='srclink' href='../src/scaproust/facade/socket.rs.html#47-50' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Socket { /* fields omitted */ }</pre><div class='docblock'><p>Socket is what applications use to exchange messages.</p>
+
+<p>It is an abstraction of an application&#39;s &quot;connection&quot; to a messaging topology.
+Applications can have more than one Socket open at a time.</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><span class='in-band'><code>impl <a class="struct" href="../scaproust/struct.Socket.html" title="struct scaproust::Socket">Socket</a></code></span><span class='out-of-band'><div class='ghost'></div><a class='srclink' href='../src/scaproust/facade/socket.rs.html#52-308' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.create_poll_req' class="method"><span id='create_poll_req.v' class='invisible'><code>fn <a href='#method.create_poll_req' class='fnname'>create_poll_req</a>(&amp;self, recv: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>, send: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>) -&gt; <a class="struct" href="../scaproust/core/struct.PollReq.html" title="struct scaproust::core::PollReq">PollReq</a></code></span></h4>
+<div class='docblock'><p>Creates a poll request that can be used to initialize a probe.
+The probe will then allow polling a group of sockets</p>
+</div><h4 id='method.connect' class="method"><span id='connect.v' class='invisible'><code>fn <a href='#method.connect' class='fnname'>connect</a>(&amp;mut self, url: &amp;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.str.html">str</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="../scaproust/struct.Endpoint.html" title="struct scaproust::Endpoint">Endpoint</a>&gt;</code></span></h4>
+<div class='docblock'><p>Adds a remote endpoint to the socket.
+The library would then try to connect to the specified remote endpoint.
+The addr argument consists of two parts as follows: <code>transport://address</code>.
+The transport specifies the underlying transport protocol to use.
+The meaning of the address part is specific to the underlying transport protocol.
+Note that bind and connect may be called multiple times on the same socket,
+thus allowing the socket to communicate with multiple heterogeneous endpoints.
+On success, returns an <a href="struct.Endpoint.html">Endpoint</a> that can be later used to remove the endpoint from the socket.</p>
+</div><h4 id='method.bind' class="method"><span id='bind.v' class='invisible'><code>fn <a href='#method.bind' class='fnname'>bind</a>(&amp;mut self, url: &amp;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.str.html">str</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="../scaproust/struct.Endpoint.html" title="struct scaproust::Endpoint">Endpoint</a>&gt;</code></span></h4>
+<div class='docblock'><p>Adds a local endpoint to the socket. The endpoint can be then used by other applications to connect to.
+The addr argument consists of two parts as follows: <code>transport://address</code>.
+The transport specifies the underlying transport protocol to use.
+The meaning of the address part is specific to the underlying transport protocol.
+Note that bind and connect may be called multiple times on the same socket,
+thus allowing the socket to communicate with multiple heterogeneous endpoints.
+On success, returns an <a href="struct.Endpoint.html">Endpoint</a> that can be later used to remove the endpoint from the socket.</p>
+</div><h4 id='method.send' class="method"><span id='send.v' class='invisible'><code>fn <a href='#method.send' class='fnname'>send</a>(&amp;mut self, buffer: <a class="struct" href="https://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html" title="struct collections::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.tuple.html">()</a>&gt;</code></span></h4>
+<div class='docblock'><p>Sends a buffer.
+Which of the peers the buffer will be sent to is determined by the protocol.</p>
+</div><h4 id='method.send_msg' class="method"><span id='send_msg.v' class='invisible'><code>fn <a href='#method.send_msg' class='fnname'>send_msg</a>(&amp;mut self, msg: <a class="struct" href="../scaproust/core/struct.Message.html" title="struct scaproust::core::Message">Message</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.tuple.html">()</a>&gt;</code></span></h4>
+<div class='docblock'><p>Sends a message.
+Which of the peers the message will be sent to is determined by the protocol.</p>
+</div><h4 id='method.try_send' class="method"><span id='try_send.v' class='invisible'><code>fn <a href='#method.try_send' class='fnname'>try_send</a>(&amp;mut self, buffer: <a class="struct" href="https://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html" title="struct collections::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.tuple.html">()</a>&gt;</code></span></h4>
+<div class='docblock'><p>Non-blocking version of the send method.</p>
+</div><h4 id='method.try_send_msg' class="method"><span id='try_send_msg.v' class='invisible'><code>fn <a href='#method.try_send_msg' class='fnname'>try_send_msg</a>(&amp;mut self, msg: <a class="struct" href="../scaproust/core/struct.Message.html" title="struct scaproust::core::Message">Message</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.tuple.html">()</a>&gt;</code></span></h4>
+<div class='docblock'><p>Non-blocking version of the send_msg method.</p>
+</div><h4 id='method.recv' class="method"><span id='recv.v' class='invisible'><code>fn <a href='#method.recv' class='fnname'>recv</a>(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html" title="struct collections::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>&gt;&gt;</code></span></h4>
+<div class='docblock'><p>Receives a buffer.</p>
+</div><h4 id='method.recv_msg' class="method"><span id='recv_msg.v' class='invisible'><code>fn <a href='#method.recv_msg' class='fnname'>recv_msg</a>(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="../scaproust/core/struct.Message.html" title="struct scaproust::core::Message">Message</a>&gt;</code></span></h4>
+<div class='docblock'><p>Receives a message.</p>
+</div><h4 id='method.try_recv' class="method"><span id='try_recv.v' class='invisible'><code>fn <a href='#method.try_recv' class='fnname'>try_recv</a>(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html" title="struct collections::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>&gt;&gt;</code></span></h4>
+<div class='docblock'><p>Non-blocking version of the recv method.</p>
+</div><h4 id='method.try_recv_msg' class="method"><span id='try_recv_msg.v' class='invisible'><code>fn <a href='#method.try_recv_msg' class='fnname'>try_recv_msg</a>(&amp;mut self) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="struct" href="../scaproust/core/struct.Message.html" title="struct scaproust::core::Message">Message</a>&gt;</code></span></h4>
+<div class='docblock'><p>Non-blocking version of the recv_msg method.</p>
+</div><h4 id='method.set_send_timeout' class="method"><span id='set_send_timeout.v' class='invisible'><code>fn <a href='#method.set_send_timeout' class='fnname'>set_send_timeout</a>(&amp;mut self, timeout: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.tuple.html">()</a>&gt;</code></span></h4>
+<div class='docblock'><p>Sets the timeout for send operation on the socket.
+If message cannot be sent within the specified timeout, 
+an error with the kind <code>TimedOut</code> is returned. 
+None means infinite timeout. Default value is <code>None</code>.</p>
+</div><h4 id='method.set_recv_timeout' class="method"><span id='set_recv_timeout.v' class='invisible'><code>fn <a href='#method.set_recv_timeout' class='fnname'>set_recv_timeout</a>(&amp;mut self, timeout: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>&gt;) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.tuple.html">()</a>&gt;</code></span></h4>
+<div class='docblock'><p>Sets the timeout for recv operation on the socket.
+If message cannot be received within the specified timeout, 
+an error with the kind <code>TimedOut</code> is returned. 
+<code>None</code> value means infinite timeout. Default value is <code>None</code>.</p>
+</div><h4 id='method.set_send_priority' class="method"><span id='set_send_priority.v' class='invisible'><code>fn <a href='#method.set_send_priority' class='fnname'>set_send_priority</a>(&amp;mut self, priority: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.tuple.html">()</a>&gt;</code></span></h4>
+<div class='docblock'><p>Sets outbound priority for endpoints subsequently added to the socket.
+This option has no effect on socket types that send messages to all the peers.<br>
+However, if the socket type sends each message to a single peer (or a limited set of peers), 
+peers with high priority take precedence over peers with low priority. 
+Highest priority is 1, lowest priority is 16. Default value is 8.</p>
+</div><h4 id='method.set_recv_priority' class="method"><span id='set_recv_priority.v' class='invisible'><code>fn <a href='#method.set_recv_priority' class='fnname'>set_recv_priority</a>(&amp;mut self, priority: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.tuple.html">()</a>&gt;</code></span></h4>
+<div class='docblock'><p>Sets inbound priority for endpoints subsequently added to the socket.
+This option has no effect on socket types that are not able to receive messages.<br>
+When receiving a message, messages from peer with higher priority 
+are received before messages from peer with lower priority. 
+Highest priority is 1, lowest priority is 16. Default value is 8.</p>
+</div><h4 id='method.set_tcp_nodelay' class="method"><span id='set_tcp_nodelay.v' class='invisible'><code>fn <a href='#method.set_tcp_nodelay' class='fnname'>set_tcp_nodelay</a>(&amp;mut self, value: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.tuple.html">()</a>&gt;</code></span></h4>
+<div class='docblock'><p>This option, when set to <code>true</code>, disables Nagle’s algorithm.
+It also disables delaying of TCP acknowledgments. 
+Using this option improves latency at the expense of throughput.
+Default value is <code>false</code>.</p>
+</div><h4 id='method.set_option' class="method"><span id='set_option.v' class='invisible'><code>fn <a href='#method.set_option' class='fnname'>set_option</a>(&amp;mut self, cfg_opt: <a class="enum" href="../scaproust/enum.ConfigOption.html" title="enum scaproust::ConfigOption">ConfigOption</a>) -&gt; <a class="type" href="https://doc.rust-lang.org/nightly/std/io/error/type.Result.html" title="type std::io::error::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.tuple.html">()</a>&gt;</code></span></h4>
+<div class='docblock'><p>Sets a socket option.
+See <a href="core/config/enum.ConfigOption.html">ConfigOption</a> to get the list of options.</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><span class='in-band'><code>impl <a class="trait" href="https://doc.rust-lang.org/nightly/core/ops/trait.Drop.html" title="trait core::ops::Drop">Drop</a> for <a class="struct" href="../scaproust/struct.Socket.html" title="struct scaproust::Socket">Socket</a></code></span><span class='out-of-band'><div class='ghost'></div><a class='srclink' href='../src/scaproust/facade/socket.rs.html#310-315' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.drop' class="method"><span id='drop.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/ops/trait.Drop.html#tymethod.drop' class='fnname'>drop</a>(&amp;mut self)</code></span></h4>
+<div class='docblock'><p>A method called when the value goes out of scope. <a href="https://doc.rust-lang.org/nightly/core/ops/trait.Drop.html#tymethod.drop">Read more</a></p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "scaproust";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    <script defer src="../search-index.js"></script>
+</body>
+</html>

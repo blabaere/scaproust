@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `ConfigOption` enum in crate `scaproust`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, ConfigOption">
+
+    <title>scaproust::ConfigOption - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../normalize.css">
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc enum">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='index.html'>scaproust</a></p><script>window.sidebarCurrent = {name: 'ConfigOption', ty: 'enum', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content">
+<h1 class='fqn'><span class='in-band'>Enum <a href='index.html'>scaproust</a>::<wbr><a class="enum" href=''>ConfigOption</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a class='srclink' href='../src/scaproust/core/config.rs.html#23-80' title='goto source code'>[src]</a></span></h1>
+<pre class='rust enum'>pub enum ConfigOption {
+    Linger(<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>),
+    SendTimeout(<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>&gt;),
+    SendPriority(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>),
+    RecvTimeout(<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>&gt;),
+    RecvPriority(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>),
+    RecvMaxSize(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>),
+    RetryIvl(<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>),
+    RetryIvlMax(<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>&gt;),
+    TcpNoDelay(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>),
+    Subscribe(<a class="struct" href="https://doc.rust-lang.org/nightly/collections/string/struct.String.html" title="struct collections::string::String">String</a>),
+    Unsubscribe(<a class="struct" href="https://doc.rust-lang.org/nightly/collections/string/struct.String.html" title="struct collections::string::String">String</a>),
+    ReqResendIvl(<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>),
+    SurveyDeadline(<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>),
+}</pre><h2 class='variants'>Variants</h2>
+<span id='variant.Linger' class='variant'><span id='Linger.v' class='invisible'><code>Linger(<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>)</code></span></span><div class='docblock'><p>Specifies how long the socket should try to send pending outbound messages
+after <code>drop</code> have been called. Default value is 1 second.</p>
+</div><span id='variant.SendTimeout' class='variant'><span id='SendTimeout.v' class='invisible'><code>SendTimeout(<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>&gt;)</code></span></span><div class='docblock'><p>See <a href="struct.Socket.html#method.set_send_timeout">Socket::set_send_timeout</a>.</p>
+</div><span id='variant.SendPriority' class='variant'><span id='SendPriority.v' class='invisible'><code>SendPriority(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>)</code></span></span><div class='docblock'><p>See <a href="struct.Socket.html#method.set_send_priority">Socket::set_send_priority</a>.</p>
+</div><span id='variant.RecvTimeout' class='variant'><span id='RecvTimeout.v' class='invisible'><code>RecvTimeout(<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>&gt;)</code></span></span><div class='docblock'><p>See <a href="struct.Socket.html#method.set_recv_timeout">Socket::set_recv_timeout</a>.</p>
+</div><span id='variant.RecvPriority' class='variant'><span id='RecvPriority.v' class='invisible'><code>RecvPriority(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>)</code></span></span><div class='docblock'><p>See <a href="struct.Socket.html#method.set_recv_priority">Socket::set_recv_priority</a>.</p>
+</div><span id='variant.RecvMaxSize' class='variant'><span id='RecvMaxSize.v' class='invisible'><code>RecvMaxSize(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>)</code></span></span><div class='docblock'><p>Maximum message size that can be received, in bytes.
+Zero value means that the received size is limited only by available addressable memory. 
+Default is 1024kB.</p>
+</div><span id='variant.RetryIvl' class='variant'><span id='RetryIvl.v' class='invisible'><code>RetryIvl(<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>)</code></span></span><div class='docblock'><p>For connection-based transports such as TCP, this option specifies how long to wait,
+when connection is broken before trying to re-establish it. 
+Note that actual reconnect interval may be randomised to some extent 
+to prevent severe reconnection storms. Default value is 0.1 second.</p>
+</div><span id='variant.RetryIvlMax' class='variant'><span id='RetryIvlMax.v' class='invisible'><code>RetryIvlMax(<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>&gt;)</code></span></span><div class='docblock'><p>This option is to be used only in addition to ReconnectInterval option.
+It specifies maximum reconnection interval. On each reconnect attempt,
+the previous interval is doubled until ReconnectIntervalMax is reached.
+Value of <code>None</code> means that no exponential backoff is performed and reconnect interval is based only on ReconnectInterval.
+If RetryIvlMax is less than RetryIvl, it is ignored. 
+Default value is <code>None</code>.</p>
+</div><span id='variant.TcpNoDelay' class='variant'><span id='TcpNoDelay.v' class='invisible'><code>TcpNoDelay(<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>)</code></span></span><div class='docblock'><p>See <a href="struct.Socket.html#method.set_tcp_nodelay">Socket::set_tcp_nodelay</a>.</p>
+</div><span id='variant.Subscribe' class='variant'><span id='Subscribe.v' class='invisible'><code>Subscribe(<a class="struct" href="https://doc.rust-lang.org/nightly/collections/string/struct.String.html" title="struct collections::string::String">String</a>)</code></span></span><div class='docblock'><p>Defined on <code>Sub</code> socket. Subscribes for a particular topic.
+A single <code>Sub</code> socket can handle multiple subscriptions.</p>
+</div><span id='variant.Unsubscribe' class='variant'><span id='Unsubscribe.v' class='invisible'><code>Unsubscribe(<a class="struct" href="https://doc.rust-lang.org/nightly/collections/string/struct.String.html" title="struct collections::string::String">String</a>)</code></span></span><div class='docblock'><p>Defined on Sub` socket. Unsubscribes from a particular topic.</p>
+</div><span id='variant.ReqResendIvl' class='variant'><span id='ReqResendIvl.v' class='invisible'><code>ReqResendIvl(<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>)</code></span></span><div class='docblock'><p>This option is defined on the Req socket.
+If a reply is not received in the specified amount of time, 
+the request will be automatically resent. 
+Default value is 1 minute.</p>
+</div><span id='variant.SurveyDeadline' class='variant'><span id='SurveyDeadline.v' class='invisible'><code>SurveyDeadline(<a class="struct" href="https://doc.rust-lang.org/nightly/std/time/duration/struct.Duration.html" title="struct std::time::duration::Duration">Duration</a>)</code></span></span><div class='docblock'><p>Specifies how long to wait for responses to the survey.
+Once the deadline expires, receive function will return a TimedOut error 
+and all subsequent responses to the survey will be silently dropped.
+Default value is 1 second.</p>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "scaproust";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    <script defer src="../search-index.js"></script>
+</body>
+</html>

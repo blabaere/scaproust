@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["stub","This module provides a pipe implementation built upon mio async streams."]],"struct":[["AsyncPipe",""]]});
