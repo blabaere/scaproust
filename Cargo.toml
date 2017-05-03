@@ -43,5 +43,5 @@ rand = "0.3"
 name = "test"
 path = "test/test.rs"
 
-//[profile.release]
-//debug = true
+#[profile.release]
+#debug = true
