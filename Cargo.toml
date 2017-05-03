@@ -23,11 +23,12 @@ appveyor = { repository = "blabaere/scaproust" }
 
 [dependencies]
 log       = "0.3.7"
-byteorder = "0.5.3"
-time      = "0.1.36"
-mio       = "0.6.6"
-mio-uds   = "0.6.3"
+byteorder = "1.0.0"
+time      = "0.1.37"
+mio       = "0.6.7"
+mio-uds   = "0.6.4"
 iovec     = "0.1.0"
+crossbeam = "0.2.10"
 
 [target.'cfg(windows)'.dependencies]
 miow = "0.2.1"
@@ -35,9 +36,12 @@ mio-named-pipes = "0.1.5"
 winapi = "0.2.8"
 
 [dev-dependencies]
-env_logger = "0.3.5"
+env_logger = "0.4.2"
 rand = "0.3"
 
 [[test]]
 name = "test"
 path = "test/test.rs"
+
+//[profile.release]
+//debug = true
