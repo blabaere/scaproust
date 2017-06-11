@@ -25,7 +25,7 @@ appveyor = { repository = "blabaere/scaproust" }
 log       = "0.3.8"
 byteorder = "1.0.0"
 time      = "0.1.37"
-mio       = "0.6.8"
+mio       = "0.6.9"
 mio-uds   = "0.6.4"
 iovec     = "0.1.0"
 crossbeam = "0.2.10"
