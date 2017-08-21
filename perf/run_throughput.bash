@@ -14,9 +14,24 @@ function run_once {
     wait $perf_local 2> /dev/null
 }
 
+    #perf record -g -- $BIN_PATH/perf_remote_thr $URL $MSG_SIZE $MSG_COUNT
+    #valgrind --tool=callgrind $BIN_PATH/perf_remote_thr $URL $MSG_SIZE $MSG_COUNT
+    #operf $BIN_PATH/perf_remote_thr $URL $MSG_SIZE $MSG_COUNT
+
+function run_once_perf {
+    URL=$1
+    MSG_SIZE=$2
+    MSG_COUNT=$3
+    $BIN_PATH/perf_remote_thr $URL $MSG_SIZE $MSG_COUNT &
+    perf record -g -- $BIN_PATH/perf_local_thr $URL $MSG_SIZE $MSG_COUNT    
+}
+
+#run_once_perf tcp://127.0.0.1:18080 512     1000000
+
 run_once tcp://127.0.0.1:18080 512     1000000
 run_once tcp://127.0.0.1:18080 1024     500000
 run_once tcp://127.0.0.1:18080 8192      50000
 run_once tcp://127.0.0.1:18080 131072    10000
 run_once tcp://127.0.0.1:18080 524288     2000
 run_once tcp://127.0.0.1:18080 1048576    1000
+
