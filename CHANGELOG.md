@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Changed
+- Updates rustc requirement to stable instead of nightly.
+- Small perf improvement (thanks to iovec).
+
 ## 0.3.0
 
 ### Added
