@@ -1,10 +1,10 @@
-## Unreleased
+## 0.3.1 (2017-08-21)
 
 ### Changed
 - Updates rustc requirement to stable instead of nightly.
 - Small perf improvement (thanks to iovec).
 
-## 0.3.0
+## 0.3.0 (2017-03-04)
 
 ### Added
 - IPC transport on Windows, using named pipes.
