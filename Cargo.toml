@@ -24,11 +24,10 @@ appveyor = { repository = "blabaere/scaproust" }
 [dependencies]
 log       = "0.3.8"
 byteorder = "1.0.0"
-time      = "0.1.37"
+time      = "0.1.38"
 mio       = "0.6.9"
 mio-uds   = "0.6.4"
 iovec     = "0.1.0"
-crossbeam = "0.2.10"
 
 [target.'cfg(windows)'.dependencies]
 miow = "0.2.1"
