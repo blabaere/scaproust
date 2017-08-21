@@ -23,7 +23,7 @@ appveyor = { repository = "blabaere/scaproust" }
 
 [dependencies]
 log       = "0.3.8"
-byteorder = "1.0.0"
+byteorder = "1.1.0"
 time      = "0.1.38"
 mio       = "0.6.10"
 mio-uds   = "0.6.4"
