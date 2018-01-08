@@ -6,7 +6,7 @@
 
 use std::io;
 
-use mio::{Poll, Token, Ready, Events, Evented, PollOpt};
+use mio::{Poll, Token, Ready, Event, Events, Evented, PollOpt};
 
 pub trait EventHandler {
     fn handle(&mut self, el: &mut EventLoop, token: Token, events: Ready);
@@ -67,14 +67,8 @@ impl EventLoop {
     }
 
     fn process_events<H: EventHandler>(&mut self, event_handler: &mut H, count: usize) {
-        let mut i = 0;
-
-        while i < count {
-            let event = self.events.get(i).unwrap();
-
+        for event in self.events.iter().take(count).collect::<Vec<Event>>() {
             event_handler.handle(self, event.token(), event.readiness());
-
-            i += 1;
         }
     }
 
