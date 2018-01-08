@@ -9,7 +9,7 @@ use std::io;
 use std::thread;
 use std::sync::mpsc;
 
-use mio;
+use mio_extras;
 
 use super::*;
 use transport::Transport;
@@ -69,7 +69,7 @@ impl SessionBuilder {
     pub fn build(self) -> io::Result<Session> {
 
         let (reply_tx, reply_rx) = mpsc::channel();
-        let (request_tx, request_rx) = mio::channel::channel();
+        let (request_tx, request_rx) = mio_extras::channel::channel();
         let session = Session::new(RequestSender::new(request_tx), reply_rx);
 
         thread::spawn(move || dispatcher::Dispatcher::dispatch(self.transports, request_rx, reply_tx));

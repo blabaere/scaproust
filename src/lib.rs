@@ -61,6 +61,7 @@ extern crate time;
 extern crate byteorder;
 extern crate mio;
 extern crate mio_uds;
+extern crate mio_extras;
 extern crate iovec;
 
 #[cfg(windows)]
