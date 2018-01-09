@@ -11,7 +11,7 @@ use std::io;
 use std::time::Duration;
 
 use mio::{Evented, Token, Ready, PollOpt};
-use mio::timer::{Timer, Timeout};
+use mio_extras::timer::{Timer, Timeout};
 
 use core::context;
 use core::device;
@@ -378,7 +378,7 @@ impl<'a> Network for SocketEventLoopContext<'a> {
 impl<'a> context::Scheduler for SocketEventLoopContext<'a> {
     fn schedule(&mut self, schedulable: context::Schedulable, delay: Duration) -> io::Result<Scheduled> {
         let task = Task::Socket(self.socket_id, schedulable);
-        let handle = try!(self.timer.set_timeout(delay, task).map_err(from_timer_error));
+        let handle = self.timer.set_timeout(delay, task);
         let scheduled = self.schedule.insert(handle);
         
         Ok(scheduled)
@@ -524,7 +524,7 @@ impl<'a> probe::Context for ProbeEventLoopContext<'a> {
 impl<'a> probe::Scheduler for ProbeEventLoopContext<'a> {
     fn schedule(&mut self, schedulable: probe::Schedulable, delay: Duration) -> io::Result<Scheduled> {
         let task = Task::Probe(self.probe_id, schedulable);
-        let handle = try!(self.timer.set_timeout(delay, task).map_err(from_timer_error));
+        let handle = self.timer.set_timeout(delay, task);
         let scheduled = self.schedule.insert(handle);
         
         Ok(scheduled)

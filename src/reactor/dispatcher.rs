@@ -10,8 +10,8 @@ use std::io;
 use std::time::Duration;
 
 use mio::{Token, Ready, PollOpt};
-use mio::timer::{Timer, Builder};
-use mio::channel::{Receiver};
+use mio_extras::timer::{Timer, Builder};
+use mio_extras::channel::{Receiver};
 
 use core::{BuildIdHasher, SocketId, EndpointId, DeviceId, ProbeId, session, socket, context, endpoint, device, probe};
 use transport::{Transport, pipe, acceptor};

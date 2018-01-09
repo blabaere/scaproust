@@ -27,6 +27,7 @@ byteorder = "1.1.0"
 time      = "0.1.38"
 mio       = "0.6.10"
 mio-uds   = "0.6.4"
+mio-extras = "2.0.3"
 iovec     = "0.1.0"
 
 [target.'cfg(windows)'.dependencies]

@@ -13,7 +13,7 @@ pub mod probe;
 use std::sync::mpsc;
 use std::io;
 
-use mio;
+use mio_extras;
 
 use reactor;
 use io_error::*;
@@ -31,4 +31,4 @@ impl<T> Receiver<T> for mpsc::Receiver<T> {
     }
 }
 
-pub type EventLoopRequestSender = mio::channel::Sender<reactor::Request>;
+pub type EventLoopRequestSender = mio_extras::channel::Sender<reactor::Request>;

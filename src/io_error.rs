@@ -7,7 +7,7 @@
 use std::error;
 use std::io;
 
-use mio;
+use mio_extras;
 
 pub fn other_io_error<E>(msg: E) -> io::Error where E: Into<Box<error::Error + Send + Sync>> {
     io::Error::new(io::ErrorKind::Other, msg)
@@ -29,13 +29,9 @@ pub fn timedout_io_error<E>(msg: E) -> io::Error where E: Into<Box<error::Error 
     io::Error::new(io::ErrorKind::TimedOut, msg)
 }
 
-pub fn from_send_error<T>(send_error: mio::channel::SendError<T>) -> io::Error {
+pub fn from_send_error<T>(send_error: mio_extras::channel::SendError<T>) -> io::Error {
     match send_error {
-        mio::channel::SendError::Io(e) => e,
-        mio::channel::SendError::Disconnected(_) => other_io_error("channel closed")
+        mio_extras::channel::SendError::Io(e) => e,
+        mio_extras::channel::SendError::Disconnected(_) => other_io_error("channel closed")
     }
-}
-
-pub fn from_timer_error(timer_error: mio::timer::TimerError) -> io::Error {
-    other_io_error(timer_error)
 }
