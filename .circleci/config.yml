@@ -2,15 +2,11 @@ version: 2
 jobs:
   build:
     docker:
-      - image: debian:stretch
+      - image: abronan/rust-circleci:latest
     steps:
       - checkout
-      - run:
-          name: Install rust
-          command: curl https://sh.rustup.rs -sSf | sh
-      - run:
-          name: Display rust version
-          command: rustc --version --verbose
+      - restore_cache:
+          key: project-cache
       - run:
           name: Build & Test
-          command: cargo test && cargo doc --no-deps
+          command: rustup run stable cargo test
