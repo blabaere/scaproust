@@ -6,11 +6,11 @@ jobs:
     steps:
       - checkout
       - run:
-        name: Install rust
-        command: curl https://sh.rustup.rs -sSf | sh
+          name: Install rust
+          command: curl https://sh.rustup.rs -sSf | sh
       - run:
-        name: Display rust version
-        command: rustc --version --verbose
+          name: Display rust version
+          command: rustc --version --verbose
       - run:
-        name: Build & Test
-        command: cargo test && cargo doc --no-deps
+          name: Build & Test
+          command: cargo test && cargo doc --no-deps
