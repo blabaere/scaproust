@@ -94,15 +94,25 @@ fn write_transport_hdr(stream: &mut TcpStream, msg: Rc<Message>, mut written: us
 
     if msg.get_header().len() == 0 {
         let payload = msg.get_body();
-        let buffers: &[&IoVec] = &[transport_hdr.into(), payload.into()];
 
-        written += try!(write_buffers(stream, buffers));
+        written += if payload.len() == 0 {
+            try!(write_buffer(stream, transport_hdr))
+        } else {
+            let buffers: &[&IoVec] = &[transport_hdr.into(), payload.into()];
+
+            try!(write_buffers(stream, buffers))
+        };
     } else {
         let proto_hdr = msg.get_header();
         let payload = msg.get_body();
-        let buffers: &[&IoVec] = &[transport_hdr.into(), proto_hdr.into(), payload.into()];
 
-        written += try!(write_buffers(stream, buffers));
+        written += if payload.len() == 0 {
+            let buffers: &[&IoVec] = &[transport_hdr.into(), proto_hdr.into()];
+            try!(write_buffers(stream, buffers))
+        } else {
+            let buffers: &[&IoVec] = &[transport_hdr.into(), proto_hdr.into(), payload.into()];
+            try!(write_buffers(stream, buffers))
+        };
     }
 
     let transport_limit = 8;
