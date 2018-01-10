@@ -8,8 +8,10 @@
 mod stub;
 mod acceptor;
 
+use std::fs;
 use std::io;
 use std::path;
+use std::os::unix::fs::FileTypeExt;
 
 use mio_uds::{UnixListener, UnixStream};
 
@@ -34,6 +36,12 @@ impl Transport for Ipc {
 
     fn bind(&self, dest: &Destination) -> io::Result<Box<Acceptor>> {
         let filename = path::Path::new(dest.addr);
+
+        match fs::metadata(filename).map(|meta| meta.file_type().is_socket()) {
+            Ok(true)  => try!(fs::remove_file(filename)),
+            _ => (),
+        }
+
         let listener = try!(UnixListener::bind(filename));
         let acceptor = IpcAcceptor::new(listener, dest.pids, dest.recv_max_size);
 
