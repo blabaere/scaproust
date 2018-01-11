@@ -14,7 +14,7 @@ use std::os::windows::fs::*;
 use std::os::windows::io::*;
 
 use mio_named_pipes::NamedPipe;
-use winapi;
+use winapi::um::winbase::FILE_FLAG_OVERLAPPED;
 
 use self::stub::IpcPipeStub;
 use self::acceptor::IpcAcceptor;
@@ -29,7 +29,7 @@ pub struct Ipc;
 impl Transport for Ipc {
     fn connect(&self, dest: &Destination) -> io::Result<Box<Pipe>> {
         let mut options = OpenOptions::new();
-        options.read(true).write(true).custom_flags(winapi::FILE_FLAG_OVERLAPPED);
+        options.read(true).write(true).custom_flags(FILE_FLAG_OVERLAPPED);
         let name = format!(r"\\.\pipe\scaproust-pipe-{}", dest.addr);
         let file = try!(options.open(name));
         let named_pipe = unsafe { NamedPipe::from_raw_handle(file.into_raw_handle()) };
