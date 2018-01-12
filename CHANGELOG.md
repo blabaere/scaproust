@@ -1,3 +1,11 @@
+## 0.3.2 (2018-01-12)
+
+### Changed
+- Updates dependencies.
+
+### Fixed
+- Sending an empty message should not crash the session.
+
 ## 0.3.1 (2017-08-21)
 
 ### Changed
