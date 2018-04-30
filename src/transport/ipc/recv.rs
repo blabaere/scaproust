@@ -71,7 +71,7 @@ fn read_header<T:io::Read>(stream: &mut T, mut buffer: [u8; 9], mut read: usize,
 
     if read == 9 {
         let msg_len = BigEndian::read_u64(&buffer[1..]);
-        if msg_len > max_size {
+        if max_size > 0 && msg_len > max_size {
             Err(invalid_data_io_error("message is too long"))
         } else {
             let payload = vec![0u8; msg_len as usize];
