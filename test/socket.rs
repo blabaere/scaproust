@@ -166,3 +166,13 @@ fn try_recv_return_would_block_when_buffer_is_empty() {
     assert_eq!(io::ErrorKind::WouldBlock, err.kind());
     drop(session);
 }
+
+#[test]
+fn set_option_should_support_max_recv_size() {
+    let (mut session, _) = before_each();
+    let mut req = session.create_socket::<Req>().expect("Failed to create socket !");
+    let mut rep = session.create_socket::<Rep>().expect("Failed to create socket !");
+
+    assert!(req.set_option(ConfigOption::RecvMaxSize(64)).is_ok());
+    assert!(rep.set_option(ConfigOption::RecvMaxSize(64)).is_ok());
+}

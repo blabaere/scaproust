@@ -118,6 +118,7 @@ impl ConfigOption {
             ConfigOption::Linger(_)       |
             ConfigOption::SendTimeout(_)  |
             ConfigOption::SendPriority(_) |
+            ConfigOption::RecvMaxSize(_)  |
             ConfigOption::RecvTimeout(_)  |
             ConfigOption::RecvPriority(_) |
             ConfigOption::RetryIvl(_)     |
