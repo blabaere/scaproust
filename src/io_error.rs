@@ -9,23 +9,23 @@ use std::io;
 
 use mio_extras;
 
-pub fn other_io_error<E>(msg: E) -> io::Error where E: Into<Box<error::Error + Send + Sync>> {
+pub fn other_io_error<E>(msg: E) -> io::Error where E: Into<Box<dyn error::Error + Send + Sync>> {
     io::Error::new(io::ErrorKind::Other, msg)
 }
 
-pub fn invalid_data_io_error<E>(msg: E) -> io::Error where E: Into<Box<error::Error + Send + Sync>> {
+pub fn invalid_data_io_error<E>(msg: E) -> io::Error where E: Into<Box<dyn error::Error + Send + Sync>> {
     io::Error::new(io::ErrorKind::InvalidData, msg)
 }
 
-pub fn would_block_io_error<E>(msg: E) -> io::Error where E: Into<Box<error::Error + Send + Sync>> {
+pub fn would_block_io_error<E>(msg: E) -> io::Error where E: Into<Box<dyn error::Error + Send + Sync>> {
     io::Error::new(io::ErrorKind::WouldBlock, msg)
 }
 
-pub fn invalid_input_io_error<E>(msg: E) -> io::Error where E: Into<Box<error::Error + Send + Sync>> {
+pub fn invalid_input_io_error<E>(msg: E) -> io::Error where E: Into<Box<dyn error::Error + Send + Sync>> {
     io::Error::new(io::ErrorKind::InvalidInput, msg)
 }
 
-pub fn timedout_io_error<E>(msg: E) -> io::Error where E: Into<Box<error::Error + Send + Sync>> {
+pub fn timedout_io_error<E>(msg: E) -> io::Error where E: Into<Box<dyn error::Error + Send + Sync>> {
     io::Error::new(io::ErrorKind::TimedOut, msg)
 }
 
