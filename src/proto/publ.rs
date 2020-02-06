@@ -49,17 +49,17 @@ impl Protocol for Pub {
     fn id(&self)      -> u16 { PUB }
     fn peer_id(&self) -> u16 { SUB }
 
-    fn add_pipe(&mut self, _: &mut Context, eid: EndpointId, pipe: Pipe) {
+    fn add_pipe(&mut self, _: &mut dyn Context, eid: EndpointId, pipe: Pipe) {
         self.pipes.insert(eid, pipe);
     }
-    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe> {
+    fn remove_pipe(&mut self, ctx: &mut dyn Context, eid: EndpointId) -> Option<Pipe> {
         self.bc.remove(&eid);
         if self.bc.is_empty() {
             ctx.raise(Event::CanSend(false));
         }
         self.pipes.remove(&eid)
     }
-    fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Timeout) {
+    fn send(&mut self, ctx: &mut dyn Context, msg: Message, timeout: Timeout) {
         let msg = Rc::new(msg);
 
         broadcast::send_to_all(&mut self.bc, &mut self.pipes, ctx, msg);
@@ -70,17 +70,17 @@ impl Protocol for Pub {
             ctx.cancel(sched);
         }
     }
-    fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {
+    fn on_send_ack(&mut self, _: &mut dyn Context, _: EndpointId) {
     }
-    fn on_send_timeout(&mut self, _: &mut Context) {
+    fn on_send_timeout(&mut self, _: &mut dyn Context) {
     }
-    fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_send_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         if self.bc.is_empty() {
             ctx.raise(Event::CanSend(true));
         }
         self.bc.insert(eid);
     }
-    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_send_not_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         let was_empty = self.bc.is_empty();
 
         self.bc.remove(&eid);
@@ -90,20 +90,20 @@ impl Protocol for Pub {
             ctx.raise(Event::CanSend(false));
         }
     }
-    fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
+    fn recv(&mut self, ctx: &mut dyn Context, timeout: Timeout) {
         let error = other_io_error("Recv is not supported by pub protocol");
         let _ = self.reply_tx.send(Reply::Err(error));
         if let Some(sched) = timeout {
             ctx.cancel(sched);
         }
     }
-    fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {
+    fn on_recv_ack(&mut self, _: &mut dyn Context, _: EndpointId, _: Message) {
     }
-    fn on_recv_timeout(&mut self, _: &mut Context) {
+    fn on_recv_timeout(&mut self, _: &mut dyn Context) {
     }
-    fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {
+    fn on_recv_ready(&mut self, _: &mut dyn Context, _: EndpointId) {
     }
-    fn on_recv_not_ready(&mut self, _: &mut Context, _: EndpointId) {
+    fn on_recv_not_ready(&mut self, _: &mut dyn Context, _: EndpointId) {
     }
     fn is_send_ready(&self) -> bool {
         !self.bc.is_empty()
@@ -111,7 +111,7 @@ impl Protocol for Pub {
     fn is_recv_ready(&self) -> bool {
         false
     }
-    fn close(&mut self, ctx: &mut Context) {
+    fn close(&mut self, ctx: &mut dyn Context) {
         self.pipes.close_all(ctx)
     }
 }

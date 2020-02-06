@@ -151,7 +151,7 @@ impl SocketCollection {
         }
     }
 
-    fn add(&mut self, reply_tx: mpsc::Sender<socket::Reply>, proto: Box<socket::Protocol>) -> SocketId {
+    fn add(&mut self, reply_tx: mpsc::Sender<socket::Reply>, proto: Box<dyn socket::Protocol>) -> SocketId {
         let id = SocketId::from(self.ids.next());
         let socket = socket::Socket::new(id, reply_tx, proto);
 

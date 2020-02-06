@@ -39,7 +39,7 @@ impl SendOperation {
         let mut cur_step = step;
 
         loop {
-            let (passed, next_step) = try!(cur_step.advance(stream));
+            let (passed, next_step) = cur_step.advance(stream)?;
 
             if next_step.is_terminal() {
                 return Ok(true);
@@ -96,11 +96,11 @@ fn write_transport_hdr(stream: &mut TcpStream, msg: Rc<Message>, mut written: us
         let payload = msg.get_body();
 
         written += if payload.len() == 0 {
-            try!(write_buffer(stream, transport_hdr))
+            write_buffer(stream, transport_hdr)?
         } else {
             let buffers: &[&IoVec] = &[transport_hdr.into(), payload.into()];
 
-            try!(write_buffers(stream, buffers))
+            write_buffers(stream, buffers)?
         };
     } else {
         let proto_hdr = msg.get_header();
@@ -108,10 +108,10 @@ fn write_transport_hdr(stream: &mut TcpStream, msg: Rc<Message>, mut written: us
 
         written += if payload.len() == 0 {
             let buffers: &[&IoVec] = &[transport_hdr.into(), proto_hdr.into()];
-            try!(write_buffers(stream, buffers))
+            write_buffers(stream, buffers)?
         } else {
             let buffers: &[&IoVec] = &[transport_hdr.into(), proto_hdr.into(), payload.into()];
-            try!(write_buffers(stream, buffers))
+            write_buffers(stream, buffers)?
         };
     }
 
@@ -136,14 +136,14 @@ fn write_protocol_hdr(stream: &mut TcpStream, msg: Rc<Message>, mut written: usi
         let payload = msg.get_body();
         let buffers: &[&IoVec] = &[proto_hdr.into(), payload.into()];
 
-        written += try!(write_buffers(stream, buffers));
+        written += write_buffers(stream, buffers)?;
     } else {
         let proto_hdr = msg.get_header();
         let proto_hdr = &proto_hdr[written..];
         let payload = msg.get_body();
         let buffers: &[&IoVec] = &[proto_hdr.into(), payload.into()];
 
-        written += try!(write_buffers(stream, buffers));
+        written += write_buffers(stream, buffers)?;
     }
 
     let proto_hdr_limit = msg.get_header().len();
@@ -162,12 +162,12 @@ fn write_usr_payload(stream: &mut TcpStream, msg: Rc<Message>, mut written: usiz
     if written == 0 {
         let payload = msg.get_body();
 
-        written += try!(write_buffer(stream, payload));
+        written += write_buffer(stream, payload)?;
     } else {
         let payload = msg.get_body();
         let payload = &payload[written..];
 
-        written += try!(write_buffer(stream, payload));
+        written += write_buffer(stream, payload)?;
     }
 
     let payload_limit = msg.get_body().len();

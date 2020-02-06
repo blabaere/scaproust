@@ -35,7 +35,7 @@ impl RecvOperation {
         let mut cur_step = step;
 
         loop {
-            let (passed, next_step) = try!(cur_step.advance(stream));
+            let (passed, next_step) = cur_step.advance(stream)?;
 
             if !passed {
                 self.step = Some(next_step);
@@ -67,7 +67,7 @@ impl RecvOperationStep {
 }
 
 fn read_header<T:io::Read>(stream: &mut T, mut buffer: [u8; 8], mut read: usize, max_size: u64) -> io::Result<(bool, RecvOperationStep)> {
-    read += try!(stream.read_buffer(&mut buffer[read..]));
+    read += stream.read_buffer(&mut buffer[read..])?;
 
     if read == 8 {
         let msg_len = BigEndian::read_u64(&buffer);
@@ -84,7 +84,7 @@ fn read_header<T:io::Read>(stream: &mut T, mut buffer: [u8; 8], mut read: usize,
 }
 
 fn read_payload<T:io::Read>(stream: &mut T, mut buffer: Vec<u8>, mut read: usize) -> io::Result<(bool, RecvOperationStep)> {
-    read += try!(stream.read_buffer(&mut buffer[read..]));
+    read += stream.read_buffer(&mut buffer[read..])?;
 
     if read == buffer.capacity() {
         Ok((true, RecvOperationStep::Terminal(Message::from_body(buffer))))

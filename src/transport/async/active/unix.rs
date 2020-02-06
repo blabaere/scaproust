@@ -35,13 +35,13 @@ impl<S : AsyncPipeStub> Active<S> {
             can_recv_msg: false
         }
     }
-    fn on_send_progress(&mut self, ctx: &mut Context, progress: Result<bool>) -> Result<()> {
+    fn on_send_progress(&mut self, ctx: &mut dyn Context, progress: Result<bool>) -> Result<()> {
         progress.map(|sent| if sent { self.on_msg_sent(ctx) } )
     }
-    fn on_msg_sent(&mut self, ctx: &mut Context) {
+    fn on_msg_sent(&mut self, ctx: &mut dyn Context) {
         ctx.raise(Event::Sent);
     }
-    fn writable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
+    fn writable_changed(&mut self, ctx: &mut dyn Context, events: Ready) -> Result<()> {
         if events.is_writable() == false {
             return Ok(self.change_can_send(ctx, false));
         }
@@ -57,20 +57,20 @@ impl<S : AsyncPipeStub> Active<S> {
 
         Ok(())
     }
-    fn change_can_send(&mut self, ctx: &mut Context, can_send: bool) {
+    fn change_can_send(&mut self, ctx: &mut dyn Context, can_send: bool) {
         if self.can_send_msg != can_send {
             self.can_send_msg = can_send;
             ctx.raise(Event::CanSend(can_send));
         }
     }
 
-    fn on_recv_progress(&mut self, ctx: &mut Context, progress: Result<Option<Message>>) -> Result<()> {
+    fn on_recv_progress(&mut self, ctx: &mut dyn Context, progress: Result<Option<Message>>) -> Result<()> {
         progress.map(|recv| if let Some(msg) = recv { self.on_msg_received(ctx, msg) } )
     }
-    fn on_msg_received(&mut self, ctx: &mut Context, msg: Message) {
+    fn on_msg_received(&mut self, ctx: &mut dyn Context, msg: Message) {
         ctx.raise(Event::Received(msg));
     }
-    fn readable_changed(&mut self, ctx: &mut Context, events: Ready) -> Result<()> {
+    fn readable_changed(&mut self, ctx: &mut dyn Context, events: Ready) -> Result<()> {
         if events.is_readable() == false {
             return Ok(self.change_can_recv(ctx, false));
         }
@@ -86,7 +86,7 @@ impl<S : AsyncPipeStub> Active<S> {
 
         Ok(())
     }
-    fn change_can_recv(&mut self, ctx: &mut Context, can_recv: bool) {
+    fn change_can_recv(&mut self, ctx: &mut dyn Context, can_recv: bool) {
         if self.can_recv_msg != can_recv {
             self.can_recv_msg = can_recv;
             ctx.raise(Event::CanRecv(can_recv));
@@ -115,16 +115,16 @@ fn interest() -> Ready {
 impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
     fn name(&self) -> &'static str {"Active"}
 
-    fn enter(&mut self, ctx: &mut Context) {
+    fn enter(&mut self, ctx: &mut dyn Context) {
         ctx.reregister(self.stub.deref(), interest(), PollOpt::level());
         ctx.raise(Event::Opened);
     }
-    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+    fn close(self: Box<Self>, ctx: &mut dyn Context) -> Box<dyn PipeState<S>> {
         ctx.deregister(self.stub.deref());
 
         Box::new(Dead)
     }
-    fn send(mut self: Box<Self>, ctx: &mut Context, msg: Rc<Message>) -> Box<PipeState<S>> {
+    fn send(mut self: Box<Self>, ctx: &mut dyn Context, msg: Rc<Message>) -> Box<dyn PipeState<S>> {
         self.can_send_msg = false;
 
         let progress = self.stub.start_send(msg);
@@ -132,7 +132,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
 
         no_transition_if_ok(self, ctx, res)
     }
-    fn recv(mut self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+    fn recv(mut self: Box<Self>, ctx: &mut dyn Context) -> Box<dyn PipeState<S>> {
         self.can_recv_msg = false;
 
         let progress = self.stub.start_recv();
@@ -140,7 +140,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Active<S> {
 
         no_transition_if_ok(self, ctx, res)
     }
-    fn ready(mut self: Box<Self>, ctx: &mut Context, events: Ready) -> Box<PipeState<S>> {
+    fn ready(mut self: Box<Self>, ctx: &mut dyn Context, events: Ready) -> Box<dyn PipeState<S>> {
         let res = 
             self.readable_changed(ctx, events).and_then(|_|
             self.writable_changed(ctx, events).and_then(|_| 

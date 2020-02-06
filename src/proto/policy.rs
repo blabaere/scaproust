@@ -16,7 +16,7 @@ pub mod broadcast {
     pub fn send_to_all(
         bc: &mut HashSet<EndpointId>, 
         pipes: &mut PipeCollection,
-        ctx: &mut Context, 
+        ctx: &mut dyn Context, 
         msg: Rc<Message>) {
 
         for id in bc.drain() {
@@ -26,7 +26,7 @@ pub mod broadcast {
     pub fn send_to_all_except(
         bc: &mut HashSet<EndpointId>, 
         pipes: &mut PipeCollection,
-        ctx: &mut Context, 
+        ctx: &mut dyn Context, 
         msg: Rc<Message>, 
         except: EndpointId) {
 
@@ -44,7 +44,7 @@ pub mod fair_queue {
     use proto::priolist::Priolist;
     use proto::pipes::PipeCollection;
 
-    pub fn recv(fq: &mut Priolist, pipes: &mut PipeCollection, ctx: &mut Context) -> Option<EndpointId> {
+    pub fn recv(fq: &mut Priolist, pipes: &mut PipeCollection, ctx: &mut dyn Context) -> Option<EndpointId> {
         fq.pop().map_or(None, |eid| pipes.recv_from(ctx, eid))
     }
 }
@@ -61,7 +61,7 @@ pub mod load_balancing {
     pub fn send(
         lb: &mut Priolist, 
         pipes: &mut PipeCollection, 
-        ctx: &mut Context, 
+        ctx: &mut dyn Context, 
         msg: Rc<Message>) -> Option<EndpointId> {
         lb.pop().map_or(None, |eid| pipes.send_to(ctx, msg, eid))
     }

@@ -58,7 +58,7 @@ impl<T> Evented for EventLoopBus<T> {
 
         let (registration, readiness) = Registration::new2();
 
-        try!(poll.register(&registration, token, interest, opts));
+        poll.register(&registration, token, interest, opts)?;
 
         if self.queue.is_empty() == false {
             let _ = readiness.set_readiness(Ready::readable());

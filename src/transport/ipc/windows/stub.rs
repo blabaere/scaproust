@@ -62,7 +62,7 @@ impl IpcPipeStub {
     }
 
     fn run_send_operation(&mut self, mut send_operation: SendOperation) -> io::Result<bool> {
-        if try!(send_operation.run(&mut self.named_pipe)) {
+        if send_operation.run(&mut self.named_pipe)? {
             Ok(true)
         } else {
             self.send_operation = Some(send_operation);
@@ -71,7 +71,7 @@ impl IpcPipeStub {
     }
 
     fn run_recv_operation(&mut self, mut recv_operation: RecvOperation) -> io::Result<Option<Message>> {
-        match try!(recv_operation.run(&mut self.named_pipe)) {
+        match recv_operation.run(&mut self.named_pipe)? {
             Some(msg) => Ok(Some(msg)),
             None => {
                 self.recv_operation = Some(recv_operation);

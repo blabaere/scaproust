@@ -49,7 +49,7 @@ impl RequestSender {
 /// Creates the session and starts the I/O thread.
 #[derive(Default)]
 pub struct SessionBuilder {
-    transports: HashMap<String, Box<Transport + Send>, core::BuildIdHasher>
+    transports: HashMap<String, Box<dyn Transport + Send>, core::BuildIdHasher>
 }
 
 impl SessionBuilder {
@@ -117,7 +117,7 @@ impl Session {
     where T : Protocol + From<mpsc::Sender<core::socket::Reply>> + 'static
     {
         Box::new(move |sender: mpsc::Sender<core::socket::Reply>| {
-            Box::new(T::from(sender)) as Box<Protocol>
+            Box::new(T::from(sender)) as Box<dyn Protocol>
         })
     }
 
@@ -141,19 +141,19 @@ impl Session {
 /*****************************************************************************/
 
     /// Creates a loopback device that loops and sends any messages received from the socket back to itself.
-    pub fn create_relay_device(&self, socket: socket::Socket) -> io::Result<Box<device::Device>> {
+    pub fn create_relay_device(&self, socket: socket::Socket) -> io::Result<Box<dyn device::Device>> {
         Ok(Box::new(device::Relay::new(socket)))
     }
 
     /// Creates a bridge device to forward messages between two sockets. 
     /// It loops and sends any messages received from `left` to `right` and vice versa.
-    pub fn create_bridge_device(&mut self, left: socket::Socket, right: socket::Socket) -> io::Result<Box<device::Device>> {
+    pub fn create_bridge_device(&mut self, left: socket::Socket, right: socket::Socket) -> io::Result<Box<dyn device::Device>> {
         let request = Request::CreateDevice(left.id(), right.id());
 
         self.call(request, |reply| self.on_create_device_reply(reply, left, right))
     }
 
-    fn on_create_device_reply(&self, reply: Reply, left: socket::Socket, right: socket::Socket) -> io::Result<Box<device::Device>> {
+    fn on_create_device_reply(&self, reply: Reply, left: socket::Socket, right: socket::Socket) -> io::Result<Box<dyn device::Device>> {
         match reply {
             Reply::DeviceCreated(id, rx) => {
                 let sender = self.request_sender.device_sender(id);

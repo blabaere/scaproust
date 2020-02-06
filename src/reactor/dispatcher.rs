@@ -44,7 +44,7 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     pub fn dispatch(
-        transports: HashMap<String, Box<Transport + Send>, BuildIdHasher>,
+        transports: HashMap<String, Box<dyn Transport + Send>, BuildIdHasher>,
         rx: Receiver<Request>,
         tx: Sender<session::Reply>) -> io::Result<()> {
 
@@ -53,7 +53,7 @@ impl Dispatcher {
         dispatcher.run()
     }
     pub fn new(
-        transports: HashMap<String, Box<Transport + Send>, BuildIdHasher>,
+        transports: HashMap<String, Box<dyn Transport + Send>, BuildIdHasher>,
         rx: Receiver<Request>, 
         tx: Sender<session::Reply>) -> Dispatcher {
 
@@ -83,13 +83,13 @@ impl Dispatcher {
 /*****************************************************************************/
 
     pub fn run(&mut self) -> io::Result<()> {
-        let mut event_loop = try!(EventLoop::new());
+        let mut event_loop = EventLoop::new()?;
         let interest = Ready::readable();
         let opt = PollOpt::edge();
 
-        try!(event_loop.register(&self.channel, CHANNEL_TOKEN, interest, opt));
-        try!(event_loop.register(&self.bus, BUS_TOKEN, interest, opt));
-        try!(event_loop.register(&self.timer, TIMER_TOKEN, interest, opt));
+        event_loop.register(&self.channel, CHANNEL_TOKEN, interest, opt)?;
+        event_loop.register(&self.bus, BUS_TOKEN, interest, opt)?;
+        event_loop.register(&self.timer, TIMER_TOKEN, interest, opt)?;
 
         event_loop.run(self)
     }

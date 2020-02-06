@@ -33,7 +33,7 @@ pub struct TcpPipeStub {
 }
 
 impl Deref for TcpPipeStub {
-    type Target = mio::Evented;
+    type Target = dyn mio::Evented;
     fn deref(&self) -> &Self::Target {
         &self.stream
     }
@@ -50,7 +50,7 @@ impl TcpPipeStub {
     }
 
     fn run_send_operation(&mut self, mut send_operation: SendOperation) -> io::Result<bool> {
-        if try!(send_operation.run(&mut self.stream)) {
+        if send_operation.run(&mut self.stream)? {
             Ok(true)
         } else {
             self.send_operation = Some(send_operation);
@@ -59,7 +59,7 @@ impl TcpPipeStub {
     }
 
     fn run_recv_operation(&mut self, mut recv_operation: RecvOperation) -> io::Result<Option<Message>> {
-        match try!(recv_operation.run(&mut self.stream)) {
+        match recv_operation.run(&mut self.stream)? {
             Some(msg) => Ok(Some(msg)),
             None => {
                 self.recv_operation = Some(recv_operation);

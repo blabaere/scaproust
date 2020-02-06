@@ -44,7 +44,7 @@ impl Device for Relay {
     fn run(mut self: Box<Self>) -> io::Result<()> {
         let mut socket = self.socket.take().unwrap();
         loop {
-            try!(socket.recv_msg().and_then(|msg| socket.send_msg(msg)));
+            socket.recv_msg().and_then(|msg| socket.send_msg(msg))?;
         }
     }
 }
@@ -113,7 +113,7 @@ impl Bridge {
     }
 
     fn run_once(&mut self, left: &mut socket::Socket, right: &mut socket::Socket) -> io::Result<()> {
-        if let Reply::Check(l, r) = try!(self.execute_request(Request::Check)) {
+        if let Reply::Check(l, r) = self.execute_request(Request::Check)? {
             match (l, r) {
                 (true, true) => exchange_msg(left, right),
                 (true, _)    => forward_msg(left, right),
@@ -133,7 +133,7 @@ impl Device for Bridge {
         let mut right = self.right.take().unwrap();
 
         loop {
-            try!(self.run_once(&mut left, &mut right));
+            self.run_once(&mut left, &mut right)?;
         }
     }
 }
@@ -143,8 +143,8 @@ fn forward_msg(from: &mut socket::Socket, to: &mut socket::Socket) -> io::Result
 }
 
 fn exchange_msg(left: &mut socket::Socket, right: &mut socket::Socket) -> io::Result<()> {
-    let from_left = try!(left.recv_msg());
-    let from_right = try!(right.recv_msg());
+    let from_left = left.recv_msg()?;
+    let from_right = right.recv_msg()?;
 
     right.send_msg(from_left).and_then(|_| left.send_msg(from_right))
 }

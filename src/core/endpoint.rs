@@ -47,16 +47,16 @@ impl Endpoint {
         }
     }
 
-    fn open(&self, network: &mut Context, remote: bool) {
+    fn open(&self, network: &mut dyn Context, remote: bool) {
         network.open(self.id, remote)
     }
-    fn send(&self, network: &mut Context, msg: Rc<Message>) {
+    fn send(&self, network: &mut dyn Context, msg: Rc<Message>) {
         network.send(self.id, msg)
     }
-    fn recv(&self, network: &mut Context) {
+    fn recv(&self, network: &mut dyn Context) {
         network.recv(self.id)
     }
-    fn close(mut self, network: &mut Context, remote: bool) -> Option<EndpointSpec> {
+    fn close(mut self, network: &mut dyn Context, remote: bool) -> Option<EndpointSpec> {
         network.close(self.id, remote);
 
         match self.url.take() {
@@ -87,16 +87,16 @@ impl Pipe {
         Pipe(Endpoint::from_spec(id, spec))
     }
 
-    pub fn open(&self, network: &mut Context) {
+    pub fn open(&self, network: &mut dyn Context) {
         self.0.open(network, true)
     }
-    pub fn send(&self, network: &mut Context, msg: Rc<Message>) {
+    pub fn send(&self, network: &mut dyn Context, msg: Rc<Message>) {
         self.0.send(network, msg)
     }
-    pub fn recv(&self, network: &mut Context) {
+    pub fn recv(&self, network: &mut dyn Context) {
         self.0.recv(network)
     }
-    pub fn close(self, network: &mut Context) -> Option<EndpointSpec> {
+    pub fn close(self, network: &mut dyn Context) -> Option<EndpointSpec> {
         self.0.close(network, true)
     }
     pub fn get_send_priority(&self) -> u8 {
@@ -114,10 +114,10 @@ impl Acceptor {
     pub fn from_spec(id: EndpointId, spec: EndpointSpec) -> Acceptor {
         Acceptor(Endpoint::from_spec(id, spec))
     }
-    pub fn open(&self, network: &mut Context) {
+    pub fn open(&self, network: &mut dyn Context) {
         self.0.open(network, false)
     }
-    pub fn close(self, network: &mut Context) -> Option<EndpointSpec> {
+    pub fn close(self, network: &mut dyn Context) -> Option<EndpointSpec> {
         self.0.close(network, false)
     }
     pub fn get_send_priority(&self) -> u8 {

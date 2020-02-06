@@ -36,7 +36,7 @@ impl SendOperation {
         let mut cur_step = step;
 
         loop {
-            let (passed, next_step) = try!(cur_step.advance(stream));
+            let (passed, next_step) = cur_step.advance(stream)?;
 
             if next_step.is_terminal() {
                 return Ok(true);
@@ -84,7 +84,7 @@ fn write_transport_hdr<T:io::Write>(stream: &mut T, msg: Rc<Message>, mut writte
 
     BigEndian::write_u64(&mut buffer[1..], msg_len);
 
-    let sent = try!(stream.write_buffer(&buffer, &mut written));
+    let sent = stream.write_buffer(&buffer, &mut written)?;
     if sent {
         Ok((true, SendOperationStep::ProtocolHdr(msg, 0)))
     } else {
@@ -97,7 +97,7 @@ fn write_protocol_hdr<T:io::Write>(stream: &mut T, msg: Rc<Message>, mut written
         return Ok((true, SendOperationStep::UsrPayload(msg, 0)));
     }
 
-    let sent = try!(stream.write_buffer(msg.get_header(), &mut written));
+    let sent = stream.write_buffer(msg.get_header(), &mut written)?;
     if sent {
         Ok((true, SendOperationStep::UsrPayload(msg, 0)))
     } else {
@@ -110,7 +110,7 @@ fn write_usr_payload<T:io::Write>(stream: &mut T, msg: Rc<Message>, mut written:
         return Ok((true, SendOperationStep::Terminal));
     }
 
-    let sent = try!(stream.write_buffer(msg.get_body(), &mut written));
+    let sent = stream.write_buffer(msg.get_body(), &mut written)?;
     if sent {
         Ok((true, SendOperationStep::Terminal))
     } else {

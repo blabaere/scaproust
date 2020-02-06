@@ -21,7 +21,7 @@ pub struct EventLoop {
 impl EventLoop {
     pub fn new() -> io::Result<EventLoop> {
         let evts = Events::with_capacity(1024);
-        let poll = try!(Poll::new());
+        let poll = Poll::new()?;
         let event_loop = EventLoop {
             events_poller: poll,
             events: evts,
@@ -39,7 +39,7 @@ impl EventLoop {
         self.running = true;
 
         while self.running {
-            try!(self.run_once(event_handler));
+            self.run_once(event_handler)?;
         }
 
         Ok(())
@@ -72,13 +72,13 @@ impl EventLoop {
         }
     }
 
-    pub fn register(&mut self, io: &Evented, token: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
+    pub fn register(&mut self, io: &dyn Evented, token: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
         self.events_poller.register(io, token, interest, opt)
     }
-    pub fn reregister(&mut self, io: &Evented, token: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
+    pub fn reregister(&mut self, io: &dyn Evented, token: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
         self.events_poller.reregister(io, token, interest, opt)
     }
-    pub fn deregister(&mut self, io: &Evented) -> io::Result<()> {
+    pub fn deregister(&mut self, io: &dyn Evented) -> io::Result<()> {
         self.events_poller.deregister(io)
     }
 }

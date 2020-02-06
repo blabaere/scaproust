@@ -31,11 +31,11 @@ pub enum Event {
 }
 
 pub trait Pipe {
-    fn ready(&mut self, ctx: &mut Context, events: Ready);
-    fn open(&mut self, ctx: &mut Context);
-    fn close(&mut self, ctx: &mut Context);
-    fn send(&mut self, ctx: &mut Context, msg: Rc<Message>);
-    fn recv(&mut self, ctx: &mut Context);
+    fn ready(&mut self, ctx: &mut dyn Context, events: Ready);
+    fn open(&mut self, ctx: &mut dyn Context);
+    fn close(&mut self, ctx: &mut dyn Context);
+    fn send(&mut self, ctx: &mut dyn Context, msg: Rc<Message>);
+    fn recv(&mut self, ctx: &mut dyn Context);
 }
 
 pub trait Context : EndpointRegistrar + fmt::Debug {

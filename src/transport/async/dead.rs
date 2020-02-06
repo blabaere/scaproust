@@ -18,22 +18,22 @@ pub struct Dead;
 impl<S : AsyncPipeStub + 'static> PipeState<S> for Dead {
 
     fn name(&self) -> &'static str {"Dead"}
-    fn enter(&mut self, ctx: &mut Context) {
+    fn enter(&mut self, ctx: &mut dyn Context) {
         ctx.raise(Event::Closed);
     }
-    fn open(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
+    fn open(self: Box<Self>, _: &mut dyn Context) -> Box<dyn PipeState<S>> {
         self
     }
-    fn close(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
+    fn close(self: Box<Self>, _: &mut dyn Context) -> Box<dyn PipeState<S>> {
         self
     }
-    fn send(self: Box<Self>, _: &mut Context, _: Rc<Message>) -> Box<PipeState<S>> {
+    fn send(self: Box<Self>, _: &mut dyn Context, _: Rc<Message>) -> Box<dyn PipeState<S>> {
         self
     }
-    fn recv(self: Box<Self>, _: &mut Context) -> Box<PipeState<S>> {
+    fn recv(self: Box<Self>, _: &mut dyn Context) -> Box<dyn PipeState<S>> {
         self
     }
-    fn ready(self: Box<Self>, _: &mut Context, _: Ready) -> Box<PipeState<S>> {
+    fn ready(self: Box<Self>, _: &mut dyn Context, _: Ready) -> Box<dyn PipeState<S>> {
         self
     }
 
@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn on_enter_an_event_is_raised() {
-        let mut state = Box::new(Dead) as Box<PipeState<TestStepStream>>;
+        let mut state = Box::new(Dead) as Box<dyn PipeState<TestStepStream>>;
         let mut ctx = TestPipeContext::new();
 
         state.enter(&mut ctx);

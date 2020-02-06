@@ -60,7 +60,7 @@ struct PendingSurvey {
 
 impl Surveyor {
 
-    fn apply<F>(&mut self, ctx: &mut Context, transition: F) where F : FnOnce(State, &mut Context, &mut Inner) -> State {
+    fn apply<F>(&mut self, ctx: &mut dyn Context, transition: F) where F : FnOnce(State, &mut dyn Context, &mut Inner) -> State {
         if let Some(old_state) = self.state.take() {
             #[cfg(debug_assertions)] let old_name = old_state.name();
             let was_send_ready = old_state.is_send_ready(&self.inner);
@@ -100,10 +100,10 @@ impl Protocol for Surveyor {
     fn id(&self)      -> u16 { SURVEYOR }
     fn peer_id(&self) -> u16 { RESPONDENT }
 
-    fn add_pipe(&mut self, _: &mut Context, eid: EndpointId, pipe: Pipe) {
+    fn add_pipe(&mut self, _: &mut dyn Context, eid: EndpointId, pipe: Pipe) {
         self.inner.add_pipe(eid, pipe)
     }
-    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe> {
+    fn remove_pipe(&mut self, ctx: &mut dyn Context, eid: EndpointId) -> Option<Pipe> {
         let was_send_ready = self.is_send_ready();
         let was_recv_ready = self.is_recv_ready();
         let pipe = self.inner.remove_pipe(eid);
@@ -119,40 +119,40 @@ impl Protocol for Surveyor {
 
         pipe
     }
-    fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Timeout) {
+    fn send(&mut self, ctx: &mut dyn Context, msg: Message, timeout: Timeout) {
         let raw_msg = self.inner.msg_to_raw_msg(msg);
 
         self.apply(ctx, |s, ctx, inner| s.send(ctx, inner, Rc::new(raw_msg), timeout))
     }
-    fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_send_ack(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_ack(ctx, inner, eid))
     }
-    fn on_send_timeout(&mut self, ctx: &mut Context) {
+    fn on_send_timeout(&mut self, ctx: &mut dyn Context) {
         self.apply(ctx, |s, ctx, inner| s.on_send_timeout(ctx, inner))
     }
-    fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_send_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_ready(ctx, inner, eid))
     }
-    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_send_not_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_not_ready(ctx, inner, eid))
     }
-    fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
+    fn recv(&mut self, ctx: &mut dyn Context, timeout: Timeout) {
         self.apply(ctx, |s, ctx, inner| s.recv(ctx, inner, timeout))
     }
-    fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, raw_msg: Message) {
+    fn on_recv_ack(&mut self, ctx: &mut dyn Context, eid: EndpointId, raw_msg: Message) {
         if let Some((msg, survey_id)) = self.inner.raw_msg_to_msg(raw_msg) {
             self.apply(ctx, |s, ctx, inner| s.on_recv_ack(ctx, inner, eid, msg, survey_id))
         } else {
             self.inner.on_recv_ack_malformed(ctx)
         }
     }
-    fn on_recv_timeout(&mut self, ctx: &mut Context) {
+    fn on_recv_timeout(&mut self, ctx: &mut dyn Context) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_timeout(ctx, inner))
     }
-    fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_recv_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
     }
-    fn on_recv_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_recv_not_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_not_ready(ctx, inner, eid))
     }
     fn set_option(&mut self, opt: ConfigOption) -> io::Result<()> {
@@ -161,12 +161,12 @@ impl Protocol for Surveyor {
             _ => Err(invalid_input_io_error("option not supported"))
         }
     }
-    fn on_timer_tick(&mut self, ctx: &mut Context, task: Schedulable) {
+    fn on_timer_tick(&mut self, ctx: &mut dyn Context, task: Schedulable) {
         if let Schedulable::SurveyCancel = task {
             self.apply(ctx, |s, ctx, inner| s.on_survey_timeout(ctx, inner))
         }
     }
-    fn on_device_plugged(&mut self, _: &mut Context) {
+    fn on_device_plugged(&mut self, _: &mut dyn Context) {
         self.inner.is_device_item = true;
     }
     fn is_send_ready(&self) -> bool {
@@ -183,7 +183,7 @@ impl Protocol for Surveyor {
             false
         }
     }
-    fn close(&mut self, ctx: &mut Context) {
+    fn close(&mut self, ctx: &mut dyn Context) {
         self.inner.close(ctx)
     }
 }
@@ -206,7 +206,7 @@ impl State {
         }
     }
 
-    fn on_pipe_removed(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_pipe_removed(self, ctx: &mut dyn Context, inner: &mut Inner, eid: EndpointId) -> State {
         match self {
             State::Receiving(id, p, timeout) => {
                 if id == eid {
@@ -225,7 +225,7 @@ impl State {
 /*                                                                           */
 /*****************************************************************************/
 
-    fn send(self, ctx: &mut Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout) -> State {
+    fn send(self, ctx: &mut dyn Context, inner: &mut Inner, msg: Rc<Message>, timeout: Timeout) -> State {
         if let State::Active(p) = self {
             inner.cancel(ctx, p);
         }
@@ -234,17 +234,17 @@ impl State {
 
         State::Active(pending_survey)
     }
-    fn on_send_ack(self, _: &mut Context, _: &mut Inner, _: EndpointId) -> State {
+    fn on_send_ack(self, _: &mut dyn Context, _: &mut Inner, _: EndpointId) -> State {
         self
     }
-    fn on_send_timeout(self, _: &mut Context, _: &mut Inner) -> State {
+    fn on_send_timeout(self, _: &mut dyn Context, _: &mut Inner) -> State {
         self
     }
-    fn on_send_ready(self, _: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_send_ready(self, _: &mut dyn Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_send_ready(eid);
         self
     }
-    fn on_send_not_ready(self, _: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_send_not_ready(self, _: &mut dyn Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_send_not_ready(eid);
         self
     }
@@ -258,7 +258,7 @@ impl State {
 /*                                                                           */
 /*****************************************************************************/
 
-    fn recv(self, ctx: &mut Context, inner: &mut Inner, timeout: Timeout) -> State {
+    fn recv(self, ctx: &mut dyn Context, inner: &mut Inner, timeout: Timeout) -> State {
         if inner.is_device_item {
             inner.recv(ctx).map_or_else(
                 |   | State::RecvOnHold(None, timeout),
@@ -271,14 +271,14 @@ impl State {
             State::Idle
         }
     }
-    fn recv_reply_for(self, ctx: &mut Context, inner: &mut Inner, timeout: Timeout, p: PendingSurvey) -> State {
+    fn recv_reply_for(self, ctx: &mut dyn Context, inner: &mut Inner, timeout: Timeout, p: PendingSurvey) -> State {
         if let Some(eid) = inner.recv(ctx) {
             State::Receiving(eid, Some(p), timeout)
         } else {
             State::RecvOnHold(Some(p), timeout)
         }
     }
-    fn on_recv_ack(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId, msg: Message, survey_id: u32) -> State {
+    fn on_recv_ack(self, ctx: &mut dyn Context, inner: &mut Inner, eid: EndpointId, msg: Message, survey_id: u32) -> State {
         match self {
             State::Receiving(id, None, timeout) => {
                 if id == eid {
@@ -303,7 +303,7 @@ impl State {
             any => any
         }
     }
-    fn on_recv_timeout(self, _: &mut Context, inner: &mut Inner) -> State {
+    fn on_recv_timeout(self, _: &mut dyn Context, inner: &mut Inner) -> State {
         inner.on_recv_timeout();
 
         match self {
@@ -312,7 +312,7 @@ impl State {
             _ => State::Idle
         }
     }
-    fn on_recv_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_recv_ready(self, ctx: &mut dyn Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_recv_ready(eid);
 
         match self {
@@ -323,11 +323,11 @@ impl State {
             any => any
         }
     }
-    fn on_recv_not_ready(self, _: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_recv_not_ready(self, _: &mut dyn Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_recv_not_ready(eid);
         self
     }
-    fn on_survey_timeout(self, _: &mut Context, _: &mut Inner) -> State {
+    fn on_survey_timeout(self, _: &mut dyn Context, _: &mut Inner) -> State {
         if let State::Active(_) = self {
             State::Idle
         } else {
@@ -373,7 +373,7 @@ impl Inner {
         self.fq.remove(&eid);
         self.pipes.remove(&eid)
     }
-    fn send(&mut self, ctx: &mut Context, msg: Rc<Message>, timeout: Timeout) -> PendingSurvey {
+    fn send(&mut self, ctx: &mut dyn Context, msg: Rc<Message>, timeout: Timeout) -> PendingSurvey {
         broadcast::send_to_all(&mut self.bc, &mut self.pipes, ctx, msg);
 
         let _ = self.reply_tx.send(Reply::Send);
@@ -396,10 +396,10 @@ impl Inner {
         !self.bc.is_empty()
     }
 
-    fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
+    fn recv(&mut self, ctx: &mut dyn Context) -> Option<EndpointId> {
         fair_queue::recv(&mut self.fq, &mut self.pipes, ctx)
     }
-    fn recv_when_inactive(&mut self, ctx: &mut Context, timeout: Timeout) {
+    fn recv_when_inactive(&mut self, ctx: &mut dyn Context, timeout: Timeout) {
         let error = other_io_error("Can't recv: no active survey");
         let _ = self.reply_tx.send(Reply::Err(error));
         if let Some(sched) = timeout {
@@ -415,7 +415,7 @@ impl Inner {
     fn is_recv_ready(&self) -> bool {
         self.fq.peek()
     }
-    fn on_recv_ack(&self, ctx: &mut Context, timeout: Timeout, msg: Message) {
+    fn on_recv_ack(&self, ctx: &mut dyn Context, timeout: Timeout, msg: Message) {
         let _ = self.reply_tx.send(Reply::Recv(msg));
         if let Some(sched) = timeout {
             ctx.cancel(sched);
@@ -425,12 +425,12 @@ impl Inner {
         let error = timedout_io_error("Recv timed out");
         let _ = self.reply_tx.send(Reply::Err(error));
     }
-    fn on_recv_ack_malformed(&self, _: &mut Context) {
+    fn on_recv_ack_malformed(&self, _: &mut dyn Context) {
         let error = invalid_data_io_error("Received response without survey id");
         let _ = self.reply_tx.send(Reply::Err(error));
     }
 
-    fn cancel(&self, ctx: &mut Context, mut pending_survey: PendingSurvey) {
+    fn cancel(&self, ctx: &mut dyn Context, mut pending_survey: PendingSurvey) {
         if let Some(timeout) = pending_survey.timeout.take() {
             ctx.cancel(timeout);
         }
@@ -465,7 +465,7 @@ impl Inner {
     fn set_survey_deadline(&mut self, ivl: Duration) {
         self.deadline = ivl;
     }
-    fn close(&mut self, ctx: &mut Context) {
+    fn close(&mut self, ctx: &mut dyn Context) {
         self.pipes.close_all(ctx)
     }
 }

@@ -33,7 +33,7 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for Initial<S> {
 
     fn name(&self) -> &'static str {"Initial"}
     
-    fn open(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+    fn open(self: Box<Self>, ctx: &mut dyn Context) -> Box<dyn PipeState<S>> {
         transition::<Initial<S>, HandshakeTx<S>, S>(self, ctx)
     }
 

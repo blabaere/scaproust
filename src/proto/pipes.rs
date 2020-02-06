@@ -40,21 +40,21 @@ impl PipeCollection {
         self.pipes.get_mut(id)
     }
 
-    pub fn send_to(&mut self, ctx: &mut Context, msg: Rc<Message>, eid: EndpointId) -> Option<EndpointId> {
+    pub fn send_to(&mut self, ctx: &mut dyn Context, msg: Rc<Message>, eid: EndpointId) -> Option<EndpointId> {
         self.pipes.get_mut(&eid).map_or(None, |pipe| {
             pipe.send(ctx, msg); 
             Some(eid)
         })
     }
 
-    pub fn recv_from(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointId> {
+    pub fn recv_from(&mut self, ctx: &mut dyn Context, eid: EndpointId) -> Option<EndpointId> {
         self.pipes.get_mut(&eid).map_or(None, |pipe| {
             pipe.recv(ctx); 
             Some(eid)
         })
     }
 
-    pub fn close_all(&mut self, ctx: &mut Context) {
+    pub fn close_all(&mut self, ctx: &mut dyn Context) {
         for (_, pipe) in self.pipes.drain() {
             pipe.close(ctx);
         }

@@ -15,7 +15,7 @@ use mio::Evented;
 use core::Message;
 use io_error::*;
 
-pub trait AsyncPipeStub : Sender + Receiver + Handshake + Deref<Target=Evented> {
+pub trait AsyncPipeStub : Sender + Receiver + Handshake + Deref<Target=dyn Evented> {
     #[cfg(windows)]
     fn read_and_write_void(&mut self);
     #[cfg(windows)]
@@ -43,7 +43,7 @@ pub fn send_and_check_handshake<T:Write>(stream: &mut T, pids: (u16, u16)) -> Re
     let (proto_id, _) = pids;
     let handshake = create_handshake(proto_id);
 
-    match try!(stream.write(&handshake)) {
+    match stream.write(&handshake)? {
         8 => Ok(()),
         _ => Err(would_block_io_error("failed to send handshake"))
     }

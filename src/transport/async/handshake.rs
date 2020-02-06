@@ -43,18 +43,18 @@ impl<S : AsyncPipeStub> Into<HandshakeRx<S>> for HandshakeTx<S> {
 impl<S : AsyncPipeStub> PipeState<S> for HandshakeTx<S> {
     fn name(&self) -> &'static str {"HandshakeTx"}
 
-    fn enter(&mut self, ctx: &mut Context) {
+    fn enter(&mut self, ctx: &mut dyn Context) {
         ctx.register(self.stub.deref(), Ready::writable(), PollOpt::level());
 
         #[cfg(windows)]
         self.stub.registered();
     }
-    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+    fn close(self: Box<Self>, ctx: &mut dyn Context) -> Box<dyn PipeState<S>> {
         ctx.deregister(self.stub.deref());
 
         Box::new(Dead)
     }
-    fn ready(mut self: Box<Self>, ctx: &mut Context, events: Ready) -> Box<PipeState<S>> {
+    fn ready(mut self: Box<Self>, ctx: &mut dyn Context, events: Ready) -> Box<dyn PipeState<S>> {
         if events.is_writable() {
             let res = self.send_handshake();
 
@@ -95,15 +95,15 @@ impl<S : AsyncPipeStub + 'static> PipeState<S> for HandshakeRx<S> {
 
     fn name(&self) -> &'static str {"HandshakeRx"}
 
-    fn enter(&mut self, ctx: &mut Context) {
+    fn enter(&mut self, ctx: &mut dyn Context) {
         ctx.reregister(self.stub.deref(), Ready::readable(), PollOpt::level());
     }
-    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+    fn close(self: Box<Self>, ctx: &mut dyn Context) -> Box<dyn PipeState<S>> {
         ctx.deregister(self.stub.deref());
 
         Box::new(Dead)
     }
-    fn ready(mut self: Box<Self>, ctx: &mut Context, events: Ready) -> Box<PipeState<S>> {
+    fn ready(mut self: Box<Self>, ctx: &mut dyn Context, events: Ready) -> Box<dyn PipeState<S>> {
         if events.is_readable() {
             let res = self.recv_handshake();
             

@@ -29,9 +29,9 @@ use io_error::*;
 use super::event_loop::EventLoop;
 
 pub trait Registrar {
-    fn register(&mut self, io: &Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()>;
-    fn reregister(&mut self, io: &Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()>;
-    fn deregister(&mut self, io: &Evented) -> io::Result<()>;
+    fn register(&mut self, io: &dyn Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()>;
+    fn reregister(&mut self, io: &dyn Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()>;
+    fn deregister(&mut self, io: &dyn Evented) -> io::Result<()>;
 }
 
 pub struct SocketEventLoopContext<'a> {
@@ -46,7 +46,7 @@ pub struct EndpointEventLoopContext<'a, 'b> {
     socket_id: SocketId,
     endpoint_id: EndpointId,
     signal_tx: &'a mut EventLoopBus<Signal>,
-    registrar: &'b mut Registrar
+    registrar: &'b mut dyn Registrar
 }
 
 pub struct DeviceEventLoopContext<'a> {
@@ -64,18 +64,18 @@ pub struct ProbeEventLoopContext<'a> {
 pub struct PipeController {
     socket_id: SocketId,
     endpoint_id: EndpointId,
-    pipe: Box<pipe::Pipe>
+    pipe: Box<dyn pipe::Pipe>
 }
 
 pub struct AcceptorController {
     socket_id: SocketId,
     endpoint_id: EndpointId,
-    acceptor: Box<acceptor::Acceptor>
+    acceptor: Box<dyn acceptor::Acceptor>
 }
 
 pub struct EndpointCollection {
     ids: Sequence,
-    transports: HashMap<String, Box<Transport + Send>, BuildIdHasher>,
+    transports: HashMap<String, Box<dyn Transport + Send>, BuildIdHasher>,
     pipes: HashMap<EndpointId, PipeController, BuildIdHasher>,
     acceptors: HashMap<EndpointId, AcceptorController, BuildIdHasher>
 }
@@ -86,13 +86,13 @@ pub struct Schedule {
 }
 
 impl Registrar for EventLoop {
-    fn register(&mut self, io: &Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
+    fn register(&mut self, io: &dyn Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
         self.register(io, tok, interest, opt)
     }
-    fn reregister(&mut self, io: &Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
+    fn reregister(&mut self, io: &dyn Evented, tok: Token, interest: Ready, opt: PollOpt) -> io::Result<()> {
         self.reregister(io, tok, interest, opt)
     }
-    fn deregister(&mut self, io: &Evented) -> io::Result<()> {
+    fn deregister(&mut self, io: &dyn Evented) -> io::Result<()> {
         self.deregister(io)
     }
 }
@@ -104,13 +104,13 @@ impl Registrar for EventLoop {
 /*****************************************************************************/
 
 impl PipeController {
-    pub fn ready(&mut self, registrar: &mut Registrar, signal_bus: &mut EventLoopBus<Signal>, events: Ready) {
+    pub fn ready(&mut self, registrar: &mut dyn Registrar, signal_bus: &mut EventLoopBus<Signal>, events: Ready) {
         let mut ctx = self.create_context(registrar, signal_bus);
 
         self.pipe.ready(&mut ctx, events);
     }
 
-    pub fn process(&mut self, registrar: &mut Registrar, signal_bus: &mut EventLoopBus<Signal>, cmd: pipe::Command) {
+    pub fn process(&mut self, registrar: &mut dyn Registrar, signal_bus: &mut EventLoopBus<Signal>, cmd: pipe::Command) {
         let mut ctx = self.create_context(registrar, signal_bus);
 
         match cmd {
@@ -121,7 +121,7 @@ impl PipeController {
         }
     }
 
-    fn create_context<'a, 'b>(&self, registrar: &'b mut Registrar, signal_bus: &'a mut EventLoopBus<Signal>) -> EndpointEventLoopContext<'a, 'b> {
+    fn create_context<'a, 'b>(&self, registrar: &'b mut dyn Registrar, signal_bus: &'a mut EventLoopBus<Signal>) -> EndpointEventLoopContext<'a, 'b> {
         EndpointEventLoopContext {
             socket_id: self.socket_id,
             endpoint_id: self.endpoint_id,
@@ -132,13 +132,13 @@ impl PipeController {
 }
 
 impl AcceptorController {
-    pub fn ready(&mut self, registrar: &mut Registrar, signal_bus: &mut EventLoopBus<Signal>, events: Ready) {
+    pub fn ready(&mut self, registrar: &mut dyn Registrar, signal_bus: &mut EventLoopBus<Signal>, events: Ready) {
         let mut ctx = self.create_context(registrar, signal_bus);
 
         self.acceptor.ready(&mut ctx, events);
     }
 
-    pub fn process(&mut self, registrar: &mut Registrar, signal_bus: &mut EventLoopBus<Signal>, cmd: acceptor::Command) {
+    pub fn process(&mut self, registrar: &mut dyn Registrar, signal_bus: &mut EventLoopBus<Signal>, cmd: acceptor::Command) {
         let mut ctx = self.create_context(registrar, signal_bus);
 
         match cmd {
@@ -147,7 +147,7 @@ impl AcceptorController {
         }
     }
 
-    fn create_context<'a, 'b>(&self, registrar: &'b mut Registrar, signal_bus: &'a mut EventLoopBus<Signal>) -> EndpointEventLoopContext<'a, 'b> {
+    fn create_context<'a, 'b>(&self, registrar: &'b mut dyn Registrar, signal_bus: &'a mut EventLoopBus<Signal>) -> EndpointEventLoopContext<'a, 'b> {
         EndpointEventLoopContext {
             socket_id: self.socket_id,
             endpoint_id: self.endpoint_id,
@@ -158,7 +158,7 @@ impl AcceptorController {
 }
 
 impl EndpointCollection {
-    pub fn new(seq: Sequence, transports: HashMap<String, Box<Transport + Send>, BuildIdHasher>) -> EndpointCollection {
+    pub fn new(seq: Sequence, transports: HashMap<String, Box<dyn Transport + Send>, BuildIdHasher>) -> EndpointCollection {
         EndpointCollection {
             ids: seq,
             transports: transports,
@@ -167,7 +167,7 @@ impl EndpointCollection {
         }
     }
 
-    fn get_transport(&self, scheme: &str) -> io::Result<&Box<Transport + Send>> {
+    fn get_transport(&self, scheme: &str) -> io::Result<&Box<dyn Transport + Send>> {
         self.transports.
             get(scheme).
             ok_or_else(|| invalid_input_io_error("invalid scheme"))
@@ -177,7 +177,7 @@ impl EndpointCollection {
         self.pipes.get_mut(&eid)
     }
 
-    pub fn insert_pipe(&mut self, sid: SocketId, pipe: Box<pipe::Pipe>) -> EndpointId {
+    pub fn insert_pipe(&mut self, sid: SocketId, pipe: Box<dyn pipe::Pipe>) -> EndpointId {
         let eid = EndpointId::from(self.ids.next());
         
         self.insert_pipe_controller(sid, eid, pipe);
@@ -185,7 +185,7 @@ impl EndpointCollection {
         eid
     }
 
-    fn insert_pipe_controller(&mut self, sid: SocketId, eid: EndpointId, pipe: Box<pipe::Pipe>) {
+    fn insert_pipe_controller(&mut self, sid: SocketId, eid: EndpointId, pipe: Box<dyn pipe::Pipe>) {
         let controller = PipeController {
             socket_id: sid,
             endpoint_id: eid,
@@ -203,7 +203,7 @@ impl EndpointCollection {
         self.acceptors.get_mut(&eid)
     }
 
-    fn insert_acceptor(&mut self, sid: SocketId, acceptor: Box<acceptor::Acceptor>) -> EndpointId {
+    fn insert_acceptor(&mut self, sid: SocketId, acceptor: Box<dyn acceptor::Acceptor>) -> EndpointId {
         let eid = EndpointId::from(self.ids.next());
 
         self.insert_acceptor_controller(sid, eid, acceptor);
@@ -211,7 +211,7 @@ impl EndpointCollection {
         eid
     }
 
-    fn insert_acceptor_controller(&mut self, sid: SocketId, eid: EndpointId, acceptor: Box<acceptor::Acceptor>) {
+    fn insert_acceptor_controller(&mut self, sid: SocketId, eid: EndpointId, acceptor: Box<dyn acceptor::Acceptor>) {
         let controller = AcceptorController {
             socket_id: sid,
             endpoint_id: eid,
@@ -283,11 +283,11 @@ impl<'a> SocketEventLoopContext<'a> {
         self.send_signal(signal);
     }
 
-    fn get_transport(&self, scheme: &str) -> io::Result<&Box<Transport + Send>> {
+    fn get_transport(&self, scheme: &str) -> io::Result<&Box<dyn Transport + Send>> {
         self.endpoints.get_transport(scheme)
     }
 
-    fn connect(&mut self, tmpl: &EndpointTmpl) -> io::Result<Box<pipe::Pipe>> {
+    fn connect(&mut self, tmpl: &EndpointTmpl) -> io::Result<Box<dyn pipe::Pipe>> {
         let url = &tmpl.spec.url;
         let index = match url.find("://") {
             Some(x) => x,
@@ -296,7 +296,7 @@ impl<'a> SocketEventLoopContext<'a> {
 
         let (scheme, remainder) = url.split_at(index);
         let addr = &remainder[3..];
-        let transport = try!(self.get_transport(scheme));
+        let transport = self.get_transport(scheme)?;
         let dest = Destination {
             addr: addr,
             pids: tmpl.pids,
@@ -307,7 +307,7 @@ impl<'a> SocketEventLoopContext<'a> {
         transport.connect(&dest)
     }
 
-    fn bind(&mut self, tmpl: &EndpointTmpl) -> io::Result<Box<acceptor::Acceptor>> {
+    fn bind(&mut self, tmpl: &EndpointTmpl) -> io::Result<Box<dyn acceptor::Acceptor>> {
         let url = &tmpl.spec.url;
         let index = match url.find("://") {
             Some(x) => x,
@@ -316,7 +316,7 @@ impl<'a> SocketEventLoopContext<'a> {
 
         let (scheme, remainder) = url.split_at(index);
         let addr = &remainder[3..];
-        let transport = try!(self.get_transport(scheme));
+        let transport = self.get_transport(scheme)?;
         let dest = Destination {
             addr: addr,
             pids: tmpl.pids,
@@ -331,24 +331,24 @@ impl<'a> SocketEventLoopContext<'a> {
 impl<'a> Network for SocketEventLoopContext<'a> {
 
     fn connect(&mut self, sid: SocketId, tmpl: &EndpointTmpl) -> io::Result<EndpointId> {
-        let pipe = try!(self.connect(tmpl));
+        let pipe = self.connect(tmpl)?;
         let eid = self.endpoints.insert_pipe(sid, pipe);
 
         Ok(eid)
     }
     fn bind(&mut self, sid: SocketId, tmpl: &EndpointTmpl) -> io::Result<EndpointId> {
-        let acceptor = try!(self.bind(tmpl));
+        let acceptor = self.bind(tmpl)?;
         let eid = self.endpoints.insert_acceptor(sid, acceptor);
 
         Ok(eid)
     }
     fn reconnect(&mut self, sid: SocketId, eid: EndpointId, tmpl: &EndpointTmpl) -> io::Result<()> {
-        let pipe = try!(self.connect(tmpl));
+        let pipe = self.connect(tmpl)?;
 
         Ok(self.endpoints.insert_pipe_controller(sid, eid, pipe))
     }
     fn rebind(&mut self, sid: SocketId, eid: EndpointId, tmpl: &EndpointTmpl) -> io::Result<()> {
-        let acceptor = try!(self.bind(tmpl));
+        let acceptor = self.bind(tmpl)?;
 
         Ok(self.endpoints.insert_acceptor_controller(sid, eid, acceptor))
     }
@@ -409,21 +409,21 @@ impl<'a> context::Context for SocketEventLoopContext<'a> {
 /*****************************************************************************/
 
 impl<'a, 'b> EndpointRegistrar for EndpointEventLoopContext<'a, 'b> {
-    fn register(&mut self, io: &Evented, interest: Ready, opt: PollOpt) {
+    fn register(&mut self, io: &dyn Evented, interest: Ready, opt: PollOpt) {
         let res = self.registrar.register(io, self.endpoint_id.into(), interest, opt);
 
         if res.is_err() {
             error!("[{:?}] register failed: {}", self, res.unwrap_err());
         }
     }
-    fn reregister(&mut self, io: &Evented, interest: Ready, opt: PollOpt) {
+    fn reregister(&mut self, io: &dyn Evented, interest: Ready, opt: PollOpt) {
         let res = self.registrar.reregister(io, self.endpoint_id.into(), interest, opt);
 
         if res.is_err() {
             error!("[{:?}] reregister failed: {}", self, res.unwrap_err());
         }
     }
-    fn deregister(&mut self, io: &Evented) {
+    fn deregister(&mut self, io: &dyn Evented) {
         let res = self.registrar.deregister(io);
 
         if res.is_err() {

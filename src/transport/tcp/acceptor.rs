@@ -32,7 +32,7 @@ impl TcpAcceptor {
         }
     }
 
-    fn accept(&mut self, ctx: &mut Context) {
+    fn accept(&mut self, ctx: &mut dyn Context) {
         let mut pipes = Vec::new();
 
         loop {
@@ -58,7 +58,7 @@ impl TcpAcceptor {
         }
     }
 
-    fn create_pipe(&self, stream: TcpStream) -> Box<pipe::Pipe> {
+    fn create_pipe(&self, stream: TcpStream) -> Box<dyn pipe::Pipe> {
         let stub = TcpPipeStub::new(stream, self.recv_max_size);
 
         Box::new(AsyncPipe::new(stub, self.proto_ids))
@@ -66,18 +66,18 @@ impl TcpAcceptor {
 }
 
 impl acceptor::Acceptor for TcpAcceptor {
-    fn ready(&mut self, ctx: &mut Context, events: mio::Ready) {
+    fn ready(&mut self, ctx: &mut dyn Context, events: mio::Ready) {
         if events.is_readable() {
             self.accept(ctx);
         }
     }
 
-    fn open(&mut self, ctx: &mut Context) {
+    fn open(&mut self, ctx: &mut dyn Context) {
         ctx.register(&self.listener, mio::Ready::readable(), mio::PollOpt::edge());
         ctx.raise(Event::Opened);
     }
 
-    fn close(&mut self, ctx: &mut Context) {
+    fn close(&mut self, ctx: &mut dyn Context) {
         ctx.deregister(&self.listener);
         ctx.raise(Event::Closed);
     }

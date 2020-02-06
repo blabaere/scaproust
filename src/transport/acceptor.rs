@@ -19,14 +19,14 @@ pub enum Command {
 pub enum Event {
     Opened,
     Closed,
-    Accepted(Vec<Box<Pipe>>),
+    Accepted(Vec<Box<dyn Pipe>>),
     Error(io::Error)
 }
 
 pub trait Acceptor {
-    fn ready(&mut self, ctx: &mut Context, events: Ready);
-    fn open(&mut self, ctx: &mut Context);
-    fn close(&mut self, ctx: &mut Context);
+    fn ready(&mut self, ctx: &mut dyn Context, events: Ready);
+    fn open(&mut self, ctx: &mut dyn Context);
+    fn close(&mut self, ctx: &mut dyn Context);
 }
 
 pub trait Context : EndpointRegistrar {

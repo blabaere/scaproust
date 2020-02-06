@@ -26,16 +26,16 @@ use io_error::*;
 pub struct Tcp;
 
 impl Tcp {
-    fn connect(&self, addr: &net::SocketAddr, dest: &Destination) -> io::Result<Box<Pipe>> {
-        let stream = try!(TcpStream::connect(addr));
-        try!(stream.set_nodelay(dest.tcp_no_delay));
+    fn connect(&self, addr: &net::SocketAddr, dest: &Destination) -> io::Result<Box<dyn Pipe>> {
+        let stream = TcpStream::connect(addr)?;
+        stream.set_nodelay(dest.tcp_no_delay)?;
         let stub = TcpPipeStub::new(stream, dest.recv_max_size);
         let pipe = AsyncPipe::new(stub, dest.pids);
 
         Ok(Box::new(pipe))
     }
-    fn bind(&self, addr: &net::SocketAddr, dest: &Destination) -> io::Result<Box<Acceptor>> {
-        let listener = try!(TcpListener::bind(addr));
+    fn bind(&self, addr: &net::SocketAddr, dest: &Destination) -> io::Result<Box<dyn Acceptor>> {
+        let listener = TcpListener::bind(addr)?;
         let acceptor = TcpAcceptor::new(listener, dest);
 
         Ok(Box::new(acceptor))
@@ -43,14 +43,14 @@ impl Tcp {
 }
 
 impl Transport for Tcp {
-    fn connect(&self, dest: &Destination) -> io::Result<Box<Pipe>> {
+    fn connect(&self, dest: &Destination) -> io::Result<Box<dyn Pipe>> {
         match net::SocketAddr::from_str(dest.addr) {
             Ok(addr) => self.connect(&addr, dest),
             Err(_) => Err(invalid_input_io_error(dest.addr))
         }
     }
 
-    fn bind(&self, dest: &Destination) -> io::Result<Box<Acceptor>> {
+    fn bind(&self, dest: &Destination) -> io::Result<Box<dyn Acceptor>> {
         match net::SocketAddr::from_str(dest.addr) {
             Ok(addr) => self.bind(&addr, dest),
             Err(_) => Err(invalid_input_io_error(dest.addr))

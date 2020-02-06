@@ -36,7 +36,7 @@ pub enum Reply {
 pub struct Socket {
     id: SocketId,
     reply_sender: Sender<Reply>,
-    protocol: Box<Protocol>,
+    protocol: Box<dyn Protocol>,
     pipes: HashMap<EndpointId, Pipe, BuildIdHasher>,
     acceptors: HashMap<EndpointId, Acceptor, BuildIdHasher>,
     config: Config
@@ -52,20 +52,20 @@ pub trait Protocol {
     fn id(&self) -> u16;
     fn peer_id(&self) -> u16;
 
-    fn add_pipe(&mut self, ctx: &mut Context, eid: EndpointId, pipe: Pipe);
-    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe>;
+    fn add_pipe(&mut self, ctx: &mut dyn Context, eid: EndpointId, pipe: Pipe);
+    fn remove_pipe(&mut self, ctx: &mut dyn Context, eid: EndpointId) -> Option<Pipe>;
 
-    fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Option<Scheduled>);
-    fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId);
-    fn on_send_timeout(&mut self, ctx: &mut Context);
-    fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId);
-    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId);
+    fn send(&mut self, ctx: &mut dyn Context, msg: Message, timeout: Option<Scheduled>);
+    fn on_send_ack(&mut self, ctx: &mut dyn Context, eid: EndpointId);
+    fn on_send_timeout(&mut self, ctx: &mut dyn Context);
+    fn on_send_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId);
+    fn on_send_not_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId);
     
-    fn recv(&mut self, ctx: &mut Context, timeout: Option<Scheduled>);
-    fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message);
-    fn on_recv_timeout(&mut self, ctx: &mut Context);
-    fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId);
-    fn on_recv_not_ready(&mut self, ctx: &mut Context, eid: EndpointId);
+    fn recv(&mut self, ctx: &mut dyn Context, timeout: Option<Scheduled>);
+    fn on_recv_ack(&mut self, ctx: &mut dyn Context, eid: EndpointId, msg: Message);
+    fn on_recv_timeout(&mut self, ctx: &mut dyn Context);
+    fn on_recv_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId);
+    fn on_recv_not_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId);
 
     fn is_send_ready(&self) -> bool;
     fn is_recv_ready(&self) -> bool;
@@ -73,13 +73,13 @@ pub trait Protocol {
     fn set_option(&mut self, _: ConfigOption) -> io::Result<()> {
         Err(invalid_input_io_error("option not supported"))
     }
-    fn on_timer_tick(&mut self, _: &mut Context, _: Schedulable) {
+    fn on_timer_tick(&mut self, _: &mut dyn Context, _: Schedulable) {
     }
-    fn on_device_plugged(&mut self, _: &mut Context) {}
-    fn close(&mut self, ctx: &mut Context);
+    fn on_device_plugged(&mut self, _: &mut dyn Context) {}
+    fn close(&mut self, ctx: &mut dyn Context);
 }
 
-pub type ProtocolCtor = Box<Fn(Sender<Reply>) -> Box<Protocol> + Send>;
+pub type ProtocolCtor = Box<dyn Fn(Sender<Reply>) -> Box<dyn Protocol> + Send>;
 
 /*****************************************************************************/
 /*                                                                           */
@@ -88,7 +88,7 @@ pub type ProtocolCtor = Box<Fn(Sender<Reply>) -> Box<Protocol> + Send>;
 /*****************************************************************************/
 
 impl Socket {
-    pub fn new(id: SocketId, reply_tx: Sender<Reply>, proto: Box<Protocol>) -> Socket {
+    pub fn new(id: SocketId, reply_tx: Sender<Reply>, proto: Box<dyn Protocol>) -> Socket {
         Socket {
             id: id,
             reply_sender: reply_tx,
@@ -110,7 +110,7 @@ impl Socket {
         let _ = self.reply_sender.send(reply);
     }
 
-    pub fn poll(&self, ctx: &mut Context) {
+    pub fn poll(&self, ctx: &mut dyn Context) {
         ctx.raise(Event::CanRecv(self.protocol.is_recv_ready()));
         ctx.raise(Event::CanSend(self.protocol.is_send_ready()));
     }
@@ -150,7 +150,7 @@ impl Socket {
 /*                                                                           */
 /*****************************************************************************/
 
-    pub fn connect(&mut self, ctx: &mut Context, url: String) {
+    pub fn connect(&mut self, ctx: &mut dyn Context, url: String) {
         let tmpl = self.create_endpoint_tmpl(url);
 
         match ctx.connect(self.id, &tmpl) {
@@ -159,7 +159,7 @@ impl Socket {
         };
     }
 
-    fn on_connect_success(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+    fn on_connect_success(&mut self, ctx: &mut dyn Context, eid: EndpointId, spec: EndpointSpec) {
         let pipe = self.connect_pipe(eid, spec);
 
         self.insert_pipe(ctx, eid, pipe);
@@ -170,7 +170,7 @@ impl Socket {
         self.send_reply(Reply::Err(err));
     }
 
-    fn schedule_reconnect(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+    fn schedule_reconnect(&mut self, ctx: &mut dyn Context, eid: EndpointId, spec: EndpointSpec) {
         let task = Schedulable::Reconnect(eid, spec);
         let delay = self.config.retry_ivl;
         let _ = ctx.schedule(task, delay); 
@@ -178,7 +178,7 @@ impl Socket {
         // In case the facade wants to close the ep somewhere between the error and the timeout
     }
 
-    pub fn reconnect(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+    pub fn reconnect(&mut self, ctx: &mut dyn Context, eid: EndpointId, spec: EndpointSpec) {
         let pids = self.get_protocol_ids();
         let tmpl = EndpointTmpl {
             pids: pids,
@@ -191,11 +191,11 @@ impl Socket {
         }
     }
 
-    fn on_reconnect_success(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+    fn on_reconnect_success(&mut self, ctx: &mut dyn Context, eid: EndpointId, spec: EndpointSpec) {
         self.insert_pipe(ctx, eid, Pipe::from_spec(eid, spec));
     }
 
-    fn on_reconnect_error(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+    fn on_reconnect_error(&mut self, ctx: &mut dyn Context, eid: EndpointId, spec: EndpointSpec) {
         self.schedule_reconnect(ctx, eid, spec);
     }
 
@@ -205,7 +205,7 @@ impl Socket {
 /*                                                                           */
 /*****************************************************************************/
 
-    pub fn bind(&mut self, ctx: &mut Context, url: String) {
+    pub fn bind(&mut self, ctx: &mut dyn Context, url: String) {
         let tmpl = self.create_endpoint_tmpl(url);
 
         match ctx.bind(self.id, &tmpl) {
@@ -214,7 +214,7 @@ impl Socket {
         };
     }
 
-    fn on_bind_success(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+    fn on_bind_success(&mut self, ctx: &mut dyn Context, eid: EndpointId, spec: EndpointSpec) {
         let acceptor = self.connect_acceptor(eid, spec);
 
         acceptor.open(ctx);
@@ -227,7 +227,7 @@ impl Socket {
         self.send_reply(Reply::Err(err));
     }
 
-    fn schedule_rebind(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+    fn schedule_rebind(&mut self, ctx: &mut dyn Context, eid: EndpointId, spec: EndpointSpec) {
         let task = Schedulable::Rebind(eid, spec);
         let delay = self.config.retry_ivl;
         let _ = ctx.schedule(task, delay); 
@@ -235,7 +235,7 @@ impl Socket {
         // In case the facade wants to close the ep somewhere between the error and the timeout
     }
 
-    pub fn rebind(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+    pub fn rebind(&mut self, ctx: &mut dyn Context, eid: EndpointId, spec: EndpointSpec) {
         let pids = self.get_protocol_ids();
         let tmpl = EndpointTmpl {
             pids: pids,
@@ -248,13 +248,13 @@ impl Socket {
         };
     }
 
-    fn on_rebind_success(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+    fn on_rebind_success(&mut self, ctx: &mut dyn Context, eid: EndpointId, spec: EndpointSpec) {
         let acceptor = Acceptor::from_spec(eid, spec);
 
         self.insert_acceptor(ctx, eid, acceptor)
     }
 
-    fn on_rebind_error(&mut self, ctx: &mut Context, eid: EndpointId, spec: EndpointSpec) {
+    fn on_rebind_error(&mut self, ctx: &mut dyn Context, eid: EndpointId, spec: EndpointSpec) {
         self.schedule_rebind(ctx, eid, spec);
     }
 
@@ -264,35 +264,35 @@ impl Socket {
 /*                                                                           */
 /*****************************************************************************/
 
-    pub fn on_pipe_opened(&mut self, ctx: &mut Context, eid: EndpointId) {
+    pub fn on_pipe_opened(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         if let Some(pipe) = self.pipes.remove(&eid) {
             self.protocol.add_pipe(ctx, eid, pipe);
         }
     }
 
-    pub fn on_pipe_accepted(&mut self, ctx: &mut Context, aid: EndpointId, eid: EndpointId) {
+    pub fn on_pipe_accepted(&mut self, ctx: &mut dyn Context, aid: EndpointId, eid: EndpointId) {
         let pipe = self.accept_pipe(aid, eid);
 
         self.insert_pipe(ctx, eid, pipe);
     }
 
-    pub fn close_pipe(&mut self, ctx: &mut Context, eid: EndpointId) {
+    pub fn close_pipe(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         let _ = self.remove_pipe(ctx, eid);
     }
 
-    pub fn on_pipe_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
+    pub fn on_pipe_error(&mut self, ctx: &mut dyn Context, eid: EndpointId, _: io::Error) {
         if let Some(spec) = self.remove_pipe(ctx, eid) {
             self.schedule_reconnect(ctx, eid, spec);
         }
     }
 
-    fn insert_pipe(&mut self, ctx: &mut Context, eid: EndpointId, pipe: Pipe) {
+    fn insert_pipe(&mut self, ctx: &mut dyn Context, eid: EndpointId, pipe: Pipe) {
         pipe.open(ctx);
 
         self.pipes.insert(eid, pipe);
     }
 
-    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointSpec> {
+    fn remove_pipe(&mut self, ctx: &mut dyn Context, eid: EndpointId) -> Option<EndpointSpec> {
         if let Some(pipe) = self.pipes.remove(&eid) {
             return pipe.close(ctx)
         }
@@ -328,23 +328,23 @@ impl Socket {
 /*                                                                           */
 /*****************************************************************************/
 
-    pub fn on_acceptor_error(&mut self, ctx: &mut Context, eid: EndpointId, _: io::Error) {
+    pub fn on_acceptor_error(&mut self, ctx: &mut dyn Context, eid: EndpointId, _: io::Error) {
         if let Some(spec) = self.remove_acceptor(ctx, eid) {
             self.schedule_rebind(ctx, eid, spec);
         }
     }
 
-    pub fn close_acceptor(&mut self, ctx: &mut Context, eid: EndpointId) {
+    pub fn close_acceptor(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         let _ = self.remove_acceptor(ctx, eid);
     }
 
-    fn insert_acceptor(&mut self, ctx: &mut Context, eid: EndpointId, acceptor: Acceptor) {
+    fn insert_acceptor(&mut self, ctx: &mut dyn Context, eid: EndpointId, acceptor: Acceptor) {
         acceptor.open(ctx);
 
         self.acceptors.insert(eid, acceptor);
     }
 
-    fn remove_acceptor(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<EndpointSpec> {
+    fn remove_acceptor(&mut self, ctx: &mut dyn Context, eid: EndpointId) -> Option<EndpointSpec> {
         self.acceptors.remove(&eid).map_or(None, |acceptor| acceptor.close(ctx))
     }
 
@@ -358,7 +358,7 @@ impl Socket {
 /*                                                                           */
 /*****************************************************************************/
 
-    pub fn send(&mut self, ctx: &mut Context, msg: Message) {
+    pub fn send(&mut self, ctx: &mut dyn Context, msg: Message) {
         #[cfg(debug_assertions)] debug!("[{:?}] send", ctx);
         if let Some(delay) = self.get_send_timeout() {
             let task = Schedulable::SendTimeout;
@@ -372,7 +372,7 @@ impl Socket {
         }
     }
 
-    pub fn try_send(&mut self, ctx: &mut Context, msg: Message) {
+    pub fn try_send(&mut self, ctx: &mut dyn Context, msg: Message) {
         #[cfg(debug_assertions)] debug!("[{:?}] try_send", ctx);
         if self.protocol.is_send_ready() {
             self.protocol.send(ctx, msg, None);
@@ -383,12 +383,12 @@ impl Socket {
         }
     }
 
-    pub fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
+    pub fn on_send_ack(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         #[cfg(debug_assertions)] debug!("[{:?}] send ack from ep {:?}", ctx, eid);
         self.protocol.on_send_ack(ctx, eid);
     }
 
-    pub fn on_send_timeout(&mut self, ctx: &mut Context) {
+    pub fn on_send_timeout(&mut self, ctx: &mut dyn Context) {
         #[cfg(debug_assertions)] debug!("[{:?}] send timeout", ctx);
         self.protocol.on_send_timeout(ctx);
     }
@@ -397,7 +397,7 @@ impl Socket {
         self.config.send_timeout
     }
 
-    pub fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId, ready: bool) {
+    pub fn on_send_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId, ready: bool) {
         #[cfg(debug_assertions)] debug!("[{:?}] ep {:?} send ready: {} ", ctx, eid, ready);
         if ready {
             self.protocol.on_send_ready(ctx, eid)
@@ -412,7 +412,7 @@ impl Socket {
 /*                                                                           */
 /*****************************************************************************/
 
-    pub fn recv(&mut self, ctx: &mut Context) {
+    pub fn recv(&mut self, ctx: &mut dyn Context) {
         #[cfg(debug_assertions)] debug!("[{:?}] recv", ctx);
         if let Some(delay) = self.get_recv_timeout() {
             let task = Schedulable::RecvTimeout;
@@ -426,7 +426,7 @@ impl Socket {
         }
     }
 
-    pub fn try_recv(&mut self, ctx: &mut Context) {
+    pub fn try_recv(&mut self, ctx: &mut dyn Context) {
         #[cfg(debug_assertions)] debug!("[{:?}] try_recv", ctx);
         if self.protocol.is_recv_ready() {
             self.protocol.recv(ctx, None);
@@ -437,12 +437,12 @@ impl Socket {
         }
     }
 
-    pub fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message) {
+    pub fn on_recv_ack(&mut self, ctx: &mut dyn Context, eid: EndpointId, msg: Message) {
         #[cfg(debug_assertions)] debug!("[{:?}] recv ack from ep {:?}", ctx, eid);
         self.protocol.on_recv_ack(ctx, eid, msg);
     }
 
-    pub fn on_recv_timeout(&mut self, ctx: &mut Context) {
+    pub fn on_recv_timeout(&mut self, ctx: &mut dyn Context) {
         #[cfg(debug_assertions)] debug!("[{:?}] recv timeout", ctx);
         self.protocol.on_recv_timeout(ctx);
     }
@@ -451,7 +451,7 @@ impl Socket {
         self.config.recv_timeout
     }
 
-    pub fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId, ready: bool) {
+    pub fn on_recv_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId, ready: bool) {
         #[cfg(debug_assertions)] debug!("[{:?}] ep {:?} recv ready: {}", ctx, eid, ready);
         if ready {
             self.protocol.on_recv_ready(ctx, eid)
@@ -466,7 +466,7 @@ impl Socket {
 /*                                                                           */
 /*****************************************************************************/
 
-    pub fn set_option(&mut self, _: &mut Context, opt: ConfigOption) {
+    pub fn set_option(&mut self, _: &mut dyn Context, opt: ConfigOption) {
         let res = if opt.is_generic() {
             self.config.set(opt)
         } else {
@@ -480,15 +480,15 @@ impl Socket {
         self.send_reply(reply);
     }
 
-    pub fn on_timer_tick(&mut self, ctx: &mut Context, task: Schedulable) {
+    pub fn on_timer_tick(&mut self, ctx: &mut dyn Context, task: Schedulable) {
         self.protocol.on_timer_tick(ctx, task)
     }
 
-    pub fn on_device_plugged(&mut self, ctx: &mut Context) {
+    pub fn on_device_plugged(&mut self, ctx: &mut dyn Context) {
         self.protocol.on_device_plugged(ctx)
     }
 
-    pub fn close(&mut self, ctx: &mut Context) {
+    pub fn close(&mut self, ctx: &mut dyn Context) {
         for (_, pipe) in self.pipes.drain() {
             pipe.close(ctx);
         }
@@ -527,21 +527,21 @@ mod tests {
     impl Protocol for TestProto {
         fn id(&self) -> u16 {0}
         fn peer_id(&self) -> u16 {0}
-        fn add_pipe(&mut self, _: &mut Context, _: EndpointId, _: Pipe) {}
-        fn remove_pipe(&mut self, _: &mut Context, _: EndpointId) -> Option<Pipe> {None}
-        fn send(&mut self, _: &mut Context, _: Message, _: Option<Scheduled>) {}
-        fn on_send_ack(&mut self, _: &mut Context, _: EndpointId) {}
-        fn on_send_timeout(&mut self, _: &mut Context) {}
-        fn on_send_ready(&mut self, _: &mut Context, _: EndpointId) {}
-        fn on_send_not_ready(&mut self, _: &mut Context, _: EndpointId) {}
-        fn recv(&mut self, _: &mut Context, _: Option<Scheduled>) {}
-        fn on_recv_ack(&mut self, _: &mut Context, _: EndpointId, _: Message) {}
-        fn on_recv_timeout(&mut self, _: &mut Context) {}
-        fn on_recv_ready(&mut self, _: &mut Context, _: EndpointId) {}
-        fn on_recv_not_ready(&mut self, _: &mut Context, _: EndpointId) {}
+        fn add_pipe(&mut self, _: &mut dyn Context, _: EndpointId, _: Pipe) {}
+        fn remove_pipe(&mut self, _: &mut dyn Context, _: EndpointId) -> Option<Pipe> {None}
+        fn send(&mut self, _: &mut dyn Context, _: Message, _: Option<Scheduled>) {}
+        fn on_send_ack(&mut self, _: &mut dyn Context, _: EndpointId) {}
+        fn on_send_timeout(&mut self, _: &mut dyn Context) {}
+        fn on_send_ready(&mut self, _: &mut dyn Context, _: EndpointId) {}
+        fn on_send_not_ready(&mut self, _: &mut dyn Context, _: EndpointId) {}
+        fn recv(&mut self, _: &mut dyn Context, _: Option<Scheduled>) {}
+        fn on_recv_ack(&mut self, _: &mut dyn Context, _: EndpointId, _: Message) {}
+        fn on_recv_timeout(&mut self, _: &mut dyn Context) {}
+        fn on_recv_ready(&mut self, _: &mut dyn Context, _: EndpointId) {}
+        fn on_recv_not_ready(&mut self, _: &mut dyn Context, _: EndpointId) {}
         fn is_send_ready(&self) -> bool { false }
         fn is_recv_ready(&self) -> bool { false }
-        fn close(&mut self, _: &mut Context) {}
+        fn close(&mut self, _: &mut dyn Context) {}
     }
 
     struct FailingNetwork;

@@ -25,24 +25,24 @@ use transport::async::AsyncPipe;
 pub struct Ipc;
 
 impl Transport for Ipc {
-    fn connect(&self, dest: &Destination) -> io::Result<Box<Pipe>> {
+    fn connect(&self, dest: &Destination) -> io::Result<Box<dyn Pipe>> {
         let filename = path::Path::new(dest.addr);
-        let stream = try!(UnixStream::connect(filename));
+        let stream = UnixStream::connect(filename)?;
         let stub = IpcPipeStub::new(stream, dest.recv_max_size);
         let pipe = AsyncPipe::new(stub, dest.pids);
 
         Ok(Box::new(pipe))
     }
 
-    fn bind(&self, dest: &Destination) -> io::Result<Box<Acceptor>> {
+    fn bind(&self, dest: &Destination) -> io::Result<Box<dyn Acceptor>> {
         let filename = path::Path::new(dest.addr);
 
         match fs::metadata(filename).map(|meta| meta.file_type().is_socket()) {
-            Ok(true)  => try!(fs::remove_file(filename)),
+            Ok(true)  => fs::remove_file(filename)?,
             _ => (),
         }
 
-        let listener = try!(UnixListener::bind(filename));
+        let listener = UnixListener::bind(filename)?;
         let acceptor = IpcAcceptor::new(listener, dest.pids, dest.recv_max_size);
 
         Ok(Box::new(acceptor))

@@ -71,7 +71,7 @@ impl Probe {
         let _ = self.reply_sender.send(reply);
     }
 
-    pub fn poll(&mut self, ctx: &mut Context, delay: Duration) {
+    pub fn poll(&mut self, ctx: &mut dyn Context, delay: Duration) {
         #[cfg(debug_assertions)] debug!("[{:?}] poll", ctx);
         let task = Schedulable::PollTimeout;
 
@@ -81,7 +81,7 @@ impl Probe {
         }
     }
 
-    fn start_poll(&mut self, ctx: &mut Context, timeout: Scheduled) {
+    fn start_poll(&mut self, ctx: &mut dyn Context, timeout: Scheduled) {
         self.timeout = Some(timeout);
 
         for po in &self.poll_opts {
@@ -91,7 +91,7 @@ impl Probe {
         self.check(ctx);
     }
 
-    pub fn on_poll_timeout(&mut self, ctx: &mut Context) {
+    pub fn on_poll_timeout(&mut self, ctx: &mut dyn Context) {
         #[cfg(debug_assertions)] debug!("[{:?}] on_poll_timeout", ctx);
 
         let poll_results = self.poll_opts.iter().enumerate().map(|(i, po)| { 
@@ -104,7 +104,7 @@ impl Probe {
         self.on_poll_succeed(ctx, poll_results);
     }
 
-    pub fn on_socket_can_recv(&mut self, ctx: &mut Context, sid: SocketId, can_recv: bool) {
+    pub fn on_socket_can_recv(&mut self, ctx: &mut dyn Context, sid: SocketId, can_recv: bool) {
         #[cfg(debug_assertions)] debug!("[{:?}] on_socket_can_recv {:?} {}", ctx, sid, can_recv);
         if let Some(i) = self.sid_to_idx.get(&sid) {
             self.recv_votes[*i] = Some(can_recv);
@@ -113,7 +113,7 @@ impl Probe {
         self.check(ctx);
     }
 
-    pub fn on_socket_can_send(&mut self, ctx: &mut Context, sid: SocketId, can_send: bool) {
+    pub fn on_socket_can_send(&mut self, ctx: &mut dyn Context, sid: SocketId, can_send: bool) {
         #[cfg(debug_assertions)] debug!("[{:?}] on_socket_can_send {:?} {}", ctx, sid, can_send);
         if let Some(i) = self.sid_to_idx.get(&sid) {
             self.send_votes[*i] = Some(can_send);
@@ -122,7 +122,7 @@ impl Probe {
         self.check(ctx);
     }
 
-    fn check(&mut self, ctx: &mut Context) {
+    fn check(&mut self, ctx: &mut dyn Context) {
         if self.timeout.is_none() {
             return;
         }
@@ -148,7 +148,7 @@ impl Probe {
         self.on_poll_succeed(ctx, poll_results);
     }
 
-    fn on_poll_succeed(&mut self, ctx: &mut Context, poll_results: Vec<PollRes>) {
+    fn on_poll_succeed(&mut self, ctx: &mut dyn Context, poll_results: Vec<PollRes>) {
         if let Some(timeout) = self.timeout.take() {
             ctx.cancel(timeout);
         }

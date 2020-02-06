@@ -17,40 +17,40 @@ use transport::pipe::{Event, Context};
 pub trait PipeState<S : AsyncPipeStub + 'static> {
 
     fn name(&self) -> &'static str;
-    fn open(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+    fn open(self: Box<Self>, ctx: &mut dyn Context) -> Box<dyn PipeState<S>> {
         error!("[{:?}] open while {}", ctx, self.name());
         Box::new(Dead)
     }
-    fn close(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+    fn close(self: Box<Self>, ctx: &mut dyn Context) -> Box<dyn PipeState<S>> {
         error!("[{:?}] close while {}", ctx, self.name());
         Box::new(Dead)
     }
-    fn send(self: Box<Self>, ctx: &mut Context, _: Rc<Message>) -> Box<PipeState<S>> {
+    fn send(self: Box<Self>, ctx: &mut dyn Context, _: Rc<Message>) -> Box<dyn PipeState<S>> {
         error!("[{:?}] send while {}", ctx, self.name());
         Box::new(Dead)
     }
-    fn recv(self: Box<Self>, ctx: &mut Context) -> Box<PipeState<S>> {
+    fn recv(self: Box<Self>, ctx: &mut dyn Context) -> Box<dyn PipeState<S>> {
         error!("[{:?}] recv while {}", ctx, self.name());
         Box::new(Dead)
     }
-    fn error(self: Box<Self>, ctx: &mut Context, err: Error) -> Box<PipeState<S>> {
+    fn error(self: Box<Self>, ctx: &mut dyn Context, err: Error) -> Box<dyn PipeState<S>> {
         info!("[{:?}] error while {}: {:?}", ctx, self.name(), err);
         
         ctx.raise(Event::Error(err));
 
         Box::new(Dead)
     }
-    fn ready(self: Box<Self>, ctx: &mut Context, _: Ready) -> Box<PipeState<S>> {
+    fn ready(self: Box<Self>, ctx: &mut dyn Context, _: Ready) -> Box<dyn PipeState<S>> {
         error!("[{:?}] ready while {}", ctx, self.name());
         Box::new(Dead)
     }
-    fn enter(&mut self, _: &mut Context) {
+    fn enter(&mut self, _: &mut dyn Context) {
     }
-    fn leave(&mut self, _: &mut Context) {
+    fn leave(&mut self, _: &mut dyn Context) {
     }
 }
 
-pub fn transition<F, T, S>(mut old_state: Box<F>, ctx: &mut Context) -> Box<T> where
+pub fn transition<F, T, S>(mut old_state: Box<F>, ctx: &mut dyn Context) -> Box<T> where
     F : PipeState<S>,
     F : Into<T>,
     T : PipeState<S>,
@@ -62,7 +62,7 @@ pub fn transition<F, T, S>(mut old_state: Box<F>, ctx: &mut Context) -> Box<T> w
     Box::new(new_state)
 }
 
-pub fn transition_if_ok<F, T, S>(f: Box<F>, ctx: &mut Context, res: Result<()>) -> Box<PipeState<S>> where
+pub fn transition_if_ok<F, T, S>(f: Box<F>, ctx: &mut dyn Context, res: Result<()>) -> Box<dyn PipeState<S>> where
     F : PipeState<S>,
     F : Into<T>,
     T : PipeState<S> + 'static,
@@ -74,7 +74,7 @@ pub fn transition_if_ok<F, T, S>(f: Box<F>, ctx: &mut Context, res: Result<()>) 
     }
 }
 
-pub fn no_transition_if_ok<F, S>(f: Box<F>, ctx: &mut Context, res: Result<()>) -> Box<PipeState<S>> where
+pub fn no_transition_if_ok<F, S>(f: Box<F>, ctx: &mut dyn Context, res: Result<()>) -> Box<dyn PipeState<S>> where
     F : PipeState<S> + 'static,
     S : AsyncPipeStub + 'static
 {

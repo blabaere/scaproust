@@ -21,8 +21,8 @@ pub struct Destination<'a> {
 }
 
 pub trait Transport {
-    fn connect(&self, dest: &Destination) -> Result<Box<pipe::Pipe>>;
-    fn bind(&self, dest: &Destination) -> Result<Box<acceptor::Acceptor>>;
+    fn connect(&self, dest: &Destination) -> Result<Box<dyn pipe::Pipe>>;
+    fn bind(&self, dest: &Destination) -> Result<Box<dyn acceptor::Acceptor>>;
 }
 
 #[cfg(test)]
@@ -56,13 +56,13 @@ mod tests {
     }
 
     impl endpoint::EndpointRegistrar for TestPipeContext {
-        fn register(&mut self, _: &mio::Evented, interest: mio::Ready, opt: mio::PollOpt) {
+        fn register(&mut self, _: &dyn mio::Evented, interest: mio::Ready, opt: mio::PollOpt) {
             self.registrations.push((interest, opt));
         }
-        fn reregister(&mut self, _: &mio::Evented, interest: mio::Ready, opt: mio::PollOpt) {
+        fn reregister(&mut self, _: &dyn mio::Evented, interest: mio::Ready, opt: mio::PollOpt) {
             self.reregistrations.push((interest, opt));
         }
-        fn deregister(&mut self, _: &mio::Evented) {
+        fn deregister(&mut self, _: &dyn mio::Evented) {
             self.deregistrations += 1;
         }
     }

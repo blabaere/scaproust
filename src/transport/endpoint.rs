@@ -7,7 +7,7 @@
 use mio::{Evented, Ready, PollOpt};
 
 pub trait EndpointRegistrar {
-    fn register(&mut self, io: &Evented, interest: Ready, opt: PollOpt);
-    fn reregister(&mut self, io: &Evented, interest: Ready, opt: PollOpt);
-    fn deregister(&mut self, io: &Evented);
+    fn register(&mut self, io: &dyn Evented, interest: Ready, opt: PollOpt);
+    fn reregister(&mut self, io: &dyn Evented, interest: Ready, opt: PollOpt);
+    fn deregister(&mut self, io: &dyn Evented);
 }

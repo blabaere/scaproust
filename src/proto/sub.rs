@@ -46,7 +46,7 @@ struct Inner {
 
 impl Sub {
 
-    fn apply<F>(&mut self, ctx: &mut Context, transition: F) where F : FnOnce(State, &mut Context, &mut Inner) -> State {
+    fn apply<F>(&mut self, ctx: &mut dyn Context, transition: F) where F : FnOnce(State, &mut dyn Context, &mut Inner) -> State {
         if let Some(old_state) = self.state.take() {
             #[cfg(debug_assertions)] let old_name = old_state.name();
             let was_recv_ready = self.is_recv_ready();
@@ -88,10 +88,10 @@ impl Protocol for Sub {
     fn id(&self)      -> u16 { SUB }
     fn peer_id(&self) -> u16 { PUB }
 
-    fn add_pipe(&mut self, _: &mut Context, eid: EndpointId, pipe: Pipe) {
+    fn add_pipe(&mut self, _: &mut dyn Context, eid: EndpointId, pipe: Pipe) {
         self.inner.add_pipe(eid, pipe)
     }
-    fn remove_pipe(&mut self, ctx: &mut Context, eid: EndpointId) -> Option<Pipe> {
+    fn remove_pipe(&mut self, ctx: &mut dyn Context, eid: EndpointId) -> Option<Pipe> {
         let was_recv_ready = self.inner.is_recv_ready();
         let pipe = self.inner.remove_pipe(eid);
         let is_recv_ready = self.inner.is_recv_ready();
@@ -104,34 +104,34 @@ impl Protocol for Sub {
 
         pipe
     }
-    fn send(&mut self, ctx: &mut Context, msg: Message, timeout: Timeout) {
+    fn send(&mut self, ctx: &mut dyn Context, msg: Message, timeout: Timeout) {
         self.apply(ctx, |s, ctx, inner| s.send(ctx, inner, Rc::new(msg), timeout))
     }
-    fn on_send_ack(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_send_ack(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_ack(ctx, inner, eid))
     }
-    fn on_send_timeout(&mut self, ctx: &mut Context) {
+    fn on_send_timeout(&mut self, ctx: &mut dyn Context) {
         self.apply(ctx, |s, ctx, inner| s.on_send_timeout(ctx, inner))
     }
-    fn on_send_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_send_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_ready(ctx, inner, eid))
     }
-    fn on_send_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_send_not_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_send_not_ready(ctx, inner, eid))
     }
-    fn recv(&mut self, ctx: &mut Context, timeout: Timeout) {
+    fn recv(&mut self, ctx: &mut dyn Context, timeout: Timeout) {
         self.apply(ctx, |s, ctx, inner| s.recv(ctx, inner, timeout))
     }
-    fn on_recv_ack(&mut self, ctx: &mut Context, eid: EndpointId, msg: Message) {
+    fn on_recv_ack(&mut self, ctx: &mut dyn Context, eid: EndpointId, msg: Message) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ack(ctx, inner, eid, msg))
     }
-    fn on_recv_timeout(&mut self, ctx: &mut Context) {
+    fn on_recv_timeout(&mut self, ctx: &mut dyn Context) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_timeout(ctx, inner))
     }
-    fn on_recv_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_recv_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_ready(ctx, inner, eid))
     }
-    fn on_recv_not_ready(&mut self, ctx: &mut Context, eid: EndpointId) {
+    fn on_recv_not_ready(&mut self, ctx: &mut dyn Context, eid: EndpointId) {
         self.apply(ctx, |s, ctx, inner| s.on_recv_not_ready(ctx, inner, eid))
     }
     fn is_send_ready(&self) -> bool {
@@ -147,7 +147,7 @@ impl Protocol for Sub {
             _ => Err(invalid_input_io_error("option not supported"))
         }
     }
-    fn close(&mut self, ctx: &mut Context) {
+    fn close(&mut self, ctx: &mut dyn Context) {
         self.inner.close(ctx)
     }
 }
@@ -169,7 +169,7 @@ impl State {
         }
     }
 
-    fn on_pipe_removed(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_pipe_removed(self, ctx: &mut dyn Context, inner: &mut Inner, eid: EndpointId) -> State {
         match self {
             State::Receiving(id, timeout) => {
                 if id == eid {
@@ -188,20 +188,20 @@ impl State {
 /*                                                                           */
 /*****************************************************************************/
 
-    fn send(self, ctx: &mut Context, inner: &mut Inner, _: Rc<Message>, timeout: Timeout) -> State {
+    fn send(self, ctx: &mut dyn Context, inner: &mut Inner, _: Rc<Message>, timeout: Timeout) -> State {
         inner.send(ctx, timeout);
         self
     }
-    fn on_send_ack(self, _: &mut Context, _: &mut Inner, _: EndpointId) -> State {
+    fn on_send_ack(self, _: &mut dyn Context, _: &mut Inner, _: EndpointId) -> State {
         self
     }
-    fn on_send_timeout(self, _: &mut Context, _: &mut Inner) -> State {
+    fn on_send_timeout(self, _: &mut dyn Context, _: &mut Inner) -> State {
         self
     }
-    fn on_send_ready(self, _: &mut Context, _: &mut Inner, _: EndpointId) -> State {
+    fn on_send_ready(self, _: &mut dyn Context, _: &mut Inner, _: EndpointId) -> State {
         self
     }
-    fn on_send_not_ready(self, _: &mut Context, _: &mut Inner, _: EndpointId) -> State {
+    fn on_send_not_ready(self, _: &mut dyn Context, _: &mut Inner, _: EndpointId) -> State {
         self
     }
 
@@ -211,12 +211,12 @@ impl State {
 /*                                                                           */
 /*****************************************************************************/
 
-    fn recv(self, ctx: &mut Context, inner: &mut Inner, timeout: Timeout) -> State {
+    fn recv(self, ctx: &mut dyn Context, inner: &mut Inner, timeout: Timeout) -> State {
         inner.recv(ctx).map_or_else(
             |   | State::RecvOnHold(timeout),
             |eid| State::Receiving(eid, timeout))
     }
-    fn on_recv_ack(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId, msg: Message) -> State {
+    fn on_recv_ack(self, ctx: &mut dyn Context, inner: &mut Inner, eid: EndpointId, msg: Message) -> State {
         match self {
             State::Receiving(id, timeout) => {
                 if id == eid {
@@ -233,12 +233,12 @@ impl State {
             any => any
         }
     }
-    fn on_recv_timeout(self, _: &mut Context, inner: &mut Inner) -> State {
+    fn on_recv_timeout(self, _: &mut dyn Context, inner: &mut Inner) -> State {
         inner.on_recv_timeout();
 
         State::Idle
     }
-    fn on_recv_ready(self, ctx: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_recv_ready(self, ctx: &mut dyn Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_recv_ready(eid);
 
         match self {
@@ -246,7 +246,7 @@ impl State {
             any => any
         }
     }
-    fn on_recv_not_ready(self, _: &mut Context, inner: &mut Inner, eid: EndpointId) -> State {
+    fn on_recv_not_ready(self, _: &mut dyn Context, inner: &mut Inner, eid: EndpointId) -> State {
         inner.on_recv_not_ready(eid);
         self
     }
@@ -267,7 +267,7 @@ impl Inner {
         self.fq.remove(&eid);
         self.pipes.remove(&eid)
     }
-    fn send(&mut self, ctx: &mut Context, timeout: Timeout) {
+    fn send(&mut self, ctx: &mut dyn Context, timeout: Timeout) {
         let error = other_io_error("Send is not supported by pull protocol");
         let _ = self.reply_tx.send(Reply::Err(error));
         if let Some(sched) = timeout {
@@ -275,7 +275,7 @@ impl Inner {
         }
     }
 
-    fn recv(&mut self, ctx: &mut Context) -> Option<EndpointId> {
+    fn recv(&mut self, ctx: &mut dyn Context) -> Option<EndpointId> {
         fair_queue::recv(&mut self.fq, &mut self.pipes, ctx)
     }
     fn on_recv_ready(&mut self, eid: EndpointId) {
@@ -284,7 +284,7 @@ impl Inner {
     fn on_recv_not_ready(&mut self, eid: EndpointId) {
         self.fq.deactivate(&eid)
     }
-    fn on_recv_ack(&self, ctx: &mut Context, timeout: Timeout, msg: Message) {
+    fn on_recv_ack(&self, ctx: &mut dyn Context, timeout: Timeout, msg: Message) {
         let _ = self.reply_tx.send(Reply::Recv(msg));
         if let Some(sched) = timeout {
             ctx.cancel(sched);
@@ -311,7 +311,7 @@ impl Inner {
         
         self.subscriptions.iter().any(|s| payload.starts_with(s))
     }
-    fn close(&mut self, ctx: &mut Context) {
+    fn close(&mut self, ctx: &mut dyn Context) {
         self.pipes.close_all(ctx)
     }
 }

@@ -43,7 +43,7 @@ impl Device {
         }
     }
 
-    pub fn check(&mut self, ctx: &mut Context) {
+    pub fn check(&mut self, ctx: &mut dyn Context) {
         if self.left_recv | self.right_recv {
             self.send_check_reply();
         } else {
